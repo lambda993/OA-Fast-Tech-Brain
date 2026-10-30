@@ -1,0 +1,247 @@
+-- SPDX-FileCopyrightText: Lambda993
+-- SPDX-License-Identifier: GPL-3.0-only
+
+-- Every unit type sorted once into the roles the brain plays with.
+-- Escalation marks each type's tier with a LEVn category: LEV0 is the
+-- commander, LEV1 to LEV3 the three factory tiers, LEV4 the experimentals
+-- and LEV5 the largest experimentals. Upgrades and stockpiled rounds are
+-- left out.
+
+local util = require("util")
+
+local catalog = {}
+
+local num = util.num
+
+local function categories(record)
+    local found = {}
+    local list = record.category
+    if type(list) == "table" then
+        for index = 1, #list do
+            found[string.upper(list[index])] = true
+        end
+    end
+    return found
+end
+
+local function tier_of(words)
+    for level = 0, 5 do
+        if words["LEV" .. level] then
+            return level
+        end
+    end
+    return nil
+end
+
+local function has_weapon(record)
+    local weapon = record.weapon1
+    if type(weapon) ~= "string" or weapon == "" then
+        return false
+    end
+    return string.find(string.upper(weapon), "NULL", 1, true) == nil
+end
+
+local function text(value)
+    if type(value) == "string" then
+        return value
+    end
+    return ""
+end
+
+-- The energy and metal a finished building adds each second, before the
+-- difficulty's income rule.
+local function yields(record)
+    local map = game.map
+    local wind = 0
+    if map ~= nil then
+        wind = (num(map.wind_min) + num(map.wind_max)) / 2
+    end
+    local energy = num(record.energymake) - num(record.energyuse)
+        + math.min(num(record.windgenerator), wind)
+    local metal = num(record.metalmake) + num(record.makesmetal)
+    return energy, metal
+end
+
+local function classify(index, record)
+    local words = categories(record)
+    local tier = tier_of(words)
+    local name = text(record.name)
+    local unit_name = string.upper(text(record.unitname))
+    local entry = {
+        index = index,
+        record = record,
+        name = name,
+        unit_name = unit_name,
+        side = text(record.side),
+        tier = tier or 1,
+        metal = num(record.buildcostmetal),
+        energy = num(record.buildcostenergy),
+        structure = num(record.bmcode) == 0,
+        builder = record.builder == true,
+        commander = record.commander == true or words.LEV0 == true,
+        air = record.canfly == true,
+        armed = has_weapon(record),
+        speed = num(record.maxvelocity),
+        sight = num(record.sightdistance),
+        radar = num(record.radardistance),
+        extracts = num(record.extractsmetal),
+        water_only = num(record.minwaterdepth) > 0 or num(record.tidalgenerator) > 0
+            or string.find(string.upper(name), "FLOATING", 1, true) ~= nil
+            or string.find(string.upper(name), "UNDERWATER", 1, true) ~= nil,
+        footprint = math.max(num(record.footprintx), num(record.footprintz)),
+        builds = {},
+    }
+    entry.cost = entry.metal + entry.energy / 60
+    entry.energy_yield, entry.metal_yield = yields(record)
+    entry.skip = tier == nil
+        or words.LEV_2 == true
+        or string.find(string.upper(name), "UPGRADE", 1, true) ~= nil
+        or string.find(unit_name, "MAKENUKE", 1, true) ~= nil
+        or string.find(unit_name, "MAKEANTI", 1, true) ~= nil
+    entry.mobile = not entry.structure
+    entry.factory = entry.structure and entry.builder
+    entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0
+    entry.scout = entry.mobile and not entry.builder and entry.metal <= 80
+        and entry.speed >= 2.5 and entry.sight >= 300
+    entry.combat = entry.mobile and not entry.builder and entry.armed and not entry.scout
+    entry.defense = entry.structure and not entry.builder and entry.armed
+        and record.canattack == true
+    entry.radar_tower = entry.structure and not entry.armed and entry.radar >= 1000
+    entry.extractor = entry.structure and entry.extracts > 0
+    entry.metal_maker = entry.structure and num(record.makesmetal) > 0 and num(record.energyuse) > 0
+    entry.geo = string.find(string.upper(name), "GEOTHERMAL", 1, true) ~= nil
+    entry.power = entry.structure and not entry.extractor and not entry.metal_maker
+        and entry.energy_yield > 0 and num(record.energystorage) < num(record.energymake) * 4 + 1
+        and string.find(string.upper(name), "STORAGE", 1, true) == nil
+    return entry
+end
+
+-- Fills `catalog.types` (type index to entry) and each entry's build list.
+function catalog.load()
+    catalog.types = {}
+    local count = #units
+    for index = 1, count do
+        local record = units[index]
+        if record ~= nil then
+            catalog.types[index] = classify(index, record)
+        end
+    end
+    catalog.refresh_builds()
+end
+
+-- Build lists are complete once the match has set its players up, so the
+-- first tick reads them again.
+function catalog.refresh_builds()
+    for index, entry in pairs(catalog.types) do
+        entry.builds = {}
+        if entry.builder then
+            local list = game.build_list(entry.record)
+            if type(list) == "table" then
+                local seen = {}
+                for slot = 1, #list do
+                    local built = list[slot]
+                    local built_index = built and built:index()
+                    local other = built_index and catalog.types[built_index]
+                    if other ~= nil and not other.skip and not other.water_only
+                        and not seen[built_index] then
+                        seen[built_index] = true
+                        entry.builds[#entry.builds + 1] = other
+                    end
+                end
+            end
+        end
+    end
+    -- A factory makes real mobile units. Escalation's reactors and other
+    -- buildings that only make upgrades are not factories.
+    for _, entry in pairs(catalog.types) do
+        if entry.structure and entry.builder then
+            local mobile = false
+            for _, built in ipairs(entry.builds) do
+                if built.mobile then
+                    mobile = true
+                    break
+                end
+            end
+            entry.factory = mobile
+        end
+    end
+end
+
+function catalog.of(unit)
+    if unit == nil then
+        return nil
+    end
+    local index = unit.type_index
+    if type(index) ~= "number" then
+        return nil
+    end
+    return catalog.types[index]
+end
+
+-- What a mobile builder can do for the seat, as a set of words.
+function catalog.abilities(entry)
+    local found = {}
+    for _, built in ipairs(entry.builds) do
+        if built.extractor then found.extractor = true end
+        if built.radar_tower then found.radar = true end
+        if built.metal_maker then found.maker = true end
+        if built.power and not built.geo then found.power = true end
+        if built.geo then found.geo = true end
+        if built.defense then found.defense = true end
+        if built.factory then found.factory = true end
+    end
+    return found
+end
+
+-- Entries in `builder`'s list for which `test(entry)` holds.
+function catalog.buildable(builder, test)
+    local found = {}
+    if builder == nil then
+        return found
+    end
+    for _, entry in ipairs(builder.builds) do
+        if test(entry) then
+            found[#found + 1] = entry
+        end
+    end
+    return found
+end
+
+function catalog.can_build(builder, target)
+    if builder == nil or target == nil then
+        return false
+    end
+    for _, entry in ipairs(builder.builds) do
+        if entry == target then
+            return true
+        end
+    end
+    return false
+end
+
+-- The tier a factory works at. A factory whose list holds only lower
+-- units still counts at its own tier.
+function catalog.factory_tier(entry)
+    return math.max(1, entry.tier)
+end
+
+-- How good a factory is as the main line of a tier: combat units it
+-- offers, more for land and hover than for air.
+function catalog.factory_score(entry)
+    local score = 0
+    for _, built in ipairs(entry.builds) do
+        if built.combat then
+            score = score + (built.air and 1 or 2)
+        end
+        if built.mobile_builder then
+            score = score + 3
+            -- A line whose builders can claim metal is worth much more.
+            if catalog.abilities(built).extractor then
+                score = score + 12
+            end
+        end
+    end
+    return score
+end
+
+return catalog

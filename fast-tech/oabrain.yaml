@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Lambda993
+# SPDX-License-Identifier: GPL-3.0-only
+
+oabrain: 1
+id: fast-tech
+name: "Fast Tech"
+version: "0.1"
+author:
+  name: "Lambda993"
+description: "Escalation computer player that races up the tech tiers.\nEach new tier winds down the lower factories, reclaims the old labs and builds the strongest units it can. It scouts with radar and expendable scouts, and keeps the commander at home."
+tags: ["rush", "economy", "experimental"]
+works-with: ["escalation >= 10"]
+requires:
+  engine: ">= 0.8.7"
+levels:
+  - id: fair
+    name: "Fair"
+    difficulty: hard
+  - id: boosted
+    name: "Boosted"
+    difficulty: medium
+  - id: rich
+    name: "Rich"
+    difficulty: easy
+fullAwareness: false
+entry: brain.lua
