@@ -7,8 +7,10 @@
 -- factories, and only when far away walks back toward the middle.
 
 local catalog = require("catalog")
+local city = require("city")
 local economy = require("economy")
 local tech = require("tech")
+local terrain = require("terrain")
 local util = require("util")
 local world = require("world")
 
@@ -41,9 +43,15 @@ end
 -- Ground the seat has never seen takes no building, so a builder sent
 -- there walks over first and tries again once it is idle.
 local function scout_site(unit, spot)
-    -- The commander keeps to the base: it never walks out to explore.
-    if util.explored(spot) or (unit.type ~= nil and unit.type.commander == true) then
+    if util.explored(spot) then
         return false
+    end
+    -- The commander keeps to the base: it walks out only a little way.
+    if unit.type ~= nil and unit.type.commander == true then
+        local home = world.base or world.start
+        if home == nil or util.dist(home, spot) > 900 then
+            return false
+        end
     end
     if unit:move(spot) then
         builders.walking[unit.id] = {tick = me.tick, x = spot.x, z = spot.z}
@@ -64,54 +72,36 @@ local function place(unit, entry, near, radius, walk)
     return unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) == true
 end
 
--- Tries a few points around `centre` at `distance`, widening each time.
--- Explored points come first; the builder walks out only when none fit.
-local function place_around(unit, entry, centre, distance, radius)
-    local offset = brain.random(1000) / 1000
-    local unseen = nil
-    for attempt = 0, 5 do
-        local near = util.clamp(util.around(centre, offset + attempt * 0.17, distance + attempt * 100), 64)
-        if util.explored(near) then
-            if place(unit, entry, near, radius + attempt * 60) then
-                return true
-            end
-        elseif unseen == nil then
-            unseen = near
-        end
-    end
-    if unseen ~= nil then
-        return scout_site(unit, unseen)
-    end
-    return false
-end
-
 local function base()
     return world.base or world.start
 end
 
--- Large labs need flat open ground, which the base's corner may lack:
--- try points further and further out in every direction, explored ones
--- only, before giving up.
-local function place_large(unit, entry)
-    local centre = base()
-    local offset = brain.random(1000) / 1000
-    local unseen = nil
-    for ring = 0, 5 do
-        local distance = ring == 0 and 120 or 120 + entry.footprint * 8 + (ring - 1) * 450
-        for step = 0, 3 do
-            local turn = offset + step * 0.25 + ring * 0.125
-            local near = util.clamp(util.around(centre, turn, distance), 96)
-            if util.explored(near) then
-                if place(unit, entry, near, 320) then
-                    return true
-                end
-            elseif unseen == nil then
-                unseen = near
-            end
+-- Puts a building in the city grid; toward `toward` when given (the front).
+-- Water-only buildings go by the open water nearest the base. With no room
+-- on explored ground a builder other than the commander walks out to the
+-- nearest unexplored block.
+local function build_in_city(unit, entry, toward)
+    if entry.water_only then
+        local water = terrain.water_point
+        if water == nil then
+            return false
         end
+        return place(unit, entry, water, 400, true)
     end
-    if unseen ~= nil then
-        return scout_site(unit, unseen)
+    if city.place(unit, entry, toward) then
+        return true
+    end
+    local unseen = city.unexplored_block(toward or base())
+    if unseen ~= nil and scout_site(unit, unseen) then
+        return true
+    end
+    -- Ground too rough or cramped for the grid: anywhere near the base.
+    local centre = toward or base()
+    for _, distance in ipairs({160, 320, 520}) do
+        local near = util.clamp(util.around(centre, brain.random(1000) / 1000, distance), 96)
+        if util.explored(near) and place(unit, entry, near, 320) then
+            return true
+        end
     end
     return false
 end
@@ -147,7 +137,7 @@ local function try_goal(unit, entry)
     if recently("goal", 45) or not tech.affordable() then
         return false
     end
-    if place_large(unit, goal) then
+    if build_in_city(unit, goal) then
         mark("goal")
         tech.started = me.tick
         tech.no_room = 0
@@ -285,7 +275,7 @@ local function try_power(unit, entry, centre, spread)
     if power == nil then
         return false
     end
-    return place_around(unit, power, centre, spread, 300)
+    return build_in_city(unit, power)
 end
 
 local function try_maker(unit, entry, centre, spread)
@@ -293,7 +283,7 @@ local function try_maker(unit, entry, centre, spread)
     if maker == nil then
         return false
     end
-    return place_around(unit, maker, centre, spread, 300)
+    return build_in_city(unit, maker)
 end
 
 local function try_economy(unit, entry, near_base)
@@ -368,7 +358,7 @@ local function try_radar(unit, entry)
     else
         near = util.clamp(util.around(base(), brain.random(1000) / 1000, 550), 96)
     end
-    if place(unit, best, near, 250, true) then
+    if build_in_city(unit, best, near) then
         mark("radar")
         return true
     end
@@ -396,7 +386,7 @@ local function try_defence(unit, entry)
     if best == nil then
         return false
     end
-    if place(unit, best, world.front(300), 220, true) then
+    if build_in_city(unit, best, world.front(300)) then
         mark("defence")
         return true
     end
@@ -430,9 +420,10 @@ local function try_more_factories(unit, entry)
     end
     local limit = me.difficulty == "hard" and 3 or 4
     local best, best_score
-    for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end)) do
+    for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end, terrain.ship_ok)) do
         local level = catalog.factory_tier(option)
-        if (level == tier or level == tier - 1) and (count[level] or 0) < limit
+        local rank = terrain.rank(option.line)
+        if rank ~= nil and (level == tier or level == tier - 1) and (count[level] or 0) < limit
             and option ~= tech.goal then
             local fights = 0
             for _, built in ipairs(option.builds) do
@@ -441,7 +432,8 @@ local function try_more_factories(unit, entry)
                 end
             end
             if fights > 0 then
-                local score = (level == tier and 1000 or 0) + (owned[option.index] and 0 or 500) + fights
+                local score = (level == tier and 1000 or 0) + (owned[option.index] and 0 or 500)
+                    - rank * 300 + fights
                 if best_score == nil or score > best_score then
                     best, best_score = option, score
                 end
@@ -451,7 +443,7 @@ local function try_more_factories(unit, entry)
     if best == nil then
         return false
     end
-    if place_large(unit, best) then
+    if build_in_city(unit, best) then
         mark("factory")
         print("another factory: " .. best.name)
         return true
@@ -487,7 +479,7 @@ local function try_storage(unit, entry)
     if best == nil then
         return false
     end
-    if place_around(unit, best, base(), 180 + world.tier * 40, 260) then
+    if build_in_city(unit, best) then
         mark("storage")
         print("storage: " .. best.name)
         return true
@@ -545,7 +537,7 @@ local function try_scout_lab(unit, entry)
     if best == nil then
         return false
     end
-    if place_around(unit, best, base(), 300, 300) then
+    if build_in_city(unit, best) then
         mark("scout-lab")
         print("building scout lab " .. best.name)
         return true

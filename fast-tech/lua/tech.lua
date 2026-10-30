@@ -7,6 +7,7 @@
 -- or when a large lab finds no room.
 
 local catalog = require("catalog")
+local terrain = require("terrain")
 local util = require("util")
 local world = require("world")
 local economy = require("economy")
@@ -78,18 +79,22 @@ function tech.reset()
     reach_memo = {}
 end
 
--- The next factory to race for: the one whose line reaches the highest
--- tier, preferring the next tier up and then the strongest line. A factory
--- of the current tier is a goal only when it opens a higher line than any
--- the seat has.
+-- The next factory to race for. Climbing the line the seat is on comes
+-- first: a factory of the next tier up. Among those, and when the line
+-- ends and a bridge to another line is needed, the line the map prefers
+-- wins (terrain.rank), then the line that reaches the highest tier.
+-- Kbots and vehicles start; hovercraft come last unless the map calls
+-- for them.
 function tech.choose_goal()
     local tier = world.tier
     local builders = own_types(function(e) return e.mobile_builder end)
     local factories = own_types(function(e) return e.factory end)
-    local owned, owned_reach = {}, tier
+    -- The highest tier the seat holds in each line.
+    local owned, held = {}, {}
     for _, factory in ipairs(factories) do
         owned[factory.index] = true
-        owned_reach = math.max(owned_reach, reach(factory))
+        local line = factory.line or "?"
+        held[line] = math.max(held[line] or 0, catalog.factory_tier(factory))
     end
     local candidates, direct = {}, {}
     for _, builder in ipairs(builders) do
@@ -115,14 +120,15 @@ function tech.choose_goal()
     for _, entry in ipairs(candidates) do
         local level = catalog.factory_tier(entry)
         local line = reach(entry)
-        local useful = not owned[entry.index] and same_side(entry) and not entry.water_only
+        local rank = terrain.rank(entry.line)
+        -- A factory is a goal when it climbs above the seat's tier, or
+        -- when its line leads above it and the seat holds nothing of that
+        -- line at its tier or higher (a bridge to a longer line).
+        local useful = rank ~= nil and not owned[entry.index] and same_side(entry)
             and level <= top_factory_tier
-            and (level > tier or line > owned_reach)
+            and (level > tier or (line > tier and (held[entry.line or "?"] or 0) < level))
         if useful then
             local score = catalog.factory_score(entry) + (direct[entry.index] and 5 or 0)
-            if entry.air then
-                score = score - 5
-            end
             if level == 1 then
                 -- The first lab should also give the early scout.
                 for _, built in ipairs(entry.builds) do
@@ -132,7 +138,8 @@ function tech.choose_goal()
                     end
                 end
             end
-            local key = line * 100000 + (level == tier + 1 and 50000 or 0) + level * 1000 + score
+            local climb = level == tier + 1 and 1 or 0
+            local key = climb * 10000000 + (9 - rank) * 1000000 + line * 100000 + level * 1000 + score
             if best_key == nil or key > best_key then
                 best, best_key = entry, key
             end
@@ -141,10 +148,17 @@ function tech.choose_goal()
     if best ~= tech.goal then
         tech.frame, tech.started, tech.no_room = nil, nil, 0
         if best then
-            print(string.format("tech goal: %s (tier %d, line reaches %d)", best.name, best.tier, reach(best)))
+            print(string.format("tech goal: %s (tier %d, %s line, reaches %d)",
+                best.name, best.tier, tostring(best.line), reach(best)))
         end
     end
     tech.goal = best
+end
+
+-- Whether a factory still leads somewhere the seat has not reached: its
+-- line climbs above the seat's tier. Such a factory is not reclaimed.
+function tech.leads_on(entry)
+    return reach(entry) > world.tier
 end
 
 -- A builder type a factory of the seat can make that can build the goal.
@@ -210,7 +224,7 @@ function tech.obsolete()
         local entry = catalog.of(unit)
         local tier = catalog.factory_tier(entry)
         if unit ~= tech.scout_lab and (tier <= top - 2 or (tier == 1 and top >= 3))
-            and not tech.could_scout(unit, entry) then
+            and not tech.could_scout(unit, entry) and not tech.leads_on(entry) then
             found[#found + 1] = unit
         end
     end
@@ -241,7 +255,8 @@ function tech.make_room()
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
         local entry = catalog.of(unit)
         local tier = catalog.factory_tier(entry)
-        if unit ~= tech.scout_lab and tier < world.tier and tech.reclaiming[unit.id] == nil then
+        if unit ~= tech.scout_lab and tier < world.tier and tech.reclaiming[unit.id] == nil
+            and not tech.leads_on(entry) then
             local at = util.pos(unit)
             local key = tier * 100000 + (at and util.dist(at, base) or 0)
             if best_key == nil or key < best_key then

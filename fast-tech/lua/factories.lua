@@ -99,7 +99,7 @@ local function pick_scout(entry)
 end
 
 local function pick_combat(entry)
-    local options = catalog.buildable(entry, function(e) return e.combat end)
+    local options = catalog.buildable(entry, function(e) return e.combat end, true)
     return util.weighted(options, function(e)
         local weight = tier_weight[math.min(5, e.tier)] or 1
         -- Air keeps a smaller part of the army: it cannot hold ground.

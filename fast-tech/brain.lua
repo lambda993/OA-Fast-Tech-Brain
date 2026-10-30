@@ -12,10 +12,12 @@ local catalog = require("catalog")
 local factories = require("factories")
 local scouts = require("scouts")
 local tech = require("tech")
+local terrain = require("terrain")
 local util = require("util")
 local world = require("world")
 
 local hooks = {}
+hooks.dump_city = false
 local armed = false
 local refreshed = false
 
@@ -64,6 +66,9 @@ local function think()
     util.guard("world", function()
         world.update_tier()
         world.update_base()
+        if world.located() then
+            terrain.survey()
+        end
         tech.choose_goal()
     end)
     -- Nothing can be placed or sent before the seat knows where it stands.
@@ -81,6 +86,9 @@ local function think()
     end
     if second % 60 == 0 then
         util.guard("status", status)
+    end
+    if hooks.dump_city and second % 600 == 0 then
+        util.guard("city dump", require("city").dump)
     end
     if second % 5 == 0 then
         util.guard("scouts", scouts.step)

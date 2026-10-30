@@ -68,6 +68,7 @@ local function classify(index, record)
     local name = text(record.name)
     local unit_name = string.upper(text(record.unitname))
     local entry = {
+        words = words,
         index = index,
         record = record,
         name = name,
@@ -149,8 +150,11 @@ function catalog.refresh_builds()
                     local built = list[slot]
                     local built_index = built and built:index()
                     local other = built_index and catalog.types[built_index]
-                    if other ~= nil and not other.skip and not other.water_only
-                        and not seen[built_index] then
+                    -- Water-only buildings are kept only when they are
+                    -- shipyards; ships themselves are kept.
+                    local keep = other ~= nil and not other.skip
+                        and (not other.water_only or other.mobile or other.builder)
+                    if keep and not seen[built_index] then
                         seen[built_index] = true
                         entry.builds[#entry.builds + 1] = other
                     end
@@ -172,6 +176,60 @@ function catalog.refresh_builds()
             entry.factory = mobile
         end
     end
+    for _, entry in pairs(catalog.types) do
+        if entry.factory then
+            entry.line = catalog.line_of(entry)
+        end
+    end
+end
+
+-- The kind of unit a factory mostly makes: "kbot", "vehicle", "air",
+-- "ship" or "hover", from its combat units' movement.
+function catalog.line_of(factory)
+    local votes = {kbot = 0, vehicle = 0, air = 0, ship = 0, hover = 0}
+    for _, built in ipairs(factory.builds) do
+        if built.mobile and not built.builder then
+            local record = built.record
+            local class = string.upper(type(record.movementclass) == "string" and record.movementclass or "")
+            -- Escalation's selection groups name the line: CTRL_K kbots,
+            -- CTRL_V vehicles, CTRL_H hovercraft. Many kbots use TANK
+            -- movement classes, so the class alone cannot tell.
+            local words = built.words or {}
+            local kind
+            if built.air then
+                kind = "air"
+            elseif built.water_only or string.find(class, "BOAT", 1, true) then
+                kind = "ship"
+            elseif words.CTRL_H or record.canhover == true or string.find(class, "HOVER", 1, true) then
+                kind = "hover"
+            elseif words.CTRL_K then
+                kind = "kbot"
+            elseif words.CTRL_V or string.find(class, "TANK", 1, true) then
+                kind = "vehicle"
+            else
+                kind = "kbot"
+            end
+            votes[kind] = votes[kind] + 1
+        end
+    end
+    local best, best_votes = "kbot", -1
+    for _, kind in ipairs({"kbot", "vehicle", "air", "ship", "hover"}) do
+        if votes[kind] > best_votes then
+            best, best_votes = kind, votes[kind]
+        end
+    end
+    return best
+end
+
+-- The movement class a factory's combat units mostly use, for reach tests.
+function catalog.line_class(factory)
+    for _, built in ipairs(factory.builds) do
+        if built.combat and not built.air and type(built.record.movementclass) == "string"
+            and built.record.movementclass ~= "" then
+            return built.record.movementclass
+        end
+    end
+    return nil
 end
 
 function catalog.of(unit)
@@ -200,14 +258,15 @@ function catalog.abilities(entry)
     return found
 end
 
--- Entries in `builder`'s list for which `test(entry)` holds.
-function catalog.buildable(builder, test)
+-- Entries in `builder`'s list for which `test(entry)` holds. Water-only
+-- entries count only when `water` is set.
+function catalog.buildable(builder, test, water)
     local found = {}
     if builder == nil then
         return found
     end
     for _, entry in ipairs(builder.builds) do
-        if test(entry) then
+        if (water or not entry.water_only) and test(entry) then
             found[#found + 1] = entry
         end
     end

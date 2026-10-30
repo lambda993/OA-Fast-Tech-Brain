@@ -24,24 +24,55 @@ commander, `LEV1` to `LEV3` the three factory tiers, `LEV4` experimentals
 and `LEV5` the largest experimentals. The brain reads these, never unit
 names, so it follows the mod's data.
 
-**What a computer seat may build.** A brain builds from the same table as
-the built-in computer player: the `[CANBUILD]` lists in the mod's
-`SIDEDATA.tdf`, read as Total Annihilation's own AI reads them and cut at
-the mod's `limits.build-list-entries` (36 entries for Escalation). The
-engine refuses any other build order. Escalation writes that table by hand
-for the AI, so it is much shorter than the players' build menus: duplicates
-weigh a choice, some units are left out on purpose (the commander's radar
-tower sits past the limit, "because lower priority"), and some lines stop
-early. Everything below plays inside that table; the brain reads it, never
-unit names.
+**What a computer seat may build.** A brain builds from the same list as
+the built-in computer player. The engine makes it from the `[CANBUILD]`
+table in the mod's `gamedatE/SIDEDATA.tdf`, then the `downloadsE` menus,
+and cuts it at the mod's `limits.build-list-entries` (36 entries for
+Escalation). The players' menu pages in `guiE` are not part of it, and the
+engine refuses any other build order. Escalation's AI table is written by
+hand and fills most of the 36 entries, with duplicates that weigh a choice,
+so the list is much shorter than the players' menus: the commander's and
+the tier-1 builders' radar towers, for one, are not in it. Everything
+below plays inside that list; the brain reads it, never unit names.
 
-**The race.** In the AI table the tech lines end at different tiers; for
-Arm and Core only the hovercraft line reaches the experimental fabricator.
-For every factory the brain works out the highest tier its line leads to
-(factory → builder → factory …) and races along the line that reaches
-highest. When the seat's own line ends early it builds a bridge lab of the
-same tier. A lab is started once the income would pay for it in about four
-minutes (five on the boosted and rich levels).
+**Which line first.** Each factory belongs to a line, read from its units'
+selection groups: kbots (`CTRL_K`), vehicles (`CTRL_V`), hovercraft
+(`CTRL_H`), aircraft, ships. When the seat knows where it stands it reads
+the map: how much of it is water, and whether the enemy starts can be
+reached on land or by hovercraft. The lines are then preferred in this
+order:
+
+| Map | Order |
+| --- | --- |
+| Land, maybe some water | kbots, vehicles > aircraft > ships > hovercraft |
+| Mostly water | kbots, vehicles, ships > aircraft > hovercraft |
+| Enemy across water | hovercraft > aircraft > ships > kbots, vehicles |
+| Enemy cut off (lava, cliffs) | aircraft > ships > hovercraft > kbots, vehicles |
+
+Ships count only with open water near the base, where the shipyard goes.
+
+**The race.** The next goal climbs the seat's own line: a factory one tier
+up. When that line ends (in the AI list the kbot line stops at tier 2, the
+vehicle and aircraft lines at tier 3, and for Arm and Core only the
+hovercraft line reaches the experimental fabricator), the brain builds a
+bridge into the preferred line that leads higher, and climbs that. For
+every factory it works out the highest tier its line leads to (factory →
+builder → factory …). A factory still on the way up is never reclaimed. A
+lab is started once the income would pay for it in about four minutes
+(five on the boosted and rich levels).
+
+**The city.** The base is a grid of square blocks, as wide as the side's
+largest factory (24 cells in Escalation), with streets as wide as its
+widest ground unit plus one cell (14 cells), so the largest units pass.
+Nothing is built on a street. Factories take blocks of their own, at the
+corners, doors facing the street; other buildings are packed into the
+other blocks. Fusion reactors, energy storage, resource generators and
+forges or vaults gain from a neighbour of their kind, so they are put edge
+to edge with one, never only corner to corner; the families are a table in
+`lua/city.lua`, matched by name, because Escalation gives the bonus in unit
+scripts. No building but an extractor stands on metal. Radar and defences
+take the blocks nearest the front. When the ground is too rough for the
+grid, a building goes anywhere near the base instead.
 
 **Builders.** In the AI table Escalation's builders differ: a construction
 vehicle has no metal extractor, a construction kbot has. Factories make the
@@ -87,7 +118,13 @@ small guard stays home, and when the base is hit, every factory builds and
 the home army answers.
 
 **Commander.** The commander builds the opening and then keeps to the base.
-Whenever it is idle, or badly hurt, it walks back to the middle of the base.
+With nothing of its own to build it helps what goes up at the base, then
+the factories. It walks back toward the middle only when far away, and when
+badly hurt.
+
+**Storage.** When a store sits full and the income would fill it again
+within a minute or so, builders add metal storage (first) or energy
+storage, until the stores hold about two minutes of income.
 
 ## Files
 
@@ -98,6 +135,8 @@ Whenever it is idle, or badly hurt, it walks back to the middle of the base.
 | `lua/catalog.lua` | Unit types sorted into roles, tiers and build lists. |
 | `lua/world.lua` | The seat's units, base, tier and memory of the enemy. |
 | `lua/economy.lua` | Income goals, what is short, metal spots, maker switching. |
+| `lua/terrain.lua` | Water, reach of the enemy, and the order of the lines. |
+| `lua/city.lua` | The base grid, streets, factory blocks and adjacent families. |
 | `lua/tech.lua` | The tech line planner, the race and lab reclaiming. |
 | `lua/builders.lua` | What every builder and the commander does next. |
 | `lua/factories.lua` | What every factory makes, and the scout lab. |
