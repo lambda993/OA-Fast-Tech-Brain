@@ -24,6 +24,8 @@ local builders = {
 }
 
 local commander_reach = 1000
+-- Surface metal from which the bare ground is worth an extractor.
+local metal_ground = 20
 local radar_wanted = {[0] = 0, 1, 2, 3, 3, 3}
 local defence_wanted = {[0] = 0, 1, 2, 3, 4, 4}
 
@@ -191,6 +193,11 @@ local function try_extractor(unit, entry, reach)
     -- commander go further out rather than build none.
     if #spots == 0 and not entry.commander and reach >= 1600 then
         spots = economy.free_spots(4500)
+    end
+    -- On a metal map the ground itself holds metal and there are few or no
+    -- deposits: extractors go in the city like any other building.
+    if #spots == 0 and util.num(game.map.surface_metal) >= metal_ground then
+        return build_in_city(unit, extractor)
     end
     local tried = 0
     for index = 1, #spots do
