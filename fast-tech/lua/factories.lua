@@ -188,10 +188,11 @@ local function one_factory(unit)
     end
     local short = factories.guard_short() and tier >= top - 1
     local builder = pick_builder(entry, tier)
-    -- A short guard comes before more builders, except the one the next
-    -- lab needs.
-    if builder ~= nil and short and not (tech.goal ~= nil and catalog.can_build(builder, tech.goal)
-        and #tech.goal_builders() == 0) then
+    -- A short guard comes before more builders once there are four, except
+    -- the one the next lab needs.
+    local builder_count = #world.select(function(_, e) return e.mobile_builder and not e.commander end)
+    if builder ~= nil and short and builder_count >= 4
+        and not (tech.goal ~= nil and catalog.can_build(builder, tech.goal) and #tech.goal_builders() == 0) then
         builder = nil
     end
     if builder ~= nil then

@@ -31,6 +31,7 @@ function world.reset()
 end
 
 function world.find_start()
+    world.start = nil
     local players = me:players()
     for _, row in ipairs(players) do
         if row.player == me.player and row.start_x ~= nil then
@@ -46,6 +47,19 @@ function world.find_start()
         end)
     end
     world.base = world.start
+end
+
+-- Whether the seat knows where it stands. A seat opened before the
+-- players are placed has no start and no commander yet, so the start is
+-- looked for again each turn until it is known.
+function world.located()
+    if world.start == nil then
+        world.find_start()
+        if world.start ~= nil then
+            print(string.format("start found at %d,%d", world.start.x, world.start.z))
+        end
+    end
+    return world.start ~= nil
 end
 
 -- Units of the seat that `test(unit, entry)` accepts.
@@ -71,6 +85,9 @@ end
 
 -- The base is the middle of the seat's buildings, or its start.
 function world.update_base()
+    if not world.located() then
+        return
+    end
     local sum_x, sum_z, count = 0, 0, 0
     for _, unit in ipairs(world.select(function(u, e) return e.structure and world.finished(u) end)) do
         local at = util.pos(unit)

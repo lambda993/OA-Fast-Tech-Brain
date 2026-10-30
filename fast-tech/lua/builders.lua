@@ -3,8 +3,8 @@
 
 -- What each free builder does next. Half the builders lean on the tech
 -- race, half on the economy; both fall back on the other. The commander
--- keeps to the base: it builds there, and with nothing to do it walks back
--- to the middle of the base.
+-- keeps to the base: it builds there, helps what goes up there or the
+-- factories, and only when far away walks back toward the middle.
 
 local catalog = require("catalog")
 local economy = require("economy")
@@ -41,7 +41,8 @@ end
 -- Ground the seat has never seen takes no building, so a builder sent
 -- there walks over first and tries again once it is idle.
 local function scout_site(unit, spot)
-    if util.explored(spot) then
+    -- The commander keeps to the base: it never walks out to explore.
+    if util.explored(spot) or (unit.type ~= nil and unit.type.commander == true) then
         return false
     end
     if unit:move(spot) then
@@ -157,12 +158,50 @@ local function try_goal(unit, entry)
     return false
 end
 
+-- The site for an extractor at a deposit that covers the most metal: every
+-- footprint position a few cells around the deposit is checked, and the
+-- one with the most metal under it wins, the nearest on a tie. Returns the
+-- footprint's centre in world units, or nil when no site is clear.
+local function extractor_site(extractor, spot)
+    local map = game.map
+    local record = extractor.record
+    local width = math.max(1, util.whole(record.footprintx))
+    local depth = math.max(1, util.whole(record.footprintz))
+    local spot_x = (spot.x - 8) // 16
+    local spot_z = (spot.z - 8) // 16
+    local best, best_metal, best_d
+    for dz = -3, 3 do
+        for dx = -3, 3 do
+            local cx = spot_x - width // 2 + dx
+            local cz = spot_z - depth // 2 + dz
+            if brain.site(record, cx, cz, 0) == true then
+                local metal = 0
+                for z = 0, depth - 1 do
+                    for x = 0, width - 1 do
+                        metal = metal + util.num(map:metal(cx + x, cz + z))
+                    end
+                end
+                local d = dx * dx + dz * dz
+                if best == nil or metal > best_metal or (metal == best_metal and d < best_d) then
+                    best, best_metal, best_d = {x = cx * 16 + width * 8, z = cz * 16 + depth * 8}, metal, d
+                end
+            end
+        end
+    end
+    return best
+end
+
 local function try_extractor(unit, entry, reach)
     local extractor = economy.best_extractor(entry)
     if extractor == nil then
         return false
     end
     local spots = economy.free_spots(reach)
+    -- On maps whose deposits lie far apart, builders other than the
+    -- commander go further out rather than build none.
+    if #spots == 0 and not entry.commander and reach >= 1600 then
+        spots = economy.free_spots(4500)
+    end
     local tried = 0
     for index = 1, #spots do
         if tried >= 3 then
@@ -170,12 +209,13 @@ local function try_extractor(unit, entry, reach)
         end
         local spot = spots[index]
         tried = tried + 1
-        local _, _, x, z = brain.place(extractor.record, spot, 40, 0)
-        if x ~= nil and unit:build(extractor.record, {x = util.whole(x), z = util.whole(z)}, 0) then
+        local site = extractor_site(extractor, spot)
+        if site ~= nil and unit:build(extractor.record, site, 0) then
             economy.claim(spot)
             return true
         end
-        if x == nil and scout_site(unit, spot) then
+        -- The commander keeps to the base and does not walk out to explore.
+        if site == nil and not entry.commander and scout_site(unit, spot) then
             economy.claim(spot)
             return true
         end
@@ -363,7 +403,10 @@ local function try_defence(unit, entry)
     return false
 end
 
--- A second factory of the top tier once the economy can feed it.
+-- More factories once the economy can feed them. A factory line the seat
+-- lacks comes first, so the army mixes kbots, vehicles, aircraft and
+-- hovercraft; then more of what it has. The top tier first, else the one
+-- below. Water-only factories are left out.
 local function try_more_factories(unit, entry)
     local tier = world.tier
     if tier < 1 or recently("factory", 60) then
@@ -371,26 +414,105 @@ local function try_more_factories(unit, entry)
     end
     local e = economy.now
     local metal_goal = economy.goals(tier)
-    if e.metal_share < 0.5 or e.metal_income < metal_goal * 0.7 or e.energy_share < 0.5 then
+    if e.metal_share < 0.4 or e.metal_income < metal_goal * 0.6 or e.energy_share < 0.4 then
         return false
     end
-    -- While the next lab goes up, or could, every builder and every bit of
-    -- room is better spent on it.
-    if tech.frame_alive() or (tech.goal ~= nil and tech.affordable()) then
+    -- While the next lab goes up, every builder is better spent on it.
+    if tech.frame_alive() then
         return false
     end
-    local top = world.select(function(u, f) return f.factory and catalog.factory_tier(f) == tier end)
-    local limit = me.difficulty == "hard" and 2 or 3
-    if #top >= limit or #top == 0 then
+    local owned, count = {}, {}
+    for _, factory in ipairs(world.select(function(_, f) return f.factory end)) do
+        local kind = catalog.of(factory)
+        owned[kind.index] = true
+        local level = catalog.factory_tier(kind)
+        count[level] = (count[level] or 0) + 1
+    end
+    local limit = me.difficulty == "hard" and 3 or 4
+    local best, best_score
+    for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end)) do
+        local level = catalog.factory_tier(option)
+        if (level == tier or level == tier - 1) and (count[level] or 0) < limit
+            and option ~= tech.goal then
+            local fights = 0
+            for _, built in ipairs(option.builds) do
+                if built.combat then
+                    fights = fights + 1
+                end
+            end
+            if fights > 0 then
+                local score = (level == tier and 1000 or 0) + (owned[option.index] and 0 or 500) + fights
+                if best_score == nil or score > best_score then
+                    best, best_score = option, score
+                end
+            end
+        end
+    end
+    if best == nil then
         return false
     end
-    local kind = catalog.of(top[1])
-    if not catalog.can_build(entry, kind) then
-        return false
-    end
-    if place_large(unit, kind) then
+    if place_large(unit, best) then
         mark("factory")
-        print("another " .. kind.name)
+        print("another factory: " .. best.name)
+        return true
+    end
+    return false
+end
+
+-- Storage once a store sits full while the income would fill it again
+-- within a minute or so: the surplus is kept instead of wasted.
+local function try_storage(unit, entry)
+    if recently("storage", 45) then
+        return false
+    end
+    local e = economy.now
+    -- Enough room for two minutes of income is enough.
+    local metal_full = e.metal_share > 0.9 and e.metal_income * 45 > e.metal_cap
+        and e.metal_cap < e.metal_income * 120
+    local energy_full = e.energy_share > 0.9 and e.energy_income * 20 > e.energy_cap
+        and e.energy_cap < e.energy_income * 120
+    -- Metal is the scarcer store: it goes first when both are full.
+    local want = metal_full and "metal_storage" or (energy_full and "energy_storage" or nil)
+    if want == nil then
+        return false
+    end
+    local best, best_value
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o[want] end)) do
+        local capacity = want == "metal_storage" and option.metal_capacity or option.energy_capacity
+        local value = capacity / math.max(1, option.cost)
+        if best_value == nil or value > best_value then
+            best, best_value = option, value
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if place_around(unit, best, base(), 180 + world.tier * 40, 260) then
+        mark("storage")
+        print("storage: " .. best.name)
+        return true
+    end
+    return false
+end
+
+-- Helps put up the nearest unfinished building of the seat.
+local function try_help(unit, reach)
+    local at = util.pos(unit)
+    if at == nil then
+        return false
+    end
+    local best, best_d
+    for _, frame in ipairs(world.select(function(u, e) return e.structure and u.finished ~= true end)) do
+        local where = util.pos(frame)
+        if where ~= nil then
+            local d = util.dist(at, where)
+            if d <= reach and (best_d == nil or d < best_d) then
+                best, best_d = frame, d
+            end
+        end
+    end
+    if best ~= nil and unit:help(best) then
+        builders.parked[unit.id] = me.tick
         return true
     end
     return false
@@ -458,14 +580,22 @@ end
 
 -- Commander -------------------------------------------------------------------
 
+-- Sends the commander back toward the middle of the base when it is far
+-- away. The middle may sit under a building, so it stops on open ground
+-- short of it, and is not sent again while it walks there.
 local function send_home(unit)
     local centre = base()
     local at = util.pos(unit)
     if at == nil or centre == nil then
         return
     end
-    if util.dist(at, centre) > 120 then
-        unit:move(util.clamp(centre, 64))
+    local last = builders.retreat[unit.id]
+    if last ~= nil and me.tick - last < 30 * 20 then
+        return
+    end
+    if util.dist(at, centre) > 350 then
+        local spot = util.clamp(util.toward(centre, at, 200), 64)
+        unit:move(spot)
         builders.retreat[unit.id] = me.tick
     end
 end
@@ -499,7 +629,15 @@ local function commander_turn(unit, entry)
     if try_scout_lab(unit, entry) then
         return true
     end
-    return false
+    if try_storage(unit, entry) then
+        return true
+    end
+    -- Nothing of its own to build: help what goes up at the base, then
+    -- the factories.
+    if try_help(unit, 900) then
+        return true
+    end
+    return try_assist(unit)
 end
 
 -- Dispatch ------------------------------------------------------------------
@@ -517,7 +655,11 @@ local function builder_turn(unit, entry)
     end
     local critical = select(2, economy.need()) >= 2
     local order
-    if builders.role[unit.id] == "tech" and not critical then
+    -- The race comes first for whoever can build the next lab once the
+    -- seat can pay for it, whatever that builder's role.
+    local racing = tech.goal ~= nil and catalog.can_build(entry, tech.goal)
+        and (tech.frame_alive() or tech.affordable())
+    if racing or (builders.role[unit.id] == "tech" and not critical) then
         order = {"reclaim", "radar", "goal", "economy"}
     else
         order = {"reclaim", "radar", "economy", "goal"}
@@ -542,7 +684,8 @@ local function builder_turn(unit, entry)
     end
     local rest = {
         {"defence", try_defence}, {"upgrade", try_upgrade_extractor}, {"factory", try_more_factories},
-        {"scout lab", try_scout_lab}, {"assist", function(u) return try_assist(u) end},
+        {"storage", try_storage}, {"scout lab", try_scout_lab},
+        {"help", function(u) return try_help(u, 1500) end}, {"assist", function(u) return try_assist(u) end},
     }
     for _, task in ipairs(rest) do
         if task[2](unit, entry) then
@@ -599,7 +742,7 @@ end
 
 -- The commander walks home as soon as it is idle, and when badly hurt.
 function builders.on_idle(unit, entry)
-    if entry.commander then
+    if entry.commander and world.located() then
         economy.read()
         if not commander_turn(unit, entry) then
             send_home(unit)

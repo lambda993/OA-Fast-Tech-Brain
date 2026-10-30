@@ -38,9 +38,17 @@ local function status()
         if entry.radar_tower then counts.radar = counts.radar + 1 end
         if entry.defense then counts.defense = counts.defense + 1 end
     end
+    local kinds = {}
+    for _, unit in ipairs(world.select(function(_, e) return e.mobile_builder end)) do
+        local name = catalog.of(unit).name
+        kinds[#kinds + 1] = name
+    end
+    table.sort(kinds)
+    print("builders: " .. table.concat(kinds, ", "))
     print(string.format(
-        "status tier %d goal %s frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d | foes known %d",
-        world.tier, tech.goal and tech.goal.name or "-", tech.frame_alive() and "up" or "-",
+        "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d | foes known %d",
+        world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
+        tech.frame_alive() and "up" or "-",
         e.metal, e.metal_cap, e.metal_income, e.metal_demand, e.energy, e.energy_cap, e.energy_income, e.energy_demand,
         counts.builders, counts.factories, counts.combat, counts.scouts, counts.extractors,
         by_tier[1], by_tier[2], by_tier[3], counts.power,
@@ -58,6 +66,10 @@ local function think()
         world.update_base()
         tech.choose_goal()
     end)
+    -- Nothing can be placed or sent before the seat knows where it stands.
+    if not world.located() then
+        return
+    end
     local second = me.tick // 30
     util.guard("builders", builders.step)
     if second % 2 == 0 then

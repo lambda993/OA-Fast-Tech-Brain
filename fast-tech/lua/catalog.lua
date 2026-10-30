@@ -109,6 +109,13 @@ local function classify(index, record)
     entry.radar_tower = entry.structure and not entry.armed and entry.radar >= 1000
     entry.extractor = entry.structure and entry.extracts > 0
     entry.metal_maker = entry.structure and num(record.makesmetal) > 0 and num(record.energyuse) > 0
+    entry.metal_storage = entry.structure and not entry.builder and not entry.armed
+        and num(record.metalstorage) >= 200 and entry.energy_yield <= 0 and entry.extracts == 0
+    entry.energy_storage = entry.structure and not entry.builder and not entry.armed
+        and num(record.energystorage) >= 500 and num(record.makesmetal) == 0 and entry.extracts == 0
+        and num(record.energymake) <= num(record.energyuse)
+    entry.metal_capacity = num(record.metalstorage)
+    entry.energy_capacity = num(record.energystorage)
     entry.geo = string.find(string.upper(name), "GEOTHERMAL", 1, true) ~= nil
     entry.power = entry.structure and not entry.extractor and not entry.metal_maker
         and entry.energy_yield > 0 and num(record.energystorage) < num(record.energymake) * 4 + 1
