@@ -46,10 +46,13 @@ local function flag(value)
 end
 
 -- What a type's weapons do: whether any hits aircraft, whether all of them
--- only work in water (torpedoes), and the longest range. Escalation's
--- RANGE_ and LAB_ weapons only mark a range or a factory door.
+-- only work in water (torpedoes), the longest range, the hungriest shot,
+-- whether any hits the ground (a weapon not made for aircraft) and whether
+-- any is a dropped bomb. Escalation's RANGE_ and LAB_ weapons only mark a
+-- range or a factory door.
 local function weapon_info(record)
     local anti_air, any, water, range, shot = false, false, true, 0, 0
+    local ground, bomb = false, false
     for slot = 1, 3 do
         local weapon_name = record["weapon" .. slot]
         if type(weapon_name) == "string" and weapon_name ~= "" then
@@ -60,6 +63,11 @@ local function weapon_info(record)
                 any = true
                 if flag(weapon.toairweapon) then
                     anti_air = true
+                else
+                    ground = true
+                end
+                if flag(weapon.dropped) then
+                    bomb = true
                 end
                 if not flag(weapon.waterweapon) then
                     water = false
@@ -69,7 +77,7 @@ local function weapon_info(record)
             end
         end
     end
-    return anti_air, any and water, range, shot
+    return anti_air, any and water, range, shot, ground, bomb
 end
 
 local function text(value)
@@ -137,7 +145,17 @@ local function classify(index, record)
     entry.decoy = string.find(unit_name, "DECOM", 1, true) ~= nil
     entry.commander = entry.commander and not entry.decoy
     -- shot_energy: what one shot of the hungriest weapon draws from the store.
-    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy = weapon_info(record)
+    local ground, bomb
+    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb = weapon_info(record)
+    -- Whether its weapons can hit ground targets: units with only
+    -- anti-air weapons cannot, units without them cannot hit aircraft.
+    entry.hits_ground = ground
+    entry.bomber = entry.air and bomb
+    -- Repair pads, carriers: aircraft land on them to be repaired.
+    entry.air_base = record.isairbase == true or num(record.isairbase) > 0
+    -- The building that makes the commander tougher (Arm's Research
+    -- Facility, Core's Upgrade Center).
+    entry.commander_upgrade = unit_name == "ARMTECH" or unit_name == "CORTECH"
     entry.mobile = not entry.structure
     entry.factory = entry.structure and entry.builder
     entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0

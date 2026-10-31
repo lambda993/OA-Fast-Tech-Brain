@@ -719,8 +719,8 @@ local function try_more_factories(unit, entry)
     for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end, terrain.ship_ok)) do
         local level = catalog.factory_tier(option)
         local rank = terrain.rank(option.line)
-        if rank ~= nil and (level == tier or level == tier - 1) and (count[level] or 0) < limit
-            and option ~= tech.goal then
+        if rank ~= nil and terrain.line_ok(option.line) and (level == tier or level == tier - 1)
+            and (count[level] or 0) < limit and option ~= tech.goal then
             local fights = 0
             for _, built in ipairs(option.builds) do
                 if built.combat then
@@ -839,6 +839,24 @@ local function try_help(unit, reach)
         end
     end
     if best ~= nil and unit:help(best) then
+        builders.parked[unit.id] = me.tick
+        return true
+    end
+    return false
+end
+
+-- Helps the frame of the next lab, which any builder can help even when it
+-- could not have started it.
+local function try_help_frame(unit)
+    if not tech.frame_alive() then
+        return false
+    end
+    local at = util.pos(unit)
+    local where = util.pos(tech.frame)
+    if at == nil or where == nil or util.dist(at, where) > 2500 then
+        return false
+    end
+    if unit:help(tech.frame) then
         builders.parked[unit.id] = me.tick
         return true
     end
@@ -979,6 +997,61 @@ local function try_artillery(unit, entry)
     return false
 end
 
+-- Repair pads once the seat flies enough aircraft: one for every eight
+-- attacking aircraft, up to four, carriers counted. Damaged aircraft fly
+-- to them by themselves (the engine's repair retreat).
+local function air_fleet()
+    return #world.select(function(_, e) return e.air and e.combat and not e.scout end)
+end
+
+function builders.air_bases_wanted()
+    return math.min(4, air_fleet() // 8)
+end
+
+local function try_air_base(unit, entry)
+    if recently("air-base", 60) then
+        return false
+    end
+    local have = count_of(function(_, e) return e.air_base end)
+    if have >= builders.air_bases_wanted() then
+        return false
+    end
+    local best
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.air_base and o.structure end)) do
+        if best == nil or option.cost < best.cost then
+            best = option
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if build_in_city(unit, best) then
+        mark("air-base")
+        print("air base: " .. best.name)
+        return true
+    end
+    return false
+end
+
+-- From tier 3, one commander upgrade building (Arm's Research Facility):
+-- it makes the commander tougher.
+local function try_commander_upgrade(unit, entry)
+    if world.tier < 3 or recently("commander-upgrade", 120) then
+        return false
+    end
+    if count_of(function(_, e) return e.commander_upgrade end) > 0 then
+        return false
+    end
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.commander_upgrade end)) do
+        if build_in_city(unit, option) then
+            mark("commander-upgrade")
+            print("commander upgrade: " .. option.name)
+            return true
+        end
+    end
+    return false
+end
+
 -- Clears large wrecks left in the base once the fighting there is over.
 local function try_clear_wreck(unit, entry)
     if entry.record.canreclamate ~= true or #world.wrecks == 0 then
@@ -1025,9 +1098,24 @@ builders.mend = {}      -- unit id -> tick it was sent home for repair
 builders.repairing = {} -- builder id -> id of what it repairs
 local repair_value = 7500
 local repairers_each = 3
+-- The commander is mended from below 75 % health, by more builders, and
+-- holds still meanwhile (builders.commander_mending).
+local commander_mend_below = 75
+local commander_repairers = 4
 
 local function repair_targets()
     local targets = {}
+    for _, commander in ipairs(world.select(function(_, e) return e.commander end)) do
+        local health = util.num(commander.health_percent)
+        if health < commander_mend_below then
+            builders.commander_mending = true
+        elseif health >= 95 then
+            builders.commander_mending = nil
+        end
+        if builders.commander_mending then
+            targets[#targets + 1] = commander
+        end
+    end
     local attacked = world.alarm ~= nil and me.tick - world.alarm.tick < 30 * 60
     if attacked then
         for _, unit in ipairs(world.select(function(u, e)
@@ -1067,11 +1155,12 @@ local function send_repairs()
         end
     end
     local free = world.select(function(u, e)
-        return e.mobile_builder and world.finished(u) and builders.repairing[u.id] == nil
+        return e.mobile_builder and not e.commander and world.finished(u) and builders.repairing[u.id] == nil
     end)
     for _, target in ipairs(targets) do
         local where = util.pos(target)
-        while where ~= nil and (crews[target.id] or 0) < repairers_each and #free > 0 do
+        local wanted = catalog.of(target).commander and commander_repairers or repairers_each
+        while where ~= nil and (crews[target.id] or 0) < wanted and #free > 0 do
             local best, best_index, best_d
             for index, unit in ipairs(free) do
                 local at = util.pos(unit)
@@ -1237,7 +1326,7 @@ local function decoy_fights(unit)
             end
         end
     end
-    target = target or world.best_target(at, decoy_reach)
+    target = target or world.best_target(at, decoy_reach, catalog.of(unit))
     if target ~= nil then
         unit:attack(target)
         builders.parked[unit.id] = me.tick - 30 * 10
@@ -1312,7 +1401,7 @@ local function commander_turn(unit, entry)
     -- so the commander lends its own before anything else.
     local e = economy.now
     if world.tier >= 1 and e.metal_share > 0.7 and e.energy_share > 0.3 then
-        if try_goal(unit, entry) or try_help(unit, 900) or try_assist(unit) then
+        if try_goal(unit, entry) or try_help_frame(unit) or try_assist(unit) or try_help(unit, 900) then
             return true
         end
     end
@@ -1388,7 +1477,17 @@ local function builder_turn(unit, entry)
         table.insert(order, at, "anti-air")
         table.insert(order, 2, "shot-storage")
     end
+    -- From tier 3 the commander upgrade building comes right after the lab.
+    if not starving then
+        for index, name in ipairs(order) do
+            if name == "goal" then
+                table.insert(order, index + 1, "commander-upgrade")
+                break
+            end
+        end
+    end
     local tasks = {
+        ["commander-upgrade"] = try_commander_upgrade,
         ["shot-storage"] = try_shot_storage,
         ["anti-air"] = try_anti_air,
         artillery = try_artillery,
@@ -1404,12 +1503,34 @@ local function builder_turn(unit, entry)
         end
     end
     local rest = {
+        {"air base", try_air_base},
         {"defence", try_defence}, {"jammer", try_jammer},
         {"factory", try_more_factories}, {"upgrade", try_upgrade_extractor},
         {"storage", try_storage}, {"scout lab", try_scout_lab}, {"wreck", try_clear_wreck},
         {"help", function(u) return try_help(u, 1500) end}, {"sweep", function(u) return try_sweep(u) end},
         {"assist", function(u) return try_assist(u) end},
     }
+    -- Metal piling up: the factories are short of build power, so more
+    -- factories and then helping them come before the rest.
+    local e = economy.now
+    if e.metal_share > 0.7 and e.energy_share > 0.3 then
+        local first = {}
+        local others = {}
+        first[1] = {"frame", function(u) return try_help_frame(u) end}
+        for _, task in ipairs(rest) do
+            if task[1] == "factory" then
+                table.insert(first, 2, task)
+            elseif task[1] == "assist" then
+                first[#first + 1] = task
+            else
+                others[#others + 1] = task
+            end
+        end
+        for _, task in ipairs(others) do
+            first[#first + 1] = task
+        end
+        rest = first
+    end
     local spare = {wreck = true, help = true, sweep = true, assist = true}
     for _, task in ipairs(rest) do
         if (not starving or spare[task[1]]) and task[2](unit, entry) then
@@ -1486,6 +1607,14 @@ function builders.step()
         if entry.commander then
             cloak_commander(unit, entry)
             busy = guard_commander(unit, entry)
+            -- Hurt and with builders on their way: it holds still until
+            -- mended (danger still sends it running).
+            if not busy and builders.commander_mending and builders.crew_for(unit) > 0 then
+                if not util.free(unit) then
+                    unit:stop()
+                end
+                busy = true
+            end
         elseif entry.decoy then
             busy = decoy_fights(unit)
         end
@@ -1537,6 +1666,17 @@ function builders.check_extractor(unit, entry)
     end
 end
 
+-- How many builders are repairing `unit`.
+function builders.crew_for(unit)
+    local count = 0
+    for _, target_id in pairs(builders.repairing) do
+        if target_id == unit.id then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 -- A heavy unit sent home for repair.
 function builders.mend_unit(unit)
     builders.mend[unit.id] = me.tick
@@ -1544,7 +1684,8 @@ end
 
 -- The commander walks home as soon as it is idle, and when badly hurt.
 function builders.on_idle(unit, entry)
-    if entry.commander and world.located() and builders.fleeing == nil then
+    if entry.commander and world.located() and builders.fleeing == nil
+        and not (builders.commander_mending and builders.crew_for(unit) > 0) then
         economy.read()
         if not commander_turn(unit, entry) then
             send_home(unit)

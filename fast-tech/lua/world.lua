@@ -134,6 +134,7 @@ function world.remember(unit)
         world.enemy_buildings[unit.id] = {
             x = at.x, z = at.z, tier = entry.tier, cost = entry.cost, tick = me.tick,
             unit = unit, factory = entry.factory, commander = false,
+            anti_air = world.anti_air(entry),
         }
     end
     world.note_contact(at)
@@ -205,18 +206,27 @@ end
 
 -- How much an enemy is worth shooting first: commanders and decoys (they
 -- look alike, so both count as commanders), then tier 4 and 5, tier 3,
--- the economy, and the rest.
+-- anti-air (it keeps the seat's aircraft away), the economy, and the rest.
+world.commander_priority = 6
+
+function world.anti_air(entry)
+    return entry ~= nil and entry.anti_air and (entry.defense or entry.combat)
+end
+
 function world.priority(entry)
     if entry == nil then
         return 1
     end
     if entry.commander or entry.decoy then
-        return 5
+        return 6
     end
     if entry.tier >= 4 then
-        return 4
+        return 5
     end
     if entry.tier == 3 then
+        return 4
+    end
+    if world.anti_air(entry) then
         return 3
     end
     -- The economy, the factories and the builders.
@@ -227,17 +237,34 @@ function world.priority(entry)
     return 1
 end
 
+-- Whether `shooter` (a catalog entry, or nil for any) can fire at `target`:
+-- only anti-air weapons hit aircraft, and only other weapons hit the rest.
+function world.can_hit(shooter, target)
+    if shooter == nil or target == nil then
+        return true
+    end
+    if target.air then
+        return shooter.anti_air == true
+    end
+    return shooter.hits_ground == true
+end
+
 -- The visible enemy to shoot from `from` within `reach`: the highest
 -- priority, the nearest among equals. A commander is chased twice as far,
--- so everything near one turns on it.
-function world.best_target(from, reach)
+-- so everything near one turns on it. With `shooter` (the catalog entry of
+-- the unit that fires) only what it can hit counts, and a bomber goes for
+-- anti-air first.
+function world.best_target(from, reach, shooter)
     local best, best_key
     for _, enemy in ipairs(world.visible_enemies()) do
         local at = util.pos(enemy)
         local entry = catalog.of(enemy)
-        if at ~= nil then
+        if at ~= nil and world.can_hit(shooter, entry) then
             local priority = world.priority(entry)
-            local limit = priority == 5 and reach * 2 or reach
+            if shooter ~= nil and shooter.bomber and world.anti_air(entry) then
+                priority = 7
+            end
+            local limit = priority == world.commander_priority and reach * 2 or reach
             local d = util.dist(from, at)
             if d <= limit then
                 local key = priority * 100000 - d

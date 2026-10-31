@@ -59,9 +59,11 @@ The lines are then preferred in this order:
 | Enemy cut off (lava, cliffs) | aircraft > ships > hovercraft > kbots, vehicles |
 
 Ships count only with open water near the base, where the shipyard goes.
-A line whose units cannot reach the enemy comes after every line that
-can, even when it would climb a tier: on islands the race takes the
-hovercraft, ships or aircraft, not the kbots.
+A line whose units cannot reach the enemy is no goal at all while some
+line can, even when it would climb a tier: on islands the race takes the
+hovercraft, ships or aircraft, not the kbots, and where only aircraft get
+through no shipyard or hover plant is built. Extra factories follow the
+same rule.
 
 **The race.** The next goal climbs the seat's own line: a factory one tier
 up. When that line ends (in the AI list the kbot line stops at tier 2, the
@@ -103,7 +105,9 @@ down the next lab, once the seat can pay for it, does that before anti-air
 and artillery. Builders walk out to ground the seat has never seen before
 they build there, and give up a walk after 40 seconds plus one for every
 20 world units of the way (far deposits) or when the engine reports no
-path. A builder parked by the engine (hovercraft "park", aircraft land)
+path. With metal piling up, builders help the next lab's frame first,
+then add factories, then help the factories, before smaller work. A
+builder parked by the engine (hovercraft "park", aircraft land)
 counts as free, and so does one left on a guard or a move the brain did
 not order.
 
@@ -163,15 +167,42 @@ unexplored ground first, and never where another scout is going.
 worth passes the tier's mark. Waves go for the nearest remembered enemy
 building, a recent contact, or a start position nobody has looked at. A
 small guard stays home, and when the base is hit, every factory builds and
-the home army answers.
+the home army answers. Torpedo-only units (torpedo bombers too) are built
+only when ships reach the enemy.
+
+**Targets.** Each unit shoots what its weapons can hit: only anti-air
+weapons fire at aircraft, so the rest ignore them, and pure anti-air
+units ignore the ground. Commanders and decoys come first, then tier 4
+and 5, tier 3, anti-air, the economy and the rest; bombers go for
+anti-air before anything else, and look further for it. Aircraft
+attacking a base pull back to the front of their own base when the
+anti-air around them outweighs half their number (tiers counted), and
+sit out the next minute; bombers stay. While the seat has strike
+aircraft (scouts do not count), its long-range guns fire at anti-air in
+range first, seen or remembered.
+
+**Allies.** When an ally is in grave danger (eight or more armed enemies
+among its units, read from the `allies` and `threat` grid layers) the
+home army goes to help, at most every two minutes, unless the seat's own
+base is under heavy attack (five armed enemies near it).
+
+**Aircraft repair.** Once the seat flies eight attacking aircraft its
+builders put up a repair pad, one for every eight up to four; with twelve
+or more the factories also make carriers (mobile pads that can reach the
+enemy), one for every sixteen. Damaged aircraft fly to them by
+themselves (the engine's repair retreat).
 
 **Commander.** The commander opens with an extractor, the first lab, then
 more extractors and power, and keeps to the base; it walks out only to see
 deposits within 800 units. With metal piling up from tier 1 it helps the
-factories and frames first (they are short of build power); with nothing
+next lab's frame, then the factories (they are short of build power); with nothing
 of its own to build it helps what goes up at the base, then the factories,
 and looks for work again every fifteen seconds. It walks back toward the
-middle only when far away, and when badly hurt. It runs from any enemy
+middle only when far away, and when badly hurt. Below 75 % health up to
+four builders come to repair it and it holds still until mended (95 %),
+unless danger sends it running. From tier 3 the builders put up the
+commander upgrade building (Arm's Research Facility, Core's Upgrade
+Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other
 both die. Decoys do the opposite: they chase an enemy commander or decoy
 they see up to four times their usual reach.

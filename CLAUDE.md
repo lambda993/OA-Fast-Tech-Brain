@@ -231,7 +231,8 @@ error is logged once and the seat keeps playing).
 - `brain.place` stops after 4 096 cells (radius about 500 world units),
   whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
-  commander fleeing or D-gunning, jammers (depends on the AI list).
+  commander fleeing or D-gunning, jammers (depends on the AI list), ally
+  rescue, carriers.
 - Fixed after the user's 4-seat Crater Islands game (all four seats were
   Fast Tech): the survey took 2-4 minutes, so the first lab was a kbot lab;
   now ~15 s and the first lab waits for it, and lines that cannot reach the
@@ -251,6 +252,26 @@ error is logged once and the seat keeps playing).
   log line if it happens again.
 - Commander flees any enemy commander or decoy within 1 100; decoys chase
   them up to 2 800. Not yet seen in a test match.
+- Added on user request (after a 4-seat game on Ooooweeee, where only
+  aircraft reach): no torpedo units unless ships reach the enemy; units
+  only shoot what their weapons can hit (`world.can_hit`); anti-air is a
+  target above the economy, bombers go for it first; aircraft pull back
+  from strong anti-air (`aircraft pull back from anti-air: N`); guns fire
+  at anti-air first while the seat has strike aircraft; the home army
+  helps an ally in grave danger (`ally in danger at ...`; needs a game
+  with allies, never tested headless); repair pads and carriers with
+  enough aircraft (aircraft go to pads by the engine's repair retreat);
+  commander under 75 % is repaired by up to four builders and holds still;
+  commander upgrade building from tier 3 (Arm Research Facility `ARMTECH`,
+  Core Upgrade Center `CORTECH`, both in the AI lists); lines that do not
+  reach the enemy are no tech goal and no extra factory.
+- `city.place` had no bound on the positions it scanned (the metal test
+  reads every footprint cell): on Core Prime (seed 7) a turn passed 250 ms
+  and the seat stopped, in the committed version too. Capped at 1 500
+  positions per placement.
+- With metal piling up, builders that cannot start the next lab must still
+  help its frame first: sending them to guard factories instead slowed the
+  tier-2 air plant from 6 700 to 15 000 ticks on Coremageddon.
 - Fixed after user reports: extractors beside taken deposits (60 % rule),
   Moho upgrades half off the deposit, units built that cannot reach the
   enemy (reach per class via routes), energy short at tier 3 (ratio by

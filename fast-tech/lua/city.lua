@@ -157,7 +157,17 @@ end
 
 -- Whether the footprint at top-left cell (x, z) is free, inside `block`,
 -- on the map, off metal unless it is an extractor, and a clear site.
+-- Positions one placement may look at: the metal test reads every cell of
+-- the footprint, and on a metal map (Core Prime) a search through every
+-- block ran past the 250 ms a turn may take.
+local scan_limit = 1500
+
 local function fits(entry, x, z, w, d, block, rects, budget, facing)
+    budget.scans = (budget.scans or 0) + 1
+    if budget.scans > scan_limit then
+        budget.left = 0
+        return false
+    end
     local rect = {x0 = x, z0 = z, x1 = x + w - 1, z1 = z + d - 1}
     if block ~= nil and (rect.x0 < block.x0 or rect.z0 < block.z0 or rect.x1 > block.x1 or rect.z1 > block.z1) then
         return false

@@ -163,6 +163,16 @@ function tech.choose_goal()
             end
         end
     end
+    -- When some line reaches the enemy, factories of lines that do not are
+    -- no goal at all: their units would stay home (a map where only
+    -- aircraft get through raced shipyards and hover plants for nothing).
+    local any_reaching = false
+    for _, entry in ipairs(candidates) do
+        if terrain.line_ok(entry.line) and terrain.rank(entry.line) ~= nil and same_side(entry) then
+            any_reaching = true
+            break
+        end
+    end
     local best, best_key
     for _, entry in ipairs(candidates) do
         local level = catalog.factory_tier(entry)
@@ -174,6 +184,7 @@ function tech.choose_goal()
         local useful = rank ~= nil and not owned[entry.index] and same_side(entry)
             and not aside(entry)
             and (not entry.water_only or terrain.ship_ok)
+            and (terrain.line_ok(entry.line) or not any_reaching)
             and level <= top_factory_tier
             and (level > tier or (line > tier and (held[entry.line or "?"] or 0) < level))
         if useful then

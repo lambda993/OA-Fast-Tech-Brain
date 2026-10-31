@@ -101,8 +101,9 @@ local function pick_scout(entry)
 end
 
 local function pick_combat(entry)
-    -- Torpedo-only units are no use without water to fight in.
-    local wet = terrain.ship_ok
+    -- Torpedo-only units (torpedo bombers too) are no use unless ships
+    -- reach the enemy: water by the base alone is not enough.
+    local wet = terrain.ship_reaches == true
     -- Nor are units that cannot reach the enemy on this map.
     local options = catalog.buildable(entry, function(e)
         return e.combat and (wet or not e.torpedo_only) and terrain.useful(e)
@@ -223,6 +224,21 @@ local function one_factory(unit)
         if scout ~= nil then
             unit:queue(scout.record, 1)
             return
+        end
+    end
+    -- Carriers once the seat flies many aircraft: a mobile repair base for
+    -- every sixteen, counted with the pads.
+    local fleet = #world.select(function(_, e) return e.air and e.combat and not e.scout end)
+    if fleet >= 12 and util.chance(0.2) then
+        local bases = #world.select(function(_, e) return e.air_base end)
+        if bases < 1 + fleet // 16 then
+            for _, built in ipairs(entry.builds) do
+                if built.air_base and built.mobile and terrain.useful(built) then
+                    unit:queue(built.record, 1)
+                    print("carrier: " .. built.name)
+                    return
+                end
+            end
         end
     end
     local share = production_share(tier, top) * level_share()
