@@ -97,8 +97,12 @@ local function push(attackers)
     for _, unit in ipairs(attackers) do
         local at = util.pos(unit)
         local enemy = at and nearest_enemy(at, 800)
+        local contact = enemy == nil and at and world.nearest_contact(at, 1200)
         if enemy ~= nil then
             unit:attack(enemy)
+        elseif contact then
+            -- Seen only on radar or sonar: close in, fighting on the way.
+            unit:patrol(util.clamp(contact, 64))
         elseif target ~= nil and util.free(unit) then
             unit:patrol(util.clamp(target, 64))
         end
@@ -157,6 +161,10 @@ local function aim_guns()
                             end
                         end
                     end
+                    -- Nothing remembered in range: a radar or sonar contact.
+                    if best == nil then
+                        best = world.nearest_contact(at, reach)
+                    end
                     if best ~= nil then
                         gun:attack_ground({x = best.x, z = best.z})
                         army.gun_orders[gun.id] = me.tick
@@ -211,6 +219,13 @@ function army.step()
     if near ~= nil then
         for _, unit in ipairs(home) do
             unit:attack(near)
+        end
+        return
+    end
+    local contact = world.nearest_contact(rally, 900)
+    if contact ~= nil then
+        for _, unit in ipairs(home) do
+            unit:patrol(util.clamp(contact, 64))
         end
         return
     end

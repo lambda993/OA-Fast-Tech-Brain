@@ -219,8 +219,9 @@ function world.priority(entry)
     if entry.tier == 3 then
         return 3
     end
+    -- The economy, the factories and the builders.
     if entry.extractor or entry.power or entry.metal_maker or entry.factory
-        or entry.metal_storage or entry.energy_storage then
+        or entry.metal_storage or entry.energy_storage or entry.mobile_builder then
         return 2
     end
     return 1
@@ -243,6 +244,27 @@ function world.best_target(from, reach)
                 if best_key == nil or key > best_key then
                     best, best_key = enemy, key
                 end
+            end
+        end
+    end
+    return best
+end
+
+-- The radar or sonar contact nearest `from` within `reach`, as a point,
+-- for when nothing in sight is worth shooting.
+function world.nearest_contact(from, reach)
+    local contacts = me.radar
+    if type(contacts) ~= "table" then
+        return nil
+    end
+    local best, best_d
+    for index = 1, #contacts do
+        local contact = contacts[index]
+        if contact ~= nil and contact.x ~= nil and contact.current ~= false then
+            local at = {x = util.whole(contact.x), z = util.whole(contact.z)}
+            local d = util.dist(from, at)
+            if d <= reach and (best_d == nil or d < best_d) then
+                best, best_d = at, d
             end
         end
     end

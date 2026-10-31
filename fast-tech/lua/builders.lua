@@ -353,16 +353,30 @@ local function try_economy(unit, entry, near_base)
     return try_power(unit, entry, centre, spread)
 end
 
+-- Radar, and sonar where there is water, as many of each as the tier
+-- calls for.
 local function try_radar(unit, entry)
     local wanted = radar_wanted[math.min(5, world.tier)]
-    local have = count_of(function(_, e) return e.radar_tower end)
-    if have >= wanted or recently("radar", 30) then
+    if recently("radar", 30) then
         return false
     end
     local best
-    for _, option in ipairs(catalog.buildable(entry, function(e) return e.radar_tower end)) do
-        if best == nil or option.radar > best.radar then
-            best = option
+    local have = count_of(function(_, e) return e.radar_tower end)
+    if have < wanted then
+        for _, option in ipairs(catalog.buildable(entry, function(e) return e.radar_tower end)) do
+            if best == nil or option.radar > best.radar then
+                best = option
+            end
+        end
+    end
+    if best == nil and terrain.water_share >= 0.05 then
+        local sonars = count_of(function(_, e) return e.sonar_tower end)
+        if sonars < wanted then
+            for _, option in ipairs(catalog.buildable(entry, function(e) return e.sonar_tower end, true)) do
+                if best == nil or util.num(option.record.sonardistance) > util.num(best.record.sonardistance) then
+                    best = option
+                end
+            end
         end
     end
     if best == nil then
@@ -377,6 +391,35 @@ local function try_radar(unit, entry)
     end
     if build_in_city(unit, best, near) then
         mark("radar")
+        return true
+    end
+    return false
+end
+
+-- Jammers to hide the base from enemy radar and sonar: as many as the
+-- seat has radar and sonar towers, near the middle of the base.
+local function try_jammer(unit, entry)
+    if recently("jammer", 40) then
+        return false
+    end
+    local towers = count_of(function(_, e) return e.radar_tower or e.sonar_tower end)
+    local have = count_of(function(_, e) return e.jammer end)
+    if have >= towers then
+        return false
+    end
+    local best, best_reach
+    for _, option in ipairs(catalog.buildable(entry, function(e) return e.jammer end, terrain.water_share >= 0.05)) do
+        local reach = util.num(option.record.radardistancejam) + util.num(option.record.sonardistancejam)
+        if best_reach == nil or reach > best_reach then
+            best, best_reach = option, reach
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if build_in_city(unit, best, base()) then
+        mark("jammer")
+        print("jammer: " .. best.name)
         return true
     end
     return false
@@ -824,7 +867,9 @@ local function danger(unit, entry)
         if where ~= nil and kind ~= nil and (kind.combat or kind.commander or kind.decoy) then
             local d = util.dist(at, where)
             local counted = false
-            if kind.air and not entry.anti_air and d <= air_radius then
+            -- Aircraft it cannot shoot count only once they hit it.
+            local hit = builders.commander_hit ~= nil and me.tick - builders.commander_hit < 30 * 5
+            if kind.air and not entry.anti_air and hit and d <= air_radius then
                 air = air + 1
                 counted = true
             elseif not kind.air and d <= danger_radius then
@@ -1064,7 +1109,7 @@ local function builder_turn(unit, entry)
         end
     end
     local rest = {
-        {"defence", try_defence},
+        {"defence", try_defence}, {"jammer", try_jammer},
         {"factory", try_more_factories}, {"upgrade", try_upgrade_extractor},
         {"storage", try_storage}, {"scout lab", try_scout_lab}, {"wreck", try_clear_wreck},
         {"help", function(u) return try_help(u, 1500) end}, {"sweep", function(u) return try_sweep(u) end},
@@ -1157,6 +1202,9 @@ function builders.on_path_failed(unit)
 end
 
 function builders.on_damaged(unit, entry)
+    if entry.commander then
+        builders.commander_hit = me.tick
+    end
     if entry.commander and util.num(unit.health_percent) < 50 then
         local last = builders.retreat[unit.id]
         if last == nil or me.tick - last > 30 * 10 then

@@ -147,6 +147,10 @@ local function classify(index, record)
     entry.defense = entry.structure and not entry.builder and entry.armed
         and record.canattack == true
     entry.radar_tower = entry.structure and not entry.armed and entry.radar >= 1000
+    entry.sonar_tower = entry.structure and not entry.armed and not entry.radar_tower
+        and num(record.sonardistance) >= 600
+    entry.jammer = entry.structure and not entry.armed
+        and (num(record.radardistancejam) > 0 or num(record.sonardistancejam) > 0)
     entry.extractor = entry.structure and entry.extracts > 0
     entry.metal_maker = entry.structure and num(record.makesmetal) > 0 and num(record.energyuse) > 0
     entry.metal_storage = entry.structure and not entry.builder and not entry.armed
@@ -164,6 +168,7 @@ local function classify(index, record)
     entry.artillery = entry.defense and entry.range >= 3000
     if entry.upgrade then
         for _, role in ipairs({"factory", "mobile_builder", "scout", "combat", "defense", "radar_tower",
+            "sonar_tower", "jammer",
             "extractor", "metal_maker", "metal_storage", "energy_storage", "geo", "power", "artillery"}) do
             entry[role] = false
         end

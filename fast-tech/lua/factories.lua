@@ -103,8 +103,9 @@ end
 local function pick_combat(entry)
     -- Torpedo-only units are no use without water to fight in.
     local wet = terrain.ship_ok
+    -- Nor are units that cannot reach the enemy on this map.
     local options = catalog.buildable(entry, function(e)
-        return e.combat and (wet or not e.torpedo_only)
+        return e.combat and (wet or not e.torpedo_only) and terrain.useful(e)
     end, true)
     return util.weighted(options, function(e)
         local weight = tier_weight[math.min(5, e.tier)] or 1
