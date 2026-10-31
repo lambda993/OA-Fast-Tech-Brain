@@ -10,6 +10,7 @@ local util = require("util")
 
 local world = {
     wrecks = {},        -- wrecks left in the base: {x, z, size, tick}
+    salvage = {},       -- wrecks near the base worth reclaiming: {x, z, metal, tick}
     tier = 0,
     own = {},           -- id -> unit, every live unit of the seat
     enemy_buildings = {}, -- id -> {x, z, tier, cost, tick}
@@ -157,6 +158,15 @@ function world.note_wreck(entry, wreck)
         return
     end
     local at = {x = util.whole(wreck.x), z = util.whole(wreck.z)}
+    -- Any wreck within reach of the base is salvage for lean times; its
+    -- metal is taken as half the unit's cost.
+    local worth = entry ~= nil and entry.metal * 0.5 or 0
+    if worth >= 25 and util.dist(at, world.base) <= 3000 then
+        world.salvage[#world.salvage + 1] = {x = at.x, z = at.z, metal = worth, tick = me.tick}
+        if #world.salvage > 80 then
+            table.remove(world.salvage, 1)
+        end
+    end
     if util.dist(at, world.base) > 2500 then
         return
     end

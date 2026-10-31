@@ -25,6 +25,9 @@ local builders = {
     upgrade_tried = {}, -- deposit and extractor type -> tick an upgrade was tried there
     pending = {},  -- what was ordered recently, so two builders do not start the same thing
     retreat = {},  -- commander id -> tick it was sent home
+    running = {},  -- builder or decoy id -> tick it last ran from danger
+    hit = {},      -- builder or decoy id -> {tick, x, z} of the last weapon hit
+    salvaging = {}, -- builder id -> tick it was sent to reclaim a wreck
 }
 
 local commander_reach = 1000
@@ -1052,6 +1055,93 @@ local function try_commander_upgrade(unit, entry)
     return false
 end
 
+-- Lean times: a store below a fifth of its size (where the engine's own
+-- patrolling builders start reclaiming) makes wrecks near the builder
+-- worth more than a new extractor or power plant. The nearest known
+-- wreck is reclaimed; with none known, a crowded block near the builder
+-- (rocks and trees, whose positions the API does not give) is patrolled,
+-- and the patrol reclaims what it passes while the store is low.
+local salvage_reach = 1200
+local salvagers_max = 3
+
+local function scarce()
+    local e = economy.now or economy.read()
+    return e.metal_share < 0.2 or e.energy_share < 0.2
+end
+
+local function try_salvage(unit, entry)
+    if entry.record.canreclamate ~= true or not scarce() then
+        return false
+    end
+    local working = 0
+    for id, tick in pairs(builders.salvaging) do
+        if me.tick - tick > 30 * 30 or world.own[id] == nil then
+            builders.salvaging[id] = nil
+        elseif id ~= unit.id then
+            working = working + 1
+        end
+    end
+    if working >= salvagers_max then
+        return false
+    end
+    local at = util.pos(unit)
+    local home = base()
+    if at == nil or home == nil then
+        return false
+    end
+    local enemies = world.visible_enemies()
+    local function safe(spot)
+        for _, enemy in ipairs(enemies) do
+            local where = util.pos(enemy)
+            local kind = catalog.of(enemy)
+            if where ~= nil and kind ~= nil and kind.combat and util.dist2(where, spot) < 700 * 700 then
+                return false
+            end
+        end
+        return true
+    end
+    local best, best_index, best_d
+    for index = #world.salvage, 1, -1 do
+        local wreck = world.salvage[index]
+        if me.tick - wreck.tick > 30 * 1200 then
+            table.remove(world.salvage, index)
+        else
+            local d = util.dist(at, wreck)
+            if d <= salvage_reach and util.dist(home, wreck) <= 3000 and safe(wreck)
+                and (best_d == nil or d < best_d) then
+                best, best_index, best_d = wreck, index, d
+            end
+        end
+    end
+    if best ~= nil then
+        table.remove(world.salvage, best_index)
+        if unit:reclaim({x = best.x, z = best.z}) then
+            builders.parked[unit.id] = me.tick
+            builders.salvaging[unit.id] = me.tick
+            print(string.format("salvage wreck at %d,%d (about %d metal)", best.x, best.z, util.whole(best.metal)))
+            return true
+        end
+        return false
+    end
+    if recently("salvage-sweep", 30) then
+        return false
+    end
+    for index, block in ipairs(city.crowded) do
+        if me.tick - block.tick <= 30 * 300 and util.dist(at, block) <= salvage_reach and safe(block) then
+            table.remove(city.crowded, index)
+            if unit:patrol(util.clamp(block, 64)) then
+                mark("salvage-sweep")
+                builders.parked[unit.id] = me.tick
+                builders.salvaging[unit.id] = me.tick
+                print(string.format("salvage sweep at %d,%d", block.x, block.z))
+                return true
+            end
+            return false
+        end
+    end
+    return false
+end
+
 -- Clears large wrecks left in the base once the fighting there is over.
 local function try_clear_wreck(unit, entry)
     if entry.record.canreclamate ~= true or #world.wrecks == 0 then
@@ -1156,6 +1246,7 @@ local function send_repairs()
     end
     local free = world.select(function(u, e)
         return e.mobile_builder and not e.commander and world.finished(u) and builders.repairing[u.id] == nil
+            and (e.decoy or builders.running[u.id] == nil)
     end)
     for _, target in ipairs(targets) do
         local where = util.pos(target)
@@ -1165,6 +1256,10 @@ local function send_repairs()
             for index, unit in ipairs(free) do
                 local at = util.pos(unit)
                 local d = at and util.dist(at, where) or 1e9
+                -- Decoys go first: they never leave an emergency repair.
+                if catalog.of(unit).decoy then
+                    d = d * 0.5
+                end
                 if best_d == nil or d < best_d then
                     best, best_index, best_d = unit, index, d
                 end
@@ -1192,7 +1287,7 @@ local danger_radius = 900
 local air_radius = 700
 local commander_radius = 1100
 
-local function danger(unit, entry)
+local function danger(unit, entry, ignore_air)
     local at = util.pos(unit)
     if at == nil then
         return nil
@@ -1205,9 +1300,11 @@ local function danger(unit, entry)
         if where ~= nil and kind ~= nil and (kind.combat or kind.commander or kind.decoy) then
             local d = util.dist(at, where)
             local counted = false
-            -- Aircraft it cannot shoot count only once they hit it.
-            local hit = builders.commander_hit ~= nil and me.tick - builders.commander_hit < 30 * 5
-            if kind.air and not entry.anti_air and hit and d <= air_radius then
+            -- Aircraft it cannot shoot count only once they hit it; decoys
+            -- ignore them.
+            local last = builders.hit[unit.id]
+            local hit = last ~= nil and me.tick - last.tick < 30 * 5
+            if kind.air and not entry.anti_air and hit and not ignore_air and d <= air_radius then
                 air = air + 1
                 counted = true
             elseif (kind.commander or kind.decoy) and d <= commander_radius then
@@ -1236,17 +1333,21 @@ end
 
 -- Runs as far from the threat as it can: straight away from it, a long
 -- way, bending toward the back of the base when the map edge is close.
-local function flee(unit, threat)
+local function run_from(unit, threat, distance)
     local at = util.pos(unit)
-    local away = util.toward(at, threat, -1800)
+    local away = util.toward(at, threat, -distance)
     local spot = util.clamp(away, 96)
-    if util.dist(spot, at) < 900 then
+    if util.dist(spot, at) < distance / 2 then
         -- Cornered against the edge: slide along it, toward the base's back.
         local home = base()
         local back = util.toward(home, world.front(400), -1200)
         spot = util.clamp(back, 96)
     end
     unit:move(spot)
+end
+
+local function flee(unit, threat)
+    run_from(unit, threat, 1800)
     if builders.fleeing == nil then
         print(string.format("commander flees from %.0f,%.0f", threat.x, threat.z))
     end
@@ -1306,32 +1407,103 @@ local function guard_commander(unit, entry)
     return try_dgun(unit, entry)
 end
 
--- Decoys fight without fear: anything worth shooting near them is shot,
--- and an enemy commander or decoy in sight is chased four times as far.
-local decoy_reach = 700
-
-local function decoy_fights(unit)
-    local at = util.pos(unit)
-    if at == nil then
+-- Decoys keep out of fights as the commander does: they run from the
+-- same dangers and from enemy commanders and decoys, but aircraft do not
+-- move them. A decoy on an emergency repair never runs.
+local function guard_decoy(unit, entry)
+    if builders.repairing[unit.id] ~= nil then
+        builders.running[unit.id] = nil
         return false
     end
-    local target, target_d
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local kind = catalog.of(enemy)
-        local where = util.pos(enemy)
-        if kind ~= nil and where ~= nil and (kind.commander or kind.decoy) then
-            local d = util.dist(at, where)
-            if d <= decoy_reach * 4 and (target_d == nil or d < target_d) then
-                target, target_d = enemy, d
+    local threat = danger(unit, entry, true)
+    local last = builders.running[unit.id]
+    if threat ~= nil then
+        if last == nil or me.tick - last > 30 * 4 then
+            if last == nil then
+                print(string.format("decoy flees from %.0f,%.0f", threat.x, threat.z))
             end
+            run_from(unit, threat, 1200)
+            builders.walking[unit.id] = nil
+            builders.running[unit.id] = me.tick
         end
-    end
-    target = target or world.best_target(at, decoy_reach, catalog.of(unit))
-    if target ~= nil then
-        unit:attack(target)
-        builders.parked[unit.id] = me.tick - 30 * 10
         return true
     end
+    if last ~= nil and me.tick - last < 30 * 6 then
+        return true
+    end
+    builders.running[unit.id] = nil
+    return false
+end
+
+-- Builders run from danger too, and from anything that hits them: back
+-- toward the base when it lies away from the threat, else straight away
+-- from it. A walk they were on is given up and its spot set aside.
+local function builder_threat(unit, entry)
+    local threat = danger(unit, entry)
+    if threat ~= nil then
+        return threat
+    end
+    local last = builders.hit[unit.id]
+    if last ~= nil and me.tick - last.tick < 30 * 4 then
+        if last.x ~= nil then
+            return {x = last.x, z = last.z}
+        end
+        -- Hit by something unseen: the nearest armed enemy in sight.
+        local at = util.pos(unit)
+        local best, best_d
+        for _, enemy in ipairs(world.visible_enemies()) do
+            local kind = catalog.of(enemy)
+            local where = util.pos(enemy)
+            if at ~= nil and kind ~= nil and where ~= nil and kind.combat then
+                local d = util.dist(at, where)
+                if d < 1000 and (best_d == nil or d < best_d) then
+                    best, best_d = where, d
+                end
+            end
+        end
+        if best == nil then
+            -- Nothing in sight to run from: back to the base.
+            return {home = true}
+        end
+        return best
+    end
+    return nil
+end
+
+local function guard_builder(unit, entry)
+    local threat = builder_threat(unit, entry)
+    local last = builders.running[unit.id]
+    if threat ~= nil then
+        if last == nil or me.tick - last > 30 * 4 then
+            local at = util.pos(unit)
+            local home = base()
+            if at ~= nil and home ~= nil and threat.home then
+                if util.dist(at, home) > 300 then
+                    unit:move(util.clamp(util.toward(home, at, 200), 64))
+                end
+            elseif at ~= nil and home ~= nil and util.dist(at, home) > 600
+                and util.dist(threat, home) > util.dist(at, home) then
+                unit:move(util.clamp(util.toward(home, at, 200), 64))
+            elseif at ~= nil and threat.x ~= nil then
+                run_from(unit, threat, 700)
+            end
+            local walk = builders.walking[unit.id]
+            if walk ~= nil then
+                builders.walking[unit.id] = nil
+                economy.claim({x = walk.x, z = walk.z}, 120)
+            end
+            builders.repairing[unit.id] = nil
+            builders.running[unit.id] = me.tick
+            if last == nil then
+                builders.new_runners = (builders.new_runners or 0) + 1
+            end
+        end
+        return true
+    end
+    if last ~= nil and me.tick - last < 30 * 8 then
+        return true
+    end
+    builders.running[unit.id] = nil
     return false
 end
 
@@ -1405,7 +1577,7 @@ local function commander_turn(unit, entry)
             return true
         end
     end
-    if try_economy(unit, entry, true) then
+    if try_salvage(unit, entry) or try_economy(unit, entry, true) then
         return true
     end
     if try_radar(unit, entry) then
@@ -1457,9 +1629,9 @@ local function builder_turn(unit, entry)
         and (tech.frame_alive() or tech.affordable())
         and not (critical and builders.role[unit.id] == "economy")
     if racing or (builders.role[unit.id] == "tech" and not critical) then
-        order = {"reclaim", "radar", "goal", "economy"}
+        order = {"reclaim", "radar", "goal", "salvage", "economy"}
     else
-        order = {"reclaim", "radar", "economy", "goal"}
+        order = {"reclaim", "radar", "salvage", "economy", "goal"}
     end
     -- Under attack, or with too few defences, the economy builders fortify first.
     local defences = count_of(function(_, e) return e.defense end)
@@ -1492,6 +1664,7 @@ local function builder_turn(unit, entry)
         ["anti-air"] = try_anti_air,
         artillery = try_artillery,
         reclaim = try_reclaim,
+        salvage = try_salvage,
         radar = try_radar,
         goal = try_goal,
         defence = try_defence,
@@ -1600,6 +1773,7 @@ end
 function builders.step()
     economy.read()
     send_repairs()
+    builders.new_runners = 0
     local list = world.select(function(u, e) return e.mobile_builder and world.finished(u) end)
     for _, unit in ipairs(list) do
         local entry = catalog.of(unit)
@@ -1616,7 +1790,9 @@ function builders.step()
                 busy = true
             end
         elseif entry.decoy then
-            busy = decoy_fights(unit)
+            busy = guard_decoy(unit, entry)
+        else
+            busy = guard_builder(unit, entry)
         end
         if not busy and (ready(unit) or released(unit, entry)) and builders.repairing[unit.id] == nil then
             if entry.commander then
@@ -1629,6 +1805,19 @@ function builders.step()
             elseif not builder_turn(unit, entry) then
                 park(unit)
             end
+        end
+    end
+    if builders.new_runners > 0 then
+        print("builders flee: " .. builders.new_runners)
+    end
+    for id in pairs(builders.running) do
+        if world.own[id] == nil then
+            builders.running[id] = nil
+        end
+    end
+    for id, last in pairs(builders.hit) do
+        if world.own[id] == nil or me.tick - last.tick > 30 * 60 then
+            builders.hit[id] = nil
         end
     end
 end
@@ -1706,10 +1895,12 @@ function builders.on_path_failed(unit)
     unit:stop()
 end
 
-function builders.on_damaged(unit, entry)
-    if entry.commander then
-        builders.commander_hit = me.tick
+function builders.on_damaged(unit, entry, attacker)
+    if not entry.mobile_builder then
+        return
     end
+    local from = attacker ~= nil and util.pos(attacker) or nil
+    builders.hit[unit.id] = {tick = me.tick, x = from and from.x, z = from and from.z}
     if entry.commander and util.num(unit.health_percent) < 50 then
         local last = builders.retreat[unit.id]
         if last == nil or me.tick - last > 30 * 10 then

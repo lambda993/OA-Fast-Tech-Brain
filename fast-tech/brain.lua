@@ -171,7 +171,7 @@ function hooks.onUnitDamaged(unit, attacker, _, kind)
         return
     end
     util.guard("damaged", function()
-        builders.on_damaged(unit, entry)
+        builders.on_damaged(unit, entry, attacker)
         army.on_damaged(unit, attacker)
     end)
 end

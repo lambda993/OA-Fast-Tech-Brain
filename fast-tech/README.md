@@ -214,8 +214,29 @@ unless danger sends it running. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other
-both die. Decoys do the opposite: they chase an enemy commander or decoy
-they see up to four times their usual reach.
+both die.
+
+**Decoys.** Decoy commanders keep out of fights as the commander does:
+they run from the same dangers (more than eight tier-1 or five tier-2
+enemies, any tier 3 or heavier) and from any enemy commander or decoy
+within 1 100 units, but aircraft never move them. A decoy on an emergency
+repair (the commander or a large building) never runs, and decoys are
+picked first for those repairs (`decoy flees from x,z`).
+
+**Builders in danger.** Builders run from the same dangers, and from
+anything that hits them: back to the base when it lies away from the
+threat, else 700 units straight away from it; they work again after eight
+quiet seconds. A walk they were on is given up and its spot set aside for
+two minutes. Aircraft count only once they hit (`builders flee: N`).
+
+**Salvage.** When a store falls below a fifth (where the engine's own
+patrolling builders start reclaiming), wrecks near a builder come before
+new extractors and power: the nearest known wreck within 1 200 units
+(every wreck the seat saw left within 3 000 of the base, worth half the
+unit's cost), away from enemies, up to three builders at a time
+(`salvage wreck at x,z`). With no wreck known, a crowded block nearby
+(rocks and trees; the API gives no feature positions) is patrolled, and
+the patrol reclaims what it passes (`salvage sweep at x,z`).
 
 **Storage.** From tier 2, when a store sits full and the income would fill it again
 within a minute or so, builders add metal storage (first) or energy

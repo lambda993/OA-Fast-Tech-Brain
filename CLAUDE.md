@@ -16,6 +16,9 @@ README in step with the code.
 - **Privacy**: the author is `Lambda993` everywhere (manifest, SPDX lines,
   commits). Never write the user's real name. The repo-local git identity is
   set to `Lambda993`.
+- **Every change updates the notes and the README**: this file (state,
+  engine facts, what the user asked for) and `fast-tech/README.md` (the
+  rules), in the same round as the code, so everything is tracked.
 - **Never commit or push unless the user says so.** The user usually says
   "comitta e installa": then commit, pack, install, check (see below).
 - The repo is a private GitHub repo: remote `origin` is
@@ -190,7 +193,10 @@ error is logged once and the seat keeps playing).
    cloaks with spare energy; flees from > 8 T1, > 5 T2 or any T3/T4 nearby,
    and from aircraft it cannot hit only once they hit it; D-guns lone T3/T4
    in its base when cloaked and safe.
-4. Up to 15 decoy commanders from tier 2; they build and fight without fear.
+4. Up to 15 decoy commanders from tier 2; they build and, like the
+   commander, avoid fights (run from danger and enemy commanders/decoys,
+   ignore aircraft), but never leave an emergency repair. (Earlier they
+   fought without fear and chased commanders; the user changed this.)
 5. Line order: land map kbot/vehicle > air > ships > hover; water map
    kbot/vehicle/ships > air > hover; enemy across water hover and ships
    first, then air; enemy cut off: air first. Units that cannot reach the
@@ -214,6 +220,8 @@ error is logged once and the seat keeps playing).
     targets when nothing is in sight.
 13. **Not possible** (not in the AI build list): nukes and anti-nukes 3:1,
     Tribulation, tier-1 radar.
+14. Builders run from danger and when hit; with a store below 20 %
+    wrecks/features nearby are reclaimed before new extractors or power.
 
 ## State and open points
 
@@ -250,8 +258,18 @@ error is logged once and the seat keeps playing).
   covers under 90 % of the deposit; none in the test runs after the 80 %
   rule. The user still saw badly placed extractors once: ask for the seat
   log line if it happens again.
-- Commander flees any enemy commander or decoy within 1 100; decoys chase
-  them up to 2 800. Not yet seen in a test match.
+- Commander and decoys flee any enemy commander or decoy within 1 100.
+  Not yet seen in a test match (neither `decoy flees`).
+- Builders flee (`builders flee: N`): 15 times on Crater Islands, once on
+  Painted Desert fair, no loss in results. `onUnitDamaged` gives the
+  attacker only when the seat may know it.
+- Salvage: feature (rock/tree) positions are not in the API; the engine's
+  RepairPatrol reclaims features in sight only while a store is below 20 %
+  (`reserve_fraction`), so the brain patrols crowded blocks then. Wrecks
+  come from `onUnitDestroyed`'s `wreck` ({name, x, z}, nil for many
+  deaths). `salvage sweep` seen (Coremageddon, Painted Desert fair);
+  `salvage wreck` never in tests: low stores and nearby wrecks rarely
+  coincide.
 - Added on user request (after a 4-seat game on Ooooweeee, where only
   aircraft reach): no torpedo units unless ships reach the enemy; units
   only shoot what their weapons can hit (`world.can_hit`); anti-air is a
