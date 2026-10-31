@@ -125,6 +125,19 @@ error is logged once and the seat keeps playing).
   and a turn over **250 ms of real time stops the seat**
   (`tick ran for more than 250 milliseconds`). The survey asks one route a
   turn. `os.clock` is not available to time things.
+- Order kinds a unit rests in: `Standby`, `Park` (hovercraft), `VTOL_Standby`,
+  `VTOL_LandIfCan`, `Stop`; `util.free` must count them all, or builders of
+  that kind never get an order (hover builders once idled a whole match).
+  Help on a finished factory turns into `Follow_Ground` (a guard) that never
+  ends. A failed path leaves the `Move_Ground` at the head of the queue:
+  `onPathFailed` stops the unit. `unit:orders()` gives `kind`, `target`,
+  `x`, `z`, `parameter_1` (the type index of a build) for debugging.
+- A unit's `heading` (0..65535): 0 and 32768 face along z. A factory's
+  units leave along that axis; a building or deposit there traps them.
+- Every map in the TA set has some surface metal (3 to 7 on ordinary maps,
+  20 on Pincushion, Lava Mania, Red Hot Lava); metal maps have 255 and no
+  deposits. Underwater deposits: Crater Islands 14 of 41, Luschaven 76 of
+  160, Sail Away 37 of 85 (`map:ground(x, z) < sea_level`).
 - A water grid cell (`brain.grid({"water"})` share > 0.6) can still be
   shallows a boat class cannot enter: check `map:passable(class, cx, cz)`
   (3 = clear) before using it as a ship endpoint.
@@ -156,7 +169,7 @@ error is logged once and the seat keeps playing).
 | `brain.lua` | Hooks; one turn a second (`think`): world, map survey, tech goal, then builders, factories (2 s), army (3 s), scouts and pruning (5 s), status (60 s), city dump (600 s). |
 | `lua/catalog.lua` | Every unit type sorted into roles: tier, line, builder/factory, combat, defence, anti-air, artillery, radar/sonar/jammer, economy, storage, decoy, upgrade, water-only, shot energy; wind/tide judged against solar. |
 | `lua/world.lua` | Own units, base and start, tier, enemy memory (buildings, contacts, wrecks, enemy air), target priority and `best_target`, radar contacts. |
-| `lua/terrain.lua` | Water share, water point for shipyards, enemy starts, reach per movement class, which lines reach the enemy, line ranking. |
+| `lua/terrain.lua` | Water share, water point (route-checked) and shore for water buildings, enemy starts, reach per movement class, which lines reach the enemy, line ranking. |
 | `lua/tech.lua` | Line reach planner, next goal (climb, else bridge to the preferred line), affordability, lab reclaiming. |
 | `lua/economy.lua` | Income goals per tier, what is short (energy ≈ 15 × metal income), power/extractor/maker choice, metal spots, geothermal vents, maker on/off. |
 | `lua/city.lua` | Grid: blocks (24 cells), streets (widest ground unit + 1 = 14), alleys (widest builder, 4), block quality from `map:passable`, districts (factories to the front, power behind), adjacency families, fill cap 60 %, `on_street`, ASCII dump. |
@@ -219,6 +232,25 @@ error is logged once and the seat keeps playing).
   whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
   commander fleeing or D-gunning, jammers (depends on the AI list).
+- Fixed after the user's 4-seat Crater Islands game (all four seats were
+  Fast Tech): the survey took 2-4 minutes, so the first lab was a kbot lab;
+  now ~15 s and the first lab waits for it, and lines that cannot reach the
+  enemy rank last even when they climb. Hover builders idled in `Park`; a
+  hovercraft platform built with an extractor at its door trapped its
+  builders; the nearest water was a lake no builder reached. Water-only
+  buildings were dropped from the build lists: underwater extractors,
+  tidal/floating power, floating anti-air and defences are now built. Tier-1
+  stutter (metal full, nothing spent): the commander built energy storage
+  and the first builder built anti-air before the lab; now storage waits
+  for tier 2, the lab comes first, and the commander helps the factories
+  when metal piles up. Ring Atoll: builders walked to unexplored grid
+  blocks all game; walks are limited to 600 units from the base.
+- Seat logs print `extractor off deposit: ...` when a finished extractor
+  covers under 90 % of the deposit; none in the test runs after the 80 %
+  rule. The user still saw badly placed extractors once: ask for the seat
+  log line if it happens again.
+- Commander flees any enemy commander or decoy within 1 100; decoys chase
+  them up to 2 800. Not yet seen in a test match.
 - Fixed after user reports: extractors beside taken deposits (60 % rule),
   Moho upgrades half off the deposit, units built that cannot reach the
   enemy (reach per class via routes), energy short at tier 3 (ratio by

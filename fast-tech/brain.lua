@@ -23,7 +23,7 @@ local refreshed = false
 
 local function status()
     local e = require("economy").read()
-    local counts = {builders = 0, factories = 0, combat = 0, scouts = 0, extractors = 0, power = 0, radar = 0, defense = 0}
+    local counts = {builders = 0, factories = 0, combat = 0, scouts = 0, extractors = 0, power = 0, radar = 0, defense = 0, water = 0}
     local by_tier = {0, 0, 0, 0, 0}
     for _, unit in ipairs(world.select(function() return true end)) do
         local entry = catalog.of(unit)
@@ -39,6 +39,7 @@ local function status()
         if entry.power then counts.power = counts.power + 1 end
         if entry.radar_tower then counts.radar = counts.radar + 1 end
         if entry.defense then counts.defense = counts.defense + 1 end
+        if entry.structure and entry.water_only then counts.water = counts.water + 1 end
     end
     local kinds = {}
     for _, unit in ipairs(world.select(function(_, e) return e.mobile_builder end)) do
@@ -58,13 +59,13 @@ local function status()
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
     print(string.format(
-        "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d | foes known %d",
+        "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
         tech.frame_alive() and "up" or "-",
         e.metal, e.metal_cap, e.metal_income, e.metal_demand, e.energy, e.energy_cap, e.energy_income, e.energy_demand,
         counts.builders, counts.factories, counts.combat, counts.scouts, counts.extractors,
         by_tier[1], by_tier[2], by_tier[3], counts.power,
-        counts.radar, counts.defense, util.count(world.enemy_buildings)))
+        counts.radar, counts.defense, counts.water, util.count(world.enemy_buildings)))
 end
 
 local function think()
@@ -76,9 +77,6 @@ local function think()
     util.guard("world", function()
         world.update_tier()
         world.update_base()
-        if world.located() then
-            terrain.survey()
-        end
         tech.choose_goal()
     end)
     -- Nothing can be placed or sent before the seat knows where it stands.
@@ -106,6 +104,15 @@ local function think()
     end
 end
 
+-- The map survey asks one route at a time, every tenth of a second, so
+-- its answer (which lines reach the enemy) comes before the first lab.
+local function survey()
+    if terrain.ready or not world.located() then
+        return
+    end
+    util.guard("survey", terrain.survey)
+end
+
 function hooks.fits(game_now)
     local mod = game_now.mod
     if mod == nil or mod.id ~= "escalation" then
@@ -120,6 +127,7 @@ function hooks.start()
     refreshed = false
     if not armed then
         brain.every(30, think)
+        brain.every(3, survey)
         armed = true
     end
     print(string.format("fast-tech %s on %s, side %s, level %s",
@@ -133,6 +141,10 @@ end
 
 function hooks.onUnitFinished(unit)
     world.own[unit.id] = unit
+    local entry = catalog.of(unit)
+    if entry ~= nil and entry.extractor then
+        util.guard("extractor check", builders.check_extractor, unit, entry)
+    end
 end
 
 function hooks.onUnitIdle(unit)

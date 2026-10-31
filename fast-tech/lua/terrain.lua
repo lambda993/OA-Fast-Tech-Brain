@@ -93,6 +93,16 @@ local function verdict(class)
     return hits.reached * 2 > #terrain.targets
 end
 
+-- Whether the checks asked so far already settle a class: every target
+-- must be reached when the starts are known, most of them when guessed.
+local function settled(hits, total)
+    local failed = hits.asked - hits.reached
+    if terrain.targets_known then
+        return failed > 0 or hits.reached == total
+    end
+    return hits.reached * 2 > total or failed * 2 >= total
+end
+
 function terrain.class_reaches(class)
     if class == nil or class == "" then
         return true
@@ -218,6 +228,29 @@ local function plan_checks(waters)
     checks = {}
     next_check = 1
     local from = {x = world.start.x, z = world.start.z}
+    -- First the water the seat builds on: the nearest open water that a
+    -- hovercraft gets to from the base (the nearest may be a crater lake
+    -- behind cliffs, or the sea beyond a rim no builder crosses).
+    local hover
+    for _, class in ipairs(ground_classes()) do
+        if string.find(string.upper(class), "HOVER", 1, true) then
+            hover = class
+            break
+        end
+    end
+    if hover ~= nil then
+        local near = {}
+        for _, water in ipairs(waters) do
+            local d = util.dist(water, world.start)
+            if d <= water_reach then
+                near[#near + 1] = {x = water.x, z = water.z, d = d}
+            end
+        end
+        table.sort(near, function(a, b) return a.d < b.d end)
+        for index = 1, math.min(5, #near) do
+            checks[#checks + 1] = {class = hover, from = from, to = {x = near[index].x, z = near[index].z}, water = true}
+        end
+    end
     for _, class in ipairs(ground_classes()) do
         class_hits[class] = {asked = 0, reached = 0}
         for _, target in ipairs(terrain.targets) do
@@ -234,7 +267,7 @@ local function plan_checks(waters)
         return ok and util.num(pass) >= 3
     end
     for _, boat in ipairs(boat_classes()) do
-        ship_hits[boat] = {asked = #terrain.targets, reached = 0}
+        ship_hits[boat] = {asked = #terrain.targets, reached = 0, failed = 0}
         local from, from_d
         for _, water in ipairs(waters) do
             local d = util.dist(water, world.start)
@@ -252,9 +285,13 @@ local function plan_checks(waters)
                     end
                 end
                 table.sort(near, function(a, b) return a.d < b.d end)
-                for index = 1, math.min(3, #near) do
+                local last = math.min(3, #near)
+                for index = 1, last do
                     checks[#checks + 1] = {class = boat, from = from,
-                        to = {x = near[index].x, z = near[index].z}, ship = number}
+                        to = {x = near[index].x, z = near[index].z}, ship = number, last = index == last}
+                end
+                if last == 0 then
+                    ship_hits[boat].failed = ship_hits[boat].failed + 1
                 end
             end
         end
@@ -265,17 +302,38 @@ end
 -- is skipped once another water point by the same enemy was reached.
 local ship_done = {}  -- boat class .. enemy number -> reached
 
+local function skip(check)
+    if check.water then
+        return terrain.water_found == true
+    end
+    if check.ship then
+        local hits = ship_hits[check.class]
+        local total = #terrain.targets
+        return ship_done[check.class .. "#" .. check.ship]
+            or hits.reached * 2 >= total or hits.failed * 2 > total
+    end
+    return settled(class_hits[check.class], #terrain.targets)
+end
+
 local function run_checks()
     while next_check <= #checks do
         local check = checks[next_check]
         next_check = next_check + 1
         local key = check.ship and (check.class .. "#" .. check.ship)
-        if not (key and ship_done[key]) then
+        if not skip(check) then
             local ok, routed = meets(check.from, check.to, check.class)
-            if check.ship then
+            if check.water then
+                if ok then
+                    terrain.water_found = true
+                    terrain.water_point = check.to
+                    terrain.shore = terrain.shore_toward(check.to)
+                end
+            elseif check.ship then
                 if ok then
                     ship_done[key] = true
                     ship_hits[check.class].reached = ship_hits[check.class].reached + 1
+                elseif check.last then
+                    ship_hits[check.class].failed = ship_hits[check.class].failed + 1
                 end
             else
                 local hits = class_hits[check.class]
@@ -324,6 +382,7 @@ function terrain.survey()
         end
         terrain.water_share = total / (grid_size * grid_size)
         terrain.water_point = nearest
+        terrain.shore = nearest and terrain.shore_toward(nearest)
         terrain.targets = enemy_starts()
         terrain.targets_known = false
         for _, row in ipairs(me:players()) do
@@ -367,6 +426,52 @@ function terrain.survey()
         terrain.water_share * 100, tostring(terrain.land_ok), tostring(terrain.hover_ok),
         tostring(terrain.ship_ok), tostring(terrain.ship_reaches), #terrain.targets,
         terrain.targets_known and "" or " guessed", #through > 0 and table.concat(through, " ") or "none"))
+end
+
+-- The edge of the water at `water` nearest the base: from the water point
+-- toward the base, the last point still under the sea. Water buildings go
+-- there, close to the land, where builders that cannot sail reach them;
+-- walking from the water side keeps to that body of water, not a lake
+-- the straight line crosses first.
+function terrain.shore_toward(water)
+    local home = world.base or world.start
+    if home == nil then
+        return water
+    end
+    local sea = util.num(game.map.sea_level)
+    local d = util.dist(home, water)
+    local last = water
+    local step = 0
+    while step <= d do
+        local at = util.toward(water, home, step)
+        local ok, ground = pcall(function() return game.map:ground(util.whole(at.x), util.whole(at.z)) end)
+        if not ok or ground == nil or util.num(ground) < 0 or util.num(ground) >= sea - 4 then
+            break
+        end
+        last = {x = util.whole(at.x), z = util.whole(at.z)}
+        step = step + 32
+    end
+    return last
+end
+
+-- Whether a point lies under the sea (an underwater deposit).
+function terrain.under_water(point)
+    local ok, ground = pcall(function() return game.map:ground(util.whole(point.x), util.whole(point.z)) end)
+    return ok and ground ~= nil and util.num(ground) >= 0 and util.num(ground) < util.num(game.map.sea_level)
+end
+
+-- Whether a line's units reach the enemy on this map.
+function terrain.line_ok(line)
+    if line == "kbot" or line == "vehicle" then
+        return terrain.land_ok
+    end
+    if line == "hover" then
+        return terrain.hover_ok
+    end
+    if line == "ship" then
+        return terrain.ship_reaches == true
+    end
+    return true
 end
 
 -- How much a line is wanted on this map: 0 is the most, higher is less,

@@ -98,16 +98,28 @@ function util.reachable(unit, point)
     if type(class) ~= "string" or class == "" then
         return true
     end
+    -- From the unit's position, not its handle: a handle standing on a
+    -- blocked cell (beside a building) can answer no.
+    local at = util.pos(unit)
+    if at == nil then
+        return true
+    end
     local ok, result = pcall(function()
-        return game.map:reachable(unit, {x = math.floor(point.x), z = math.floor(point.z)}, class)
+        return game.map:reachable({x = math.floor(at.x), z = math.floor(at.z)},
+            {x = math.floor(point.x), z = math.floor(point.z)}, class)
     end)
     return not ok or result ~= false
 end
 
+-- Orders a unit sits in when it has nothing to do: hovercraft "park",
+-- aircraft hover in place or land.
+local resting = {Standby = true, Park = true, VTOL_Standby = true, VTOL_LandIfCan = true,
+    Standby_Mine = true, Stop = true}
+
 -- A unit with no order at the head of its queue, or a finished one.
 function util.free(unit)
     local kind, _, idle = unit:head_order()
-    return kind == nil or idle == true or kind == "Standby"
+    return kind == nil or idle == true or resting[kind] == true
 end
 
 function util.alive(unit)

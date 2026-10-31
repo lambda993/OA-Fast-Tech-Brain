@@ -43,11 +43,13 @@ reached on land or by hovercraft. Each movement class of the side's combat
 units is judged on its own: a unit is built only when its class reaches
 the enemy (a kbot for shallows may not, where a deep-water tank does). A
 seat without full awareness is told by `map:reachable` that ground it has
-never seen is open, so a yes is checked with `map:route`, one route a
-second; the `map:` line comes some seconds into the match and names the
-classes that get through. Ships are judged the same way, from water near
-the base deep enough for that class to the three such points nearest each
-enemy start. The lines are then preferred in this order:
+never seen is open, so a yes is checked with `map:route`, one route every
+tenth of a second, and a class stops being asked once its answer is
+settled; the `map:` line comes about fifteen seconds into the match and
+names the classes that get through. The first lab waits for it (at most
+90 seconds). Ships are judged the same way, from water near the base deep
+enough for that class to the three such points nearest each enemy start.
+The lines are then preferred in this order:
 
 | Map | Order |
 | --- | --- |
@@ -57,6 +59,9 @@ enemy start. The lines are then preferred in this order:
 | Enemy cut off (lava, cliffs) | aircraft > ships > hovercraft > kbots, vehicles |
 
 Ships count only with open water near the base, where the shipyard goes.
+A line whose units cannot reach the enemy comes after every line that
+can, even when it would climb a tier: on islands the race takes the
+hovercraft, ships or aircraft, not the kbots.
 
 **The race.** The next goal climbs the seat's own line: a factory one tier
 up. When that line ends (in the AI list the kbot line stops at tier 2, the
@@ -73,7 +78,12 @@ largest factory (24 cells in Escalation), with streets as wide as its
 widest ground unit plus one cell (14 cells), so the largest units pass.
 Nothing is built on a street. Factories take blocks of their own, at the
 corners, doors facing the street; other buildings are packed into the
-other blocks. Fusion reactors, energy storage, resource generators and
+other blocks. Builders walk out to see unexplored blocks only within 600
+units of the base; past that (islands, a thin ring of land) a building
+goes anywhere near the base, and the commander tries that first.
+Outside the grid nothing hems a factory in: no building stands at a
+factory's door or back, and a factory is not put where a deposit or a
+building would sit there. Fusion reactors, energy storage, resource generators and
 forges or vaults gain from a neighbour of their kind, so they are put edge
 to edge with one, never only corner to corner; the families are a table in
 `lua/city.lua`, matched by name, because Escalation gives the bonus in unit
@@ -88,27 +98,42 @@ radar, metal makers, power), then more of the best kind. Half the builders
 lean on the race and half on the economy; when metal has run out the
 economy half sees to the economy first, builds nothing else (anti-air,
 artillery, defences, storage, more factories) unless attacked, and is
-called back from helping frames that cannot rise. Builders walk out to
-ground the seat has never seen before they build there, and give up a walk
-after 40 seconds plus one for every 20 world units of the way (far
-deposits) or when the engine reports no path.
+called back from helping frames that cannot rise. A builder that can put
+down the next lab, once the seat can pay for it, does that before anti-air
+and artillery. Builders walk out to ground the seat has never seen before
+they build there, and give up a walk after 40 seconds plus one for every
+20 world units of the way (far deposits) or when the engine reports no
+path. A builder parked by the engine (hovercraft "park", aircraft land)
+counts as free, and so does one left on a guard or a move the brain did
+not order.
 
-**Economy.** Free metal spots near the base come first. An extractor goes
-where its footprint covers the most of the deposit, and only where it
-covers at least 60 % of what the best position would: a deposit taken by
-an enemy extractor or a building is passed over, not answered with an
-extractor on the bare ground beside it. From tier 2 a builder that can
+**Economy.** Free metal spots near the base come first, those the seat
+can already see before those it must walk to. An extractor goes where its
+footprint covers the most of the deposit, and only where it covers at
+least 80 % of what the best position would: a deposit taken by an enemy
+extractor or a building is passed over, not answered with an extractor
+on the bare ground beside it. A deposit under the sea takes an underwater
+extractor. The bare ground gets extractors only on metal maps (surface
+metal 100 or more, or 20 with hardly any deposits). From tier 2 a builder that can
 make a better extractor replaces the lower-tier ones, nearest the base
 first: it reclaims the old extractor and builds the new one where it
 covers the deposit best. Only then do builders walk to far spots. A free
-builder with nothing else to do also upgrades extractors. Without spots the
-builders put up metal makers when energy allows, and power when the makers
-would starve.
+builder with nothing else to do also upgrades extractors. An upgrade that
+did not take on a deposit is not tried there again for ten minutes.
+Without spots the builders put up metal makers when energy allows, and
+power when the makers would starve.
 Energy is kept at about fifteen per unit of metal income up to tier 2,
 twenty-five at tier 3 and thirty above (the big units burn far more), and
 metal piling up while the energy store runs dry makes power the first
 task. Large plants are preferred to many small ones, geothermal plants go on vents, and metal
 makers switch off when the metal store is nearly full.
+
+**Water.** With open water by the base the builders also use the
+water-only buildings of their lists: tidal, floating and underwater power
+when it gives more for its cost, floating makers, anti-air and defences
+(some on the water by choice when much of the map is water, otherwise
+when the land has no room). They go into the sea nearest the base that a
+hovercraft reaches (checked with a route), by its shore.
 
 **Lower tiers wind down.** A factory at the top tier builds freely, one tier
 below builds 40 % of its turns, two tiers below 10 %, and tier 1 builds 15 %
@@ -140,12 +165,18 @@ building, a recent contact, or a start position nobody has looked at. A
 small guard stays home, and when the base is hit, every factory builds and
 the home army answers.
 
-**Commander.** The commander builds the opening and then keeps to the base.
-With nothing of its own to build it helps what goes up at the base, then
-the factories. It walks back toward the middle only when far away, and when
-badly hurt.
+**Commander.** The commander opens with an extractor, the first lab, then
+more extractors and power, and keeps to the base; it walks out only to see
+deposits within 800 units. With metal piling up from tier 1 it helps the
+factories and frames first (they are short of build power); with nothing
+of its own to build it helps what goes up at the base, then the factories,
+and looks for work again every fifteen seconds. It walks back toward the
+middle only when far away, and when badly hurt. It runs from any enemy
+commander or decoy within 1 100 units: two commanders D-gunning each other
+both die. Decoys do the opposite: they chase an enemy commander or decoy
+they see up to four times their usual reach.
 
-**Storage.** When a store sits full and the income would fill it again
+**Storage.** From tier 2, when a store sits full and the income would fill it again
 within a minute or so, builders add metal storage (first) or energy
 storage, until the stores hold about two minutes of income; for metal
 at most 2 000 plus twenty seconds of income, so a large late income is

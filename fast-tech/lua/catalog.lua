@@ -202,10 +202,9 @@ function catalog.refresh_builds()
                     local built = list[slot]
                     local built_index = built and built:index()
                     local other = built_index and catalog.types[built_index]
-                    -- Water-only buildings are kept only when they are
-                    -- shipyards; ships themselves are kept.
+                    -- Water-only buildings are kept too; catalog.buildable
+                    -- leaves them out unless the caller asks for water.
                     local keep = other ~= nil and not other.skip
-                        and (not other.water_only or other.mobile or other.builder)
                     if keep and not seen[built_index] then
                         seen[built_index] = true
                         entry.builds[#entry.builds + 1] = other
@@ -327,17 +326,20 @@ function catalog.of(unit)
     return catalog.types[index]
 end
 
--- What a mobile builder can do for the seat, as a set of words.
+-- What a mobile builder can do for the seat on land, as a set of words.
+-- Water buildings do not count.
 function catalog.abilities(entry)
     local found = {}
     for _, built in ipairs(entry.builds) do
-        if built.extractor then found.extractor = true end
-        if built.radar_tower then found.radar = true end
-        if built.metal_maker then found.maker = true end
-        if built.power and not built.geo then found.power = true end
-        if built.geo then found.geo = true end
-        if built.defense then found.defense = true end
-        if built.factory then found.factory = true end
+        if not built.water_only or built.factory then
+            if built.extractor then found.extractor = true end
+            if built.radar_tower then found.radar = true end
+            if built.metal_maker then found.maker = true end
+            if built.power and not built.geo then found.power = true end
+            if built.geo then found.geo = true end
+            if built.defense then found.defense = true end
+            if built.factory then found.factory = true end
+        end
     end
     return found
 end

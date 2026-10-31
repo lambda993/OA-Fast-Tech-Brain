@@ -20,15 +20,16 @@ local builders = {
     role = {},     -- builder id -> "tech" or "economy"
     parked = {},   -- builder id -> tick it was sent to patrol or assist
     wide_search = {},  -- factory index -> tick of the last search around the base
-    wide_failed = {},
-    released = {},     -- builder id -> tick it was last called back from helping  -- factory index -> searches in a row that found nothing
+    wide_failed = {},  -- factory index -> searches in a row that found nothing
+    released = {},     -- builder id -> tick it was last called back from helping
+    upgrade_tried = {}, -- deposit and extractor type -> tick an upgrade was tried there
     pending = {},  -- what was ordered recently, so two builders do not start the same thing
     retreat = {},  -- commander id -> tick it was sent home
 }
 
 local commander_reach = 1000
--- Surface metal from which the bare ground is worth an extractor.
-local metal_ground = 20
+-- How far from the base the commander walks to see a deposit.
+local commander_walk = 800
 local radar_wanted = {[0] = 0, 1, 2, 3, 3, 3}
 local defence_wanted = {[0] = 0, 1, 2, 3, 4, 4}
 
@@ -70,16 +71,79 @@ local function scout_site(unit, spot)
     return false
 end
 
+-- Outside the city grid nothing may hem a factory in: a building is kept
+-- a few cells off every factory, and a factory off every building and
+-- deposit (an extractor goes there later). A hovercraft platform with an
+-- extractor at its door and a solar collector at its back kept its
+-- builders on the pad for a whole match.
+local factory_margin = 64
+
+local function half_size(entry)
+    return math.max(util.num(entry.record.footprintx), util.num(entry.record.footprintz)) * 8
+end
+
+-- A factory's units leave by its door, on the axis it faces (facing 0 and
+-- 2, heading 0 and 32768: the z axis). Its door and back must stay clear
+-- along that axis; its sides may touch other buildings.
+local function axis_of_heading(heading)
+    local quarter = ((util.num(heading) % 65536) + 8192) // 16384 % 4
+    return quarter % 2 == 0 and "z" or "x"
+end
+
+local function hems(axis, fx, fz, fhalf, ox, oz, ohalf)
+    local dx, dz = math.abs(ox - fx), math.abs(oz - fz)
+    local along, across = dz, dx
+    if axis == "x" then
+        along, across = dx, dz
+    end
+    return across < fhalf + ohalf and along < fhalf + ohalf + factory_margin
+end
+
+local function crowds_factory(entry, x, z, facing)
+    local half = half_size(entry)
+    local axis = (facing or 0) % 2 == 0 and "z" or "x"
+    for _, other in ipairs(world.select(function(u, e) return e.structure end)) do
+        local kind = catalog.of(other)
+        local at = util.pos(other)
+        if at ~= nil then
+            if kind.factory and hems(axis_of_heading(other.heading), at.x, at.z, half_size(kind), x, z, half) then
+                return true
+            end
+            if entry.factory and hems(axis, x, z, half, at.x, at.z, half_size(kind)) then
+                return true
+            end
+        end
+    end
+    if entry.factory then
+        economy.free_spots(0)
+        for _, spot in ipairs(economy.spots or {}) do
+            if hems(axis, x, z, half, spot.x, spot.z, 24) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+builders.crowds_factory = crowds_factory
+
 -- Puts `entry` down near `near`, searching `radius` world units. When
 -- `walk` is set and the ground is unexplored, the builder walks there.
 local function place(unit, entry, near, radius, walk)
-    local facing = brain.random(4) - 1
     local spot = util.clamp(near, 64)
-    local _, _, x, z = brain.place(entry.record, spot, radius, facing)
-    if x == nil then
-        return walk == true and scout_site(unit, spot)
+    for attempt = 1, 3 do
+        local facing = brain.random(4) - 1
+        local from = attempt == 1 and spot or util.clamp(util.around(spot, brain.random(1000) / 1000, 160), 64)
+        local _, _, x, z = brain.place(entry.record, from, radius, facing)
+        if x == nil then
+            return attempt == 1 and walk == true and scout_site(unit, spot)
+        end
+        x, z = util.whole(x), util.whole(z)
+        if not crowds_factory(entry, x, z, facing) then
+            return unit:build(entry.record, {x = x, z = z}, facing) == true
+        end
     end
-    return unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) == true
+    return false
 end
 
 local function base()
@@ -97,7 +161,9 @@ local wide_rings = {{0, 1}, {480, 8}, {960, 12}, {1440, 16}}
 
 local function place_wide(unit, entry, centre)
     local last = builders.wide_search[entry.index]
-    if last ~= nil and me.tick - last < 30 * 60 then
+    -- The first lab cannot wait three minutes to learn it fits nowhere.
+    local pause = world.tier == 0 and 30 * 30 or 30 * 60
+    if last ~= nil and me.tick - last < pause then
         return false, false
     end
     builders.wide_search[entry.index] = me.tick
@@ -110,7 +176,8 @@ local function place_wide(unit, entry, centre)
                 local _, _, x, z = brain.place(entry.record, near, 480, 0)
                 if x ~= nil then
                     x, z = util.whole(x), util.whole(z)
-                    if not city.on_street(entry, x, z) and unit:build(entry.record, {x = x, z = z}, 0) then
+                    if not city.on_street(entry, x, z) and not crowds_factory(entry, x, z, 0)
+                        and unit:build(entry.record, {x = x, z = z}, 0) then
                         builders.wide_failed[entry.index] = nil
                         return true
                     end
@@ -132,48 +199,75 @@ local function place_wide(unit, entry, centre)
 end
 
 -- Puts a building in the city grid; toward `toward` when given (the front).
--- Water-only buildings go by the open water nearest the base. With no room
--- on explored ground a builder other than the commander walks out to the
--- nearest unexplored block.
+-- Water-only buildings go into the sea nearest the base, by the shore, where
+-- builders that cannot sail still reach them. With no room on explored
+-- ground a builder other than the commander walks out to the nearest
+-- unexplored block.
 local function build_in_city(unit, entry, toward)
     if entry.water_only then
-        local water = terrain.water_point
+        local water = terrain.shore or terrain.water_point
         if water == nil then
             return false
         end
-        if place(unit, entry, water, 400, true) then
+        if place(unit, entry, water, 480, true) then
             return true
         end
         if entry.factory then
-            return place_wide(unit, entry, water)
+            return place_wide(unit, entry, terrain.water_point or water)
         end
         return false
     end
     if city.place(unit, entry, toward) then
         return true
     end
-    local unseen = city.unexplored_block(toward or base())
-    if unseen ~= nil and scout_site(unit, unseen) then
-        return true
-    end
-    -- Ground too rough or cramped for the grid: anywhere near the base,
-    -- but never on a street. A factory found nowhere returns false plus true.
+    -- Ground too rough or cramped for the grid (a narrow ring of land, a
+    -- small island): anywhere near the base, but never on a street. The
+    -- commander tries this before walking out to unexplored blocks.
     local centre = toward or base()
-    for _, distance in ipairs({160, 320, 520, 800}) do
-        local near = util.clamp(util.around(centre, brain.random(1000) / 1000, distance), 96)
-        if util.explored(near) then
-            local facing = brain.random(4) - 1
-            local _, _, x, z = brain.place(entry.record, near, 320, facing)
-            if x ~= nil and not city.on_street(entry, util.whole(x), util.whole(z))
-                and unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) then
-                return true
+    local function anywhere()
+        for _, distance in ipairs({160, 320, 520, 800}) do
+            local near = util.clamp(util.around(centre, brain.random(1000) / 1000, distance), 96)
+            if util.explored(near) then
+                local facing = brain.random(4) - 1
+                local _, _, x, z = brain.place(entry.record, near, 320, facing)
+                if x ~= nil and not city.on_street(entry, util.whole(x), util.whole(z))
+                    and not crowds_factory(entry, util.whole(x), util.whole(z), facing)
+                    and unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) then
+                    return true
+                end
             end
         end
+        return false
+    end
+    local kind = catalog.of(unit)
+    if kind ~= nil and kind.commander and anywhere() then
+        return true
+    end
+    -- Unexplored blocks are worth a walk only close to the base: on a map
+    -- of islands or a thin ring of land there is always another one, and
+    -- the builders would walk all game.
+    local unseen = city.unexplored_block(toward or base())
+    if unseen ~= nil and util.dist(unseen, base()) <= 600 and scout_site(unit, unseen) then
+        return true
+    end
+    -- A factory found nowhere returns false plus true.
+    if anywhere() then
+        return true
     end
     if entry.factory then
         return place_wide(unit, entry, centre)
     end
     return false
+end
+
+-- Puts `land` down in the city, or `wet` (its water kind) on the sea by the
+-- base. On a map with much water some go on the water by choice, as the
+-- islands are small; otherwise the water is used when the land has no room.
+local function build_land_or_water(unit, land, wet, toward)
+    if wet ~= nil and (land == nil or (terrain.water_share >= 0.3 and brain.random(3) == 1)) then
+        land, wet = wet, land
+    end
+    return (land ~= nil and build_in_city(unit, land, toward)) or (wet ~= nil and build_in_city(unit, wet, toward))
 end
 
 -- Tasks ---------------------------------------------------------------------
@@ -212,7 +306,11 @@ local function try_goal(unit, entry)
         mark("goal")
         tech.started = me.tick
         tech.no_room = 0
-        print("building " .. goal.name)
+        -- A builder sent to see unexplored ground first is not building yet.
+        local walk = builders.walking[unit.id]
+        if walk == nil or walk.tick ~= me.tick then
+            print("building " .. goal.name)
+        end
         return true
     end
     tech.no_room = tech.no_room + 1
@@ -231,7 +329,7 @@ end
 -- With `ignore_site` the site test is skipped (an extractor to be
 -- replaced still stands there). Returns the footprint's centre in world
 -- units, or nil.
-local deposit_share = 0.6
+local deposit_share = 0.8
 
 local function extractor_site(extractor, spot, ignore_site)
     local map = game.map
@@ -267,40 +365,56 @@ local function extractor_site(extractor, spot, ignore_site)
     return best
 end
 
+-- Deposits under the sea take an underwater extractor; a builder without
+-- one tries its land extractor there (shallows may take it).
 local function try_extractor(unit, entry, reach)
-    local extractor = economy.best_extractor(entry)
-    if extractor == nil then
+    local land = economy.best_extractor(entry)
+    local wet = terrain.water_share > 0 and economy.best_extractor(entry, true) or nil
+    if land == nil and wet == nil then
         return false
     end
-    local spots = economy.free_spots(reach)
+    local spots = economy.free_spots(reach, unit.id)
     -- On maps whose deposits lie far apart, builders other than the
     -- commander go further out rather than build none.
     if #spots == 0 and not entry.commander and reach >= 1600 then
-        spots = economy.free_spots(4500)
+        spots = economy.free_spots(4500, unit.id)
     end
     -- On a metal map the ground itself holds metal and there are few or no
     -- deposits: extractors go in the city like any other building.
-    if #spots == 0 and util.num(game.map.surface_metal) >= metal_ground then
-        return build_in_city(unit, extractor)
+    if #spots == 0 and land ~= nil and economy.metal_map() then
+        return build_in_city(unit, land)
     end
-    local tried = 0
-    for index = 1, #spots do
-        if tried >= 3 then
-            break
-        end
+    -- A deposit the seat can see and build on comes first, nearest the
+    -- base; only when there is none does the builder walk to one it has
+    -- not seen (at the start even near ones are unexplored).
+    local unseen = {}
+    for index = 1, math.min(6, #spots) do
         local spot = spots[index]
-        tried = tried + 1
-        local site = extractor_site(extractor, spot)
-        if site ~= nil and unit:build(extractor.record, site, 0) then
-            economy.claim(spot)
+        local extractor = land
+        if terrain.under_water(spot) then
+            extractor = wet or land
+        end
+        if extractor ~= nil then
+            if util.explored(spot) then
+                local site = extractor_site(extractor, spot)
+                if site ~= nil and unit:build(extractor.record, site, 0) then
+                    economy.claim(spot)
+                    return true
+                end
+                -- Taken, or no room: left alone for a while.
+                economy.claim(spot)
+            else
+                unseen[#unseen + 1] = spot
+            end
+        end
+    end
+    for index = 1, math.min(3, #unseen) do
+        local spot = unseen[index]
+        -- The commander walks out only to deposits close to the base.
+        if (not entry.commander or spot.d <= commander_walk) and scout_site(unit, spot) then
+            economy.claim(spot, 0, unit.id)
             return true
         end
-        -- The commander keeps to the base and does not walk out to explore.
-        if site == nil and not entry.commander and scout_site(unit, spot) then
-            economy.claim(spot)
-            return true
-        end
-        economy.claim(spot)
     end
     return false
 end
@@ -308,26 +422,38 @@ end
 -- Replaces a lower-tier extractor with the best one this builder can make:
 -- reclaim the old one, then build the new one on the same spot. The
 -- nearest to the base go first, one builder per extractor.
+local function upgrade_key(at, extractor)
+    return string.format("%d,%d:%d", at.x // 32, at.z // 32, extractor.index)
+end
+
 local function try_upgrade_extractor(unit, entry)
-    local extractor = economy.best_extractor(entry)
-    if extractor == nil then
+    local land = economy.best_extractor(entry)
+    local wet = terrain.water_share > 0 and economy.best_extractor(entry, true) or nil
+    if land == nil and wet == nil then
         return false
     end
     -- On a metal map any ground will do: build new extractors, keep the old.
-    if util.num(game.map.surface_metal) >= metal_ground then
+    if economy.metal_map() then
         return false
     end
     local centre = base()
-    local best, best_d
+    local best, best_d, best_new
     for _, old in ipairs(world.select(function(u, e) return e.extractor and world.finished(u) end)) do
         local old_entry = catalog.of(old)
         local at = util.pos(old)
         local taken = builders.upgrading[old.id]
-        if old_entry.extracts < extractor.extracts and at ~= nil
-            and (taken == nil or me.tick - taken > 30 * 90) then
+        local extractor = old_entry.water_only and wet or (not old_entry.water_only and land) or nil
+        -- A deposit where the same upgrade was tried in the last ten
+        -- minutes is left alone: the new extractor did not go up there
+        -- (no room, or the builder could not get there).
+        local tried = extractor ~= nil and at ~= nil and builders.upgrade_tried[upgrade_key(at, extractor)]
+        if extractor ~= nil and old_entry.extracts < extractor.extracts and at ~= nil
+            and (taken == nil or me.tick - taken > 30 * 90)
+            and (not tried or me.tick - tried > 30 * 600)
+            and util.reachable(unit, at) then
             local d = util.dist(at, centre)
             if best_d == nil or d < best_d then
-                best, best_d = old, d
+                best, best_d, best_new = old, d, extractor
             end
         end
     end
@@ -337,11 +463,12 @@ local function try_upgrade_extractor(unit, entry)
     local at = util.pos(best)
     -- The new extractor may be larger: it goes where it covers the most of
     -- the deposit, not simply centred on the old one.
-    local site = extractor_site(extractor, at, true) or at
+    local site = extractor_site(best_new, at, true) or at
     if unit:reclaim(best) then
-        unit:build(extractor.record, site, 0, true)
+        unit:build(best_new.record, site, 0, true)
         builders.upgrading[best.id] = me.tick
-        print(string.format("upgrade %s -> %s at %d,%d", catalog.of(best).name, extractor.name, at.x, at.z))
+        builders.upgrade_tried[upgrade_key(at, best_new)] = me.tick
+        print(string.format("upgrade %s -> %s at %d,%d", catalog.of(best).name, best_new.name, at.x, at.z))
         return true
     end
     return false
@@ -369,19 +496,27 @@ local function try_power(unit, entry, centre, spread)
     if try_geo(unit, entry, 1500 + world.tier * 800) then
         return true
     end
-    local power = economy.best_power(entry)
-    if power == nil then
-        return false
+    -- Tidal and floating plants when they give more for their cost, or
+    -- when the land has no room.
+    local land, land_value = economy.best_power(entry)
+    local wet, wet_value = nil, 0
+    if terrain.ship_ok then
+        wet, wet_value = economy.best_power(entry, true)
     end
-    return build_in_city(unit, power)
+    if wet ~= nil and (land == nil or wet_value > land_value) then
+        land, wet = wet, land
+    end
+    return (land ~= nil and build_in_city(unit, land)) or (wet ~= nil and build_in_city(unit, wet))
 end
 
 local function try_maker(unit, entry, centre, spread)
     local maker = economy.best_maker(entry)
-    if maker == nil then
-        return false
+    if maker ~= nil and build_in_city(unit, maker) then
+        return true
     end
-    return build_in_city(unit, maker)
+    -- Floating makers when the land has none or no room.
+    local wet = terrain.ship_ok and economy.best_maker(entry, true) or nil
+    return wet ~= nil and build_in_city(unit, wet)
 end
 
 local function try_economy(unit, entry, near_base)
@@ -426,7 +561,7 @@ local function try_economy(unit, entry, near_base)
         end
         -- No spot left and no energy for a maker: build the power the
         -- next maker will burn.
-        if economy.maker_type(entry) ~= nil then
+        if economy.maker_type(entry) ~= nil or (terrain.ship_ok and economy.maker_type(entry, true) ~= nil) then
             return try_power(unit, entry, centre, spread)
         end
         return false
@@ -517,17 +652,24 @@ local function try_defence(unit, entry)
     end
     local e = economy.now
     local budget = math.max(300, e.metal_income * 60 + e.metal * 0.3)
-    local best
-    for _, option in ipairs(catalog.buildable(entry, function(o) return o.defense and not o.air end)) do
-        if option.metal <= budget and (best == nil or option.tier > best.tier
-            or (option.tier == best.tier and option.cost > best.cost)) then
-            best = option
+    local function pick(wet)
+        local best
+        for _, option in ipairs(catalog.buildable(entry, function(o)
+            return o.defense and not o.air and o.water_only == wet
+        end, wet)) do
+            if option.metal <= budget and (best == nil or option.tier > best.tier
+                or (option.tier == best.tier and option.cost > best.cost)) then
+                best = option
+            end
         end
+        return best
     end
-    if best == nil then
+    local land = pick(false)
+    local wet = terrain.ship_ok and pick(true) or nil
+    if land == nil and wet == nil then
         return false
     end
-    if build_in_city(unit, best, world.front(300)) then
+    if build_land_or_water(unit, land, wet, world.front(300)) then
         mark("defence")
         return true
     end
@@ -643,7 +785,9 @@ end
 -- Storage once a store sits full while the income would fill it again
 -- within a minute or so: the surplus is kept instead of wasted.
 local function try_storage(unit, entry)
-    if recently("storage", 45) then
+    -- Below tier 2 a full store means the builders are too few to spend
+    -- the income, not that it needs keeping: they help the factories.
+    if world.tier < 2 or recently("storage", 45) then
         return false
     end
     local e = economy.now
@@ -778,19 +922,26 @@ local function try_anti_air(unit, entry)
     end
     local e = economy.now
     local budget = math.max(250, e.metal_income * 60 + e.metal * 0.3)
-    local best
-    for _, option in ipairs(catalog.buildable(entry, function(o) return o.defense and o.anti_air end)) do
-        if option.metal <= budget and option.tier <= 3 and (best == nil or option.tier > best.tier
-            or (option.tier == best.tier and option.range > best.range)) then
-            best = option
+    local function pick(wet)
+        local best
+        for _, option in ipairs(catalog.buildable(entry, function(o)
+            return o.defense and o.anti_air and o.water_only == wet
+        end, wet)) do
+            if option.metal <= budget and option.tier <= 3 and (best == nil or option.tier > best.tier
+                or (option.tier == best.tier and option.range > best.range)) then
+                best = option
+            end
         end
+        return best
     end
-    if best == nil then
+    local land = pick(false)
+    local wet = terrain.ship_ok and pick(true) or nil
+    if land == nil and wet == nil then
         return false
     end
     -- Spread round the base rather than all on one side.
     local around = util.clamp(util.around(base(), brain.random(1000) / 1000, 400 + world.tier * 150), 96)
-    if build_in_city(unit, best, around) then
+    if build_land_or_water(unit, land, wet, around) then
         mark("anti-air")
         return true
     end
@@ -945,10 +1096,12 @@ end
 -- Commander -------------------------------------------------------------------
 
 -- The danger round the commander: more than eight tier-1 enemies, more
--- than five tier-2, any tier-3 or heavier, or aircraft it cannot shoot
--- at. Returns the middle of the threat, or nil.
+-- than five tier-2, any tier-3 or heavier, any enemy commander or decoy
+-- (two commanders D-gunning each other both die), or aircraft it cannot
+-- shoot at. Returns the middle of the threat, or nil.
 local danger_radius = 900
 local air_radius = 700
+local commander_radius = 1100
 
 local function danger(unit, entry)
     local at = util.pos(unit)
@@ -967,6 +1120,9 @@ local function danger(unit, entry)
             local hit = builders.commander_hit ~= nil and me.tick - builders.commander_hit < 30 * 5
             if kind.air and not entry.anti_air and hit and d <= air_radius then
                 air = air + 1
+                counted = true
+            elseif (kind.commander or kind.decoy) and d <= commander_radius then
+                heavy = heavy + 1
                 counted = true
             elseif not kind.air and d <= danger_radius then
                 if kind.tier >= 3 then
@@ -1061,10 +1217,27 @@ local function guard_commander(unit, entry)
     return try_dgun(unit, entry)
 end
 
--- Decoys fight without fear: anything worth shooting near them is shot.
+-- Decoys fight without fear: anything worth shooting near them is shot,
+-- and an enemy commander or decoy in sight is chased four times as far.
+local decoy_reach = 700
+
 local function decoy_fights(unit)
     local at = util.pos(unit)
-    local target = at and world.best_target(at, 700)
+    if at == nil then
+        return false
+    end
+    local target, target_d
+    for _, enemy in ipairs(world.visible_enemies()) do
+        local kind = catalog.of(enemy)
+        local where = util.pos(enemy)
+        if kind ~= nil and where ~= nil and (kind.commander or kind.decoy) then
+            local d = util.dist(at, where)
+            if d <= decoy_reach * 4 and (target_d == nil or d < target_d) then
+                target, target_d = enemy, d
+            end
+        end
+    end
+    target = target or world.best_target(at, decoy_reach)
     if target ~= nil then
         unit:attack(target)
         builders.parked[unit.id] = me.tick - 30 * 10
@@ -1118,16 +1291,28 @@ builders.send_home = send_home
 
 local function commander_turn(unit, entry)
     if world.tier == 0 then
-        -- Opening: two extractors and some power, then the first lab.
+        -- Opening: an extractor, the first lab, then more extractors and
+        -- power. The lab brings builders, which do the rest far faster.
         local extractors = count_of(function(_, e) return e.extractor end)
         local power = count_of(function(_, e) return e.power end)
+        if extractors < 1 and try_extractor(unit, entry, commander_reach) then
+            return true
+        end
+        if try_goal(unit, entry) then
+            return true
+        end
         if extractors < 2 and try_extractor(unit, entry, commander_reach) then
             return true
         end
         if power < 2 and try_power(unit, entry, base(), 160) then
             return true
         end
-        if try_goal(unit, entry) then
+    end
+    -- Metal piling up: the factories and frames are short of build power,
+    -- so the commander lends its own before anything else.
+    local e = economy.now
+    if world.tier >= 1 and e.metal_share > 0.7 and e.energy_share > 0.3 then
+        if try_goal(unit, entry) or try_help(unit, 900) or try_assist(unit) then
             return true
         end
     end
@@ -1196,8 +1381,11 @@ local function builder_turn(unit, entry)
     -- Anti-air and long-range artillery come early, at their own pace, and
     -- the energy store the guns need to fire before either.
     if not starving then
-        table.insert(order, 3, "artillery")
-        table.insert(order, 3, "anti-air")
+        -- A builder racing for the next lab puts it before anti-air and
+        -- artillery: the first tier-1 builders used to raise towers first.
+        local at = racing and (#order) or 3
+        table.insert(order, at, "artillery")
+        table.insert(order, at, "anti-air")
         table.insert(order, 2, "shot-storage")
     end
     local tasks = {
@@ -1256,6 +1444,16 @@ local function ready(unit)
         end
         return false
     end
+    -- A guard the brain did not park the unit on (the engine turns help
+    -- on a finished factory into one) would last for ever, and so would a
+    -- move that is no walk the brain is timing (a path that failed).
+    local kind = unit:head_order()
+    if type(kind) == "string" and (string.find(kind, "Follow", 1, true) or string.find(kind, "Guard", 1, true)) then
+        return true
+    end
+    if (kind == "Move_Ground" or kind == "Move") and not catalog.of(unit).commander then
+        return true
+    end
     return util.free(unit)
 end
 
@@ -1295,11 +1493,47 @@ function builders.step()
             if entry.commander then
                 if not commander_turn(unit, entry) then
                     send_home(unit)
+                    -- Whatever it is doing now (a guard, a walk home), it
+                    -- looks for work again in fifteen seconds.
+                    builders.parked[unit.id] = me.tick
                 end
             elseif not builder_turn(unit, entry) then
                 park(unit)
             end
         end
+    end
+end
+
+-- A finished extractor that covers less than 90 % of the metal it could
+-- cover a few cells away is logged ("extractor off deposit"): placement
+-- should never do that, so the line points at a fault.
+function builders.check_extractor(unit, entry)
+    local at = util.pos(unit)
+    if at == nil or economy.metal_map() then
+        return
+    end
+    local map = game.map
+    local width = math.max(1, util.whole(entry.record.footprintx))
+    local depth = math.max(1, util.whole(entry.record.footprintz))
+    local left = (at.x - width * 8) // 16
+    local top = (at.z - depth * 8) // 16
+    local here, richest = 0, 0
+    for dz = -3, 3 do
+        for dx = -3, 3 do
+            local metal = 0
+            for z = 0, depth - 1 do
+                for x = 0, width - 1 do
+                    metal = metal + util.num(map:metal(left + dx + x, top + dz + z))
+                end
+            end
+            if dx == 0 and dz == 0 then
+                here = metal
+            end
+            richest = math.max(richest, metal)
+        end
+    end
+    if here < richest * 0.9 then
+        print(string.format("extractor off deposit: %s at %d,%d covers %d of %d", entry.name, at.x, at.z, here, richest))
     end
 end
 
@@ -1326,6 +1560,9 @@ function builders.on_path_failed(unit)
         builders.walking[unit.id] = nil
         economy.claim({x = walk.x, z = walk.z}, 600)
     end
+    -- The failed move would otherwise stay at the head of the queue and
+    -- the builder would never be free again.
+    unit:stop()
 end
 
 function builders.on_damaged(unit, entry)

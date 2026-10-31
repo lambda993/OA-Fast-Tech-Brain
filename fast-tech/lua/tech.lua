@@ -126,6 +126,13 @@ function tech.choose_goal()
             reach_memo = {}
         end
     end
+    -- The first lab waits for the map survey (a few seconds, while the
+    -- commander builds extractors and power): which lines reach the enemy
+    -- decides it.
+    if not terrain.ready and me.tick < 30 * 90 then
+        tech.goal = nil
+        return
+    end
     local tier = world.tier
     local builders = own_types(function(e) return e.mobile_builder end)
     local factories = own_types(function(e) return e.factory end)
@@ -181,7 +188,11 @@ function tech.choose_goal()
                 end
             end
             local climb = level == tier + 1 and 1 or 0
-            local key = climb * 10000000 + (9 - rank) * 1000000 + line * 100000 + level * 1000 + score
+            -- A line whose units cannot reach the enemy comes last, even
+            -- when it climbs: its army would stay home.
+            local reaches = terrain.line_ok(entry.line) and 1 or 0
+            local key = reaches * 100000000 + climb * 10000000 + (9 - rank) * 1000000
+                + line * 100000 + level * 1000 + score
             if best_key == nil or key > best_key then
                 best, best_key = entry, key
             end

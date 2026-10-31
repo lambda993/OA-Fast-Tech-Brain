@@ -76,14 +76,22 @@ function economy.need()
     return nil, 0
 end
 
+-- Whether `entry` fits the ground asked for: land buildings when `wet` is
+-- nil or false, water-only ones (floating, underwater, tidal) when true.
+local function on(entry, wet)
+    return (entry.water_only == true) == (wet == true)
+end
+
 -- The power building with the best output for its cost that the seat can
--- pay for within about two minutes of income.
-local function best_power(builder)
+-- pay for within about two minutes of income, on land or (`wet`) on the
+-- water. Returns it and its value.
+local function best_power(builder, wet)
     local e = economy.now
     local budget = math.max(400, e.metal_income * 120 + e.metal * 0.8)
     local options = catalog.buildable(builder, function(entry)
-        return entry.power and not entry.geo and entry.metal <= budget and entry.energy <= math.max(3000, e.energy_income * 150 + e.energy)
-    end)
+        return entry.power and not entry.geo and on(entry, wet) and entry.metal <= budget
+            and entry.energy <= math.max(3000, e.energy_income * 150 + e.energy)
+    end, wet)
     local best, best_value
     for _, entry in ipairs(options) do
         -- Output per cost, times the square root of the output: builders'
@@ -93,11 +101,13 @@ local function best_power(builder)
             best, best_value = entry, value
         end
     end
-    return best
+    return best, best_value or 0
 end
 
-local function best_extractor(builder)
-    local options = catalog.buildable(builder, function(entry) return entry.extractor end)
+-- The best extractor for land deposits, or (`wet`) for deposits under
+-- the sea.
+local function best_extractor(builder, wet)
+    local options = catalog.buildable(builder, function(entry) return entry.extractor and on(entry, wet) end, wet)
     local best
     for _, entry in ipairs(options) do
         if best == nil or entry.extracts > best.extracts then
@@ -107,12 +117,26 @@ local function best_extractor(builder)
     return best
 end
 
--- The best metal maker the builder can pay for, fed or not.
-local function maker_type(builder)
+-- Whether the ground itself is worth extractors: metal maps (Core Prime,
+-- Coremageddon: surface metal 255, no deposits). Maps with a little
+-- surface metal and deposits (20 on Pincushion or Lava Mania) are not:
+-- their deposits are many times richer.
+function economy.metal_map()
+    local surface = util.num(game.map.surface_metal)
+    if surface >= 100 then
+        return true
+    end
+    economy.free_spots(0)
+    return surface >= 20 and #economy.spots < 4
+end
+
+-- The best metal maker the builder can pay for, fed or not, on land or
+-- (`wet`) floating.
+local function maker_type(builder, wet)
     local e = economy.now
     local options = catalog.buildable(builder, function(entry)
-        return entry.metal_maker and entry.metal <= math.max(300, e.metal_income * 120 + e.metal)
-    end)
+        return entry.metal_maker and on(entry, wet) and entry.metal <= math.max(300, e.metal_income * 120 + e.metal)
+    end, wet)
     local best
     for _, entry in ipairs(options) do
         if best == nil or entry.metal_yield > best.metal_yield then
@@ -124,9 +148,9 @@ end
 
 -- A metal maker the energy on hand can feed: the stores well filled and
 -- the upkeep within most of what the income leaves over.
-local function best_maker(builder)
+local function best_maker(builder, wet)
     local e = economy.now
-    local maker = maker_type(builder)
+    local maker = maker_type(builder, wet)
     if maker == nil or e.energy_share < 0.5 then
         return nil
     end
@@ -219,8 +243,9 @@ economy.best_extractor = best_extractor
 economy.best_maker = best_maker
 
 -- Metal spots no extractor of the seat already covers, nearest the base
--- first, within `reach` world units.
-function economy.free_spots(reach)
+-- first, within `reach` world units. A spot claimed by the builder `by`
+-- itself (it walked there to see it) stays free for it.
+function economy.free_spots(reach, by)
     local spots = economy.spots
     if spots == nil then
         spots = {}
@@ -250,7 +275,8 @@ function economy.free_spots(reach)
                 end
             end
             local claim = economy.claims[spot.x * 100000 + spot.z]
-            if claim ~= nil and me.tick - claim < 30 * 40 then
+            local mine = by ~= nil and economy.claimed_by[spot.x * 100000 + spot.z] == by
+            if claim ~= nil and me.tick - claim < 30 * 40 and not mine then
                 free = false
             end
             for _, building in pairs(world.enemy_buildings) do
@@ -268,11 +294,15 @@ function economy.free_spots(reach)
 end
 
 economy.claims = {}
+economy.claimed_by = {}
 
 -- Holds a spot back from other builders; `seconds` beyond the usual 40
--- keep it out longer, for spots a builder could not reach.
-function economy.claim(spot, seconds)
-    economy.claims[spot.x * 100000 + spot.z] = me.tick + 30 * (seconds or 0)
+-- keep it out longer, for spots a builder could not reach. `by` is the
+-- builder that walks there.
+function economy.claim(spot, seconds, by)
+    local key = spot.x * 100000 + spot.z
+    economy.claims[key] = me.tick + 30 * (seconds or 0)
+    economy.claimed_by[key] = by
 end
 
 return economy
