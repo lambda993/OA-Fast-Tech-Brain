@@ -4,7 +4,9 @@
 -- The army gathers in front of the base. A wave leaves once its worth
 -- passes the tier's mark, and goes for the nearest remembered enemy
 -- building, a recent contact, or a start nobody has looked at. Units at
--- home turn on whoever hits the base.
+-- home turn on whoever hits the base. Fire goes to commanders first, then
+-- the heaviest units, then the economy. Long-range guns are aimed at
+-- remembered buildings they cannot see.
 
 local builders = require("builders")
 local catalog = require("catalog")
@@ -34,18 +36,10 @@ local function worth(list)
     return total
 end
 
+-- The enemy to shoot: commanders first, then the heaviest, then the
+-- economy (world.best_target).
 local function nearest_enemy(from, reach)
-    local best, best_d
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local at = util.pos(enemy)
-        if at ~= nil then
-            local d = util.dist2(from, at)
-            if d <= reach * reach and (best_d == nil or d < best_d) then
-                best, best_d = enemy, d
-            end
-        end
-    end
-    return best
+    return world.best_target(from, reach)
 end
 
 local function rally_point()
@@ -102,7 +96,7 @@ local function push(attackers)
     end
     for _, unit in ipairs(attackers) do
         local at = util.pos(unit)
-        local enemy = at and nearest_enemy(at, 600)
+        local enemy = at and nearest_enemy(at, 800)
         if enemy ~= nil then
             unit:attack(enemy)
         elseif target ~= nil and util.free(unit) then
@@ -133,7 +127,49 @@ local function send_to_mend(unit)
     builders.mend_unit(unit)
 end
 
+-- Long-range guns rarely see their targets, so they are told what to hit:
+-- a visible enemy in range, best first, else a remembered building in
+-- range, factories and the heaviest first. Each gun gets a new order every
+-- twenty seconds.
+army.gun_orders = {} -- gun id -> tick
+
+local function aim_guns()
+    for _, gun in ipairs(world.select(function(u, e) return e.artillery and world.finished(u) end)) do
+        local last = army.gun_orders[gun.id]
+        if last == nil or me.tick - last >= 30 * 20 then
+            local entry = catalog.of(gun)
+            local at = util.pos(gun)
+            if at ~= nil then
+                local reach = entry.range * 0.95
+                local target = world.best_target(at, reach)
+                if target ~= nil and util.dist(at, util.pos(target)) <= reach then
+                    gun:attack(target)
+                    army.gun_orders[gun.id] = me.tick
+                    print(string.format("%s fires at %s", entry.name, catalog.of(target).name))
+                else
+                    local best, best_key
+                    for _, building in pairs(world.enemy_buildings) do
+                        local d = util.dist(at, building)
+                        if d <= reach then
+                            local key = (building.factory and 6 or building.tier) * 100000 + building.cost - d
+                            if best_key == nil or key > best_key then
+                                best, best_key = building, key
+                            end
+                        end
+                    end
+                    if best ~= nil then
+                        gun:attack_ground({x = best.x, z = best.z})
+                        army.gun_orders[gun.id] = me.tick
+                        print(string.format("%s shells %.0f,%.0f", entry.name, best.x, best.z))
+                    end
+                end
+            end
+        end
+    end
+end
+
 function army.step()
+    util.guard("guns", aim_guns)
     local home, attackers = {}, {}
     for id in pairs(army.mending) do
         local unit = world.own[id]
@@ -170,6 +206,14 @@ function army.step()
         end
     end
     local rally = rally_point()
+    -- Enemies coming near the rally point are met there, commanders first.
+    local near = world.best_target(rally, 700)
+    if near ~= nil then
+        for _, unit in ipairs(home) do
+            unit:attack(near)
+        end
+        return
+    end
     for _, unit in ipairs(home) do
         local at = util.pos(unit)
         if at ~= nil and util.free(unit) and util.dist(at, rally) > 250 then

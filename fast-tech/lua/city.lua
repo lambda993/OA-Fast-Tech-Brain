@@ -28,7 +28,7 @@ local city = {
 local cell = 16
 local rings = 4
 local site_checks = 160
-local alley = 1          -- free cells kept round a town building
+local alley = 3          -- free cells kept round a town building; set from the builders
 local fill_cap = 0.6     -- share of a town block buildings may cover
 
 -- Families that gain from an adjacent building of their own family, by
@@ -87,12 +87,23 @@ function city.setup()
         end
     end
     city.street = widest + 1
+    -- Alleys as wide as the widest builder, so builders never get boxed in.
+    local builder_width = 2
+    for index = 1, #units do
+        local entry = catalog.types[index]
+        if entry ~= nil and entry.mobile_builder and not entry.air and not entry.skip
+            and (side == nil or entry.side == "" or entry.side == side) then
+            local w, d = footprint(entry)
+            builder_width = math.max(builder_width, w, d)
+        end
+    end
+    alley = math.max(2, math.min(4, builder_width))
     city.block = math.max(16, math.min(24, largest))
     local start_x = world.start.x // cell
     local start_z = world.start.z // cell
     city.origin = {x = start_x - city.block // 2, z = start_z - city.block // 2}
     city.ready = true
-    print(string.format("city grid: blocks %d cells, streets %d cells", city.block, city.street))
+    print(string.format("city grid: blocks %d cells, streets %d cells, alleys %d cells", city.block, city.street, alley))
 end
 
 local function block_rect(i, j)

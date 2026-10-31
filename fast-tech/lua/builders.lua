@@ -235,6 +235,10 @@ local function try_upgrade_extractor(unit, entry)
     if extractor == nil then
         return false
     end
+    -- On a metal map any ground will do: build new extractors, keep the old.
+    if util.num(game.map.surface_metal) >= metal_ground then
+        return false
+    end
     local centre = base()
     local best, best_d
     for _, old in ipairs(world.select(function(u, e) return e.extractor and world.finished(u) end)) do
@@ -801,6 +805,133 @@ end
 
 -- Commander -------------------------------------------------------------------
 
+-- The danger round the commander: more than eight tier-1 enemies, more
+-- than five tier-2, any tier-3 or heavier, or aircraft it cannot shoot
+-- at. Returns the middle of the threat, or nil.
+local danger_radius = 900
+local air_radius = 700
+
+local function danger(unit, entry)
+    local at = util.pos(unit)
+    if at == nil then
+        return nil
+    end
+    local t1, t2, heavy, air = 0, 0, 0, 0
+    local sum_x, sum_z, count = 0, 0, 0
+    for _, enemy in ipairs(world.visible_enemies()) do
+        local where = util.pos(enemy)
+        local kind = catalog.of(enemy)
+        if where ~= nil and kind ~= nil and (kind.combat or kind.commander or kind.decoy) then
+            local d = util.dist(at, where)
+            local counted = false
+            if kind.air and not entry.anti_air and d <= air_radius then
+                air = air + 1
+                counted = true
+            elseif not kind.air and d <= danger_radius then
+                if kind.tier >= 3 then
+                    heavy = heavy + 1
+                elseif kind.tier == 2 then
+                    t2 = t2 + 1
+                else
+                    t1 = t1 + 1
+                end
+                counted = true
+            end
+            if counted then
+                sum_x, sum_z, count = sum_x + where.x, sum_z + where.z, count + 1
+            end
+        end
+    end
+    if t1 > 8 or t2 > 5 or heavy > 0 or air > 0 then
+        return {x = sum_x / count, z = sum_z / count}
+    end
+    return nil
+end
+
+-- Runs as far from the threat as it can: straight away from it, a long
+-- way, bending toward the back of the base when the map edge is close.
+local function flee(unit, threat)
+    local at = util.pos(unit)
+    local away = util.toward(at, threat, -1800)
+    local spot = util.clamp(away, 96)
+    if util.dist(spot, at) < 900 then
+        -- Cornered against the edge: slide along it, toward the base's back.
+        local home = base()
+        local back = util.toward(home, world.front(400), -1200)
+        spot = util.clamp(back, 96)
+    end
+    unit:move(spot)
+    if builders.fleeing == nil then
+        print(string.format("commander flees from %.0f,%.0f", threat.x, threat.z))
+    end
+    builders.fleeing = me.tick
+end
+
+builders.dgun_at = 0
+
+-- Cloaked and out of danger, the commander may fire its D-gun at a lone
+-- tier-3 or heavier enemy inside its own base.
+local function try_dgun(unit, entry)
+    if builders.cloaked ~= true or entry.record.candgun ~= true or me.tick - builders.dgun_at < 30 * 5 then
+        return false
+    end
+    local home = base()
+    local at = util.pos(unit)
+    if home == nil or at == nil then
+        return false
+    end
+    local enemies = world.visible_enemies()
+    for _, enemy in ipairs(enemies) do
+        local kind = catalog.of(enemy)
+        local where = util.pos(enemy)
+        if kind ~= nil and where ~= nil and kind.tier >= 3 and not kind.air
+            and util.dist(where, home) < 1200 and util.dist(where, at) < 900 then
+            local alone = true
+            for _, other in ipairs(enemies) do
+                local there = util.pos(other)
+                if other ~= enemy and there ~= nil and util.dist(there, where) < 600 then
+                    alone = false
+                    break
+                end
+            end
+            if alone and unit:dgun(enemy) then
+                builders.dgun_at = me.tick
+                print("commander d-guns " .. kind.name)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- The commander's own safety comes before its work.
+local function guard_commander(unit, entry)
+    local threat = danger(unit, entry)
+    if threat ~= nil then
+        if builders.fleeing == nil or me.tick - builders.fleeing > 30 * 4 then
+            flee(unit, threat)
+        end
+        return true
+    end
+    if builders.fleeing ~= nil and me.tick - builders.fleeing < 30 * 6 then
+        return true
+    end
+    builders.fleeing = nil
+    return try_dgun(unit, entry)
+end
+
+-- Decoys fight without fear: anything worth shooting near them is shot.
+local function decoy_fights(unit)
+    local at = util.pos(unit)
+    local target = at and world.best_target(at, 700)
+    if target ~= nil then
+        unit:attack(target)
+        builders.parked[unit.id] = me.tick - 30 * 10
+        return true
+    end
+    return false
+end
+
 -- Cloaks the commander while energy is plentiful, and drops the cloak when
 -- the stores run low.
 local function cloak_commander(unit, entry)
@@ -981,10 +1112,14 @@ function builders.step()
     local list = world.select(function(u, e) return e.mobile_builder and world.finished(u) end)
     for _, unit in ipairs(list) do
         local entry = catalog.of(unit)
+        local busy = false
         if entry.commander then
             cloak_commander(unit, entry)
+            busy = guard_commander(unit, entry)
+        elseif entry.decoy then
+            busy = decoy_fights(unit)
         end
-        if ready(unit) and builders.repairing[unit.id] == nil then
+        if not busy and ready(unit) and builders.repairing[unit.id] == nil then
             if entry.commander then
                 if not commander_turn(unit, entry) then
                     send_home(unit)
@@ -1003,7 +1138,7 @@ end
 
 -- The commander walks home as soon as it is idle, and when badly hurt.
 function builders.on_idle(unit, entry)
-    if entry.commander and world.located() then
+    if entry.commander and world.located() and builders.fleeing == nil then
         economy.read()
         if not commander_turn(unit, entry) then
             send_home(unit)

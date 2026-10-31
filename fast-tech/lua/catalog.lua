@@ -83,12 +83,14 @@ end
 -- difficulty's income rule.
 local function yields(record)
     local map = game.map
-    local wind = 0
+    local wind, tide = 0, 0
     if map ~= nil then
         wind = (num(map.wind_min) + num(map.wind_max)) / 2
+        tide = num(map.tide)
     end
     local energy = num(record.energymake) - num(record.energyuse)
         + math.min(num(record.windgenerator), wind)
+        + math.min(num(record.tidalgenerator), tide)
     local metal = num(record.metalmake) + num(record.makesmetal)
     return energy, metal
 end
@@ -224,6 +226,38 @@ function catalog.refresh_builds()
     for _, entry in pairs(catalog.types) do
         if entry.factory then
             entry.line = catalog.line_of(entry)
+        end
+    end
+    catalog.judge_wind_and_tide()
+end
+
+-- Wind and tidal generators make what the map's wind and tide give. Where
+-- their best output is under half a solar collector's, as on airless moons,
+-- they are not built: solar collectors are.
+function catalog.judge_wind_and_tide()
+    local map = game.map
+    if map == nil then
+        return
+    end
+    local solar = 0
+    for _, entry in pairs(catalog.types) do
+        local record = entry.record
+        if entry.power and entry.tier <= 1 and num(record.windgenerator) == 0
+            and num(record.tidalgenerator) == 0 then
+            solar = math.max(solar, entry.energy_yield)
+        end
+    end
+    local wind_max, tide = num(map.wind_max), num(map.tide)
+    for _, entry in pairs(catalog.types) do
+        local record = entry.record
+        local most = nil
+        if num(record.windgenerator) > 0 then
+            most = math.min(num(record.windgenerator), wind_max)
+        elseif num(record.tidalgenerator) > 0 then
+            most = math.min(num(record.tidalgenerator), tide)
+        end
+        if most ~= nil and most < solar * 0.5 then
+            entry.power = false
         end
     end
 end

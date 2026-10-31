@@ -203,6 +203,52 @@ function world.visible_enemies()
     return found
 end
 
+-- How much an enemy is worth shooting first: commanders and decoys (they
+-- look alike, so both count as commanders), then tier 4 and 5, tier 3,
+-- the economy, and the rest.
+function world.priority(entry)
+    if entry == nil then
+        return 1
+    end
+    if entry.commander or entry.decoy then
+        return 5
+    end
+    if entry.tier >= 4 then
+        return 4
+    end
+    if entry.tier == 3 then
+        return 3
+    end
+    if entry.extractor or entry.power or entry.metal_maker or entry.factory
+        or entry.metal_storage or entry.energy_storage then
+        return 2
+    end
+    return 1
+end
+
+-- The visible enemy to shoot from `from` within `reach`: the highest
+-- priority, the nearest among equals. A commander is chased twice as far,
+-- so everything near one turns on it.
+function world.best_target(from, reach)
+    local best, best_key
+    for _, enemy in ipairs(world.visible_enemies()) do
+        local at = util.pos(enemy)
+        local entry = catalog.of(enemy)
+        if at ~= nil then
+            local priority = world.priority(entry)
+            local limit = priority == 5 and reach * 2 or reach
+            local d = util.dist(from, at)
+            if d <= limit then
+                local key = priority * 100000 - d
+                if best_key == nil or key > best_key then
+                    best, best_key = enemy, key
+                end
+            end
+        end
+    end
+    return best
+end
+
 -- Start positions that may hold an enemy and are not yet explored.
 function world.unexplored_starts()
     local found = {}
