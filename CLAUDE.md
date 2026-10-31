@@ -1,7 +1,7 @@
 # Fast Tech — notes for continuing the work
 
 Fast Tech is a computer player ("brain", Lua) for the **TA: Escalation** mod
-in **Open Annihilation** (OA, engine 0.8.7). It races up the tech tiers,
+in **Open Annihilation** (OA, engine 0.8.9). It races up the tech tiers,
 winds the lower tiers down, builds the base as a city grid and plays without
 full awareness. The brain package is `fast-tech/`; this file, the README and
 `.gitignore` sit outside it because a brain package may hold only its own
@@ -18,10 +18,10 @@ README in step with the code.
   set to `Lambda993`.
 - **Never commit or push unless the user says so.** The user usually says
   "comitta e installa": then commit, pack, install, check (see below).
-- The repo is meant for a private GitHub repo
-  (`https://github.com/lambda993/OA-Fast-Tech-Brain.git`); no remote is set
-  and nothing was pushed (the harness refused adding the remote; the user
-  pushes by hand if wanted).
+- The repo is a private GitHub repo: remote `origin` is
+  `git@github.com:lambda993/OA-Fast-Tech-Brain.git` (SSH, the user's key
+  `~/.ssh/id_ed25519`). `git push` works from the session; push only when
+  the user asks. The repo-local git email is `lambda.sigma93@gmail.com`.
 - Commit messages: short imperative subject, wrapped body explaining why,
   ending with the `Co-Authored-By` line the harness gives.
 
@@ -201,6 +201,9 @@ error is logged once and the seat keeps playing).
   35 minutes.
   The map line there says `enemy by land true`, and land units do reach the
   enemy, so the earlier expectation of `false` was wrong.
+- Engine 0.8.9 (from 0.8.7): only path handling (UTF-8) and interface
+  changes for brains; the brain API and docs are unchanged. `brain check`
+  passes and the test matches give the same results as before.
 - `brain.place` stops after 4 096 cells (radius about 500 world units),
   whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
