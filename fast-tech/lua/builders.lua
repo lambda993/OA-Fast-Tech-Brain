@@ -997,19 +997,19 @@ local function try_artillery(unit, entry)
     return false
 end
 
--- Repair pads once the seat flies enough aircraft: one for every eight
--- attacking aircraft, up to four, carriers counted. Damaged aircraft fly
--- to them by themselves (the engine's repair retreat).
+-- Repair pads once the seat flies enough aircraft: one for every four
+-- attacking aircraft, up to ten, carriers counted (a pad mends one
+-- aircraft at a time). The army sends aircraft below half health to them.
 local function air_fleet()
     return #world.select(function(_, e) return e.air and e.combat and not e.scout end)
 end
 
 function builders.air_bases_wanted()
-    return math.min(4, air_fleet() // 8)
+    return math.min(10, air_fleet() // 4)
 end
 
 local function try_air_base(unit, entry)
-    if recently("air-base", 60) then
+    if recently("air-base", 30) then
         return false
     end
     local have = count_of(function(_, e) return e.air_base end)

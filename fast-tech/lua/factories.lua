@@ -172,7 +172,15 @@ local function pick_builder(entry, tier)
     if tier < world.tier then
         return nil
     end
-    if count_builders(tier) >= (builders_wanted[math.min(5, tier)] or 2) then
+    -- Metal piling up while energy is fine: the seat is short of build
+    -- power (no room for more factories), so up to twice as many builders,
+    -- who then help the factories.
+    local wanted = builders_wanted[math.min(5, tier)] or 2
+    local e = economy.now or economy.read()
+    if e.metal_share > 0.8 and e.energy_share > 0.5 then
+        wanted = wanted * 2
+    end
+    if count_builders(tier) >= wanted then
         return nil
     end
     return best

@@ -87,18 +87,30 @@ local function text(value)
     return ""
 end
 
+-- The engine's wind: the map gives a strength range (2500 to 4500 on
+-- Ooooweeee) and a generator makes its windgenerator times strength / 5000,
+-- at most its windgenerator. A tidal generator makes tidalgenerator times
+-- the map's tide.
+local wind_divisor = 5000
+
+local function wind_share(strength)
+    return math.max(0, math.min(1, strength / wind_divisor))
+end
+
+catalog.wind_share = wind_share
+
 -- The energy and metal a finished building adds each second, before the
--- difficulty's income rule.
+-- difficulty's income rule. Wind counts at the middle of the map's range.
 local function yields(record)
     local map = game.map
     local wind, tide = 0, 0
     if map ~= nil then
-        wind = (num(map.wind_min) + num(map.wind_max)) / 2
+        wind = wind_share((num(map.wind_min) + num(map.wind_max)) / 2)
         tide = num(map.tide)
     end
     local energy = num(record.energymake) - num(record.energyuse)
-        + math.min(num(record.windgenerator), wind)
-        + math.min(num(record.tidalgenerator), tide)
+        + num(record.windgenerator) * wind
+        + num(record.tidalgenerator) * tide
     local metal = num(record.metalmake) + num(record.makesmetal)
     return energy, metal
 end
@@ -255,7 +267,9 @@ end
 
 -- Wind and tidal generators make what the map's wind and tide give. Where
 -- their best output is under half a solar collector's, as on airless moons,
--- they are not built: solar collectors are.
+-- they are not built: solar collectors are. The solar collector is the
+-- tier-1 plant that draws its energy from nothing (a negative energy use);
+-- geothermal plants do not count.
 function catalog.judge_wind_and_tide()
     local map = game.map
     if map == nil then
@@ -264,19 +278,19 @@ function catalog.judge_wind_and_tide()
     local solar = 0
     for _, entry in pairs(catalog.types) do
         local record = entry.record
-        if entry.power and entry.tier <= 1 and num(record.windgenerator) == 0
-            and num(record.tidalgenerator) == 0 then
+        if entry.power and entry.tier <= 1 and not entry.geo and num(record.windgenerator) == 0
+            and num(record.tidalgenerator) == 0 and num(record.energyuse) < 0 then
             solar = math.max(solar, entry.energy_yield)
         end
     end
-    local wind_max, tide = num(map.wind_max), num(map.tide)
+    local wind_max, tide = wind_share(num(map.wind_max)), num(map.tide)
     for _, entry in pairs(catalog.types) do
         local record = entry.record
         local most = nil
         if num(record.windgenerator) > 0 then
-            most = math.min(num(record.windgenerator), wind_max)
+            most = num(record.windgenerator) * wind_max
         elseif num(record.tidalgenerator) > 0 then
-            most = math.min(num(record.tidalgenerator), tide)
+            most = num(record.tidalgenerator) * tide
         end
         if most ~= nil and most < solar * 0.5 then
             entry.power = false

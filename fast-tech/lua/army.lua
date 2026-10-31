@@ -19,6 +19,7 @@ local army = {
     target = nil,
     sent_at = 0,
     grounded = {},  -- aircraft id -> tick it pulled back from anti-air
+    air_mending = {}, -- aircraft id -> tick it was sent to a repair pad
     rescue = nil,   -- {x, z, tick} an ally in trouble the army went to
 }
 
@@ -266,6 +267,51 @@ local function rescue_ally(home)
     return true
 end
 
+-- Aircraft below half health fly to the nearest repair pad or carrier.
+-- They are sent on a patrol to it: a patrolling aircraft under three
+-- quarters health that reaches its waypoint lands on a pad within 3 840
+-- units by itself (the engine's repair retreat), which attacks far from
+-- home never trigger. Sent again after a minute and a half if still hurt.
+local function send_aircraft_to_pads()
+    local pads = world.select(function(u, e) return e.air_base and world.finished(u) end)
+    for id, tick in pairs(army.air_mending) do
+        local unit = world.own[id]
+        if unit == nil or util.num(unit.health_percent) >= 95 or #pads == 0 then
+            army.air_mending[id] = nil
+        elseif me.tick - tick > 30 * 90 then
+            army.air_mending[id] = nil
+        end
+    end
+    if #pads == 0 then
+        return
+    end
+    local sent = 0
+    for _, unit in ipairs(world.select(function(u, e) return e.air and e.combat and not e.scout and world.finished(u) end)) do
+        local at = util.pos(unit)
+        if at ~= nil and army.air_mending[unit.id] == nil and util.num(unit.health_percent) < 50 then
+            local best, best_d
+            for _, pad in ipairs(pads) do
+                local where = util.pos(pad)
+                if where ~= nil then
+                    local d = util.dist(at, where)
+                    if best_d == nil or d < best_d then
+                        best, best_d = where, d
+                    end
+                end
+            end
+            if best ~= nil then
+                unit:patrol(util.clamp({x = best.x + 48, z = best.z + 48}, 64))
+                army.air_mending[unit.id] = me.tick
+                army.attacking[unit.id] = nil
+                sent = sent + 1
+            end
+        end
+    end
+    if sent > 0 then
+        print(string.format("aircraft to repair pads: %d", sent))
+    end
+end
+
 -- Heavy units (tier 3 and up) below 30 % health go home to be repaired,
 -- and rejoin once mended.
 army.mending = {} -- unit id -> true
@@ -381,6 +427,7 @@ end
 
 function army.step()
     util.guard("guns", aim_guns)
+    util.guard("air repair", send_aircraft_to_pads)
     local home, attackers = {}, {}
     for id in pairs(army.mending) do
         local unit = world.own[id]
@@ -389,8 +436,8 @@ function army.step()
         end
     end
     for _, unit in ipairs(soldiers()) do
-        if army.mending[unit.id] then
-            -- Waiting at home for the builders.
+        if army.mending[unit.id] or army.air_mending[unit.id] then
+            -- Waiting at home for the builders, or on a repair pad.
         elseif army.attacking[unit.id] then
             attackers[#attackers + 1] = unit
         else

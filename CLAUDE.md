@@ -265,6 +265,18 @@ error is logged once and the seat keeps playing).
   commander upgrade building from tier 3 (Arm Research Facility `ARMTECH`,
   Core Upgrade Center `CORTECH`, both in the AI lists); lines that do not
   reach the enemy are no tech goal and no extra factory.
+- Wind and tide (fixed after the user saw no wind generators on
+  Ooooweeee, wind 2 500..4 500): a wind generator makes `windgenerator *
+  strength / 5000` (engine `default_wind_strength_divisor`), a tidal one
+  `tidalgenerator * map.tide` (Tidal Generator rating 1, tide 20-30). The
+  catalog took `min(rating, strength)` and judged against the best tier-1
+  plant, which was the geothermal (300): wind and tidal were never built.
+- Aircraft go to repair pads by themselves only in some missions: below
+  75 % health, on a patrol waypoint or an air attack pass, with a pad of
+  the owner within 3 840 (`repair_pads_in_reach`). A brain cannot order a
+  landing directly (`guard` gives VTOL_Follow, `load` VTOL_Pickup); it
+  sends aircraft under 50 % on a patrol to the nearest pad
+  (`aircraft to repair pads: N`). Not yet seen working in a test match.
 - `city.place` had no bound on the positions it scanned (the metal test
   reads every footprint cell): on Core Prime (seed 7) a turn passed 250 ms
   and the seat stopped, in the committed version too. Capped at 1 500

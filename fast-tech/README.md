@@ -96,7 +96,8 @@ grid, a building goes anywhere near the base instead.
 **Builders.** In the AI table Escalation's builders differ: a construction
 vehicle has no metal extractor, a construction kbot has. Factories make the
 builder that brings what the seat lacks first (extractors, the next lab,
-radar, metal makers, power), then more of the best kind. Half the builders
+radar, metal makers, power), then more of the best kind, twice as many while metal piles up (they help
+the factories). Half the builders
 lean on the race and half on the economy; when metal has run out the
 economy half sees to the economy first, builds nothing else (anti-air,
 artillery, defences, storage, more factories) unless attacked, and is
@@ -126,6 +127,12 @@ builder with nothing else to do also upgrades extractors. An upgrade that
 did not take on a deposit is not tried there again for ten minutes.
 Without spots the builders put up metal makers when energy allows, and
 power when the makers would starve.
+Wind and tidal generators count at what the engine gives them: a wind
+generator makes its rating times the wind strength over 5 000 (the map's
+range, 2 500 to 4 500 on Ooooweeee, gives 15 to 27 from a rating of 30),
+taken at the middle of the range; a tidal generator makes its rating times
+the map's tide. They are built when their best output is at least half a
+solar collector's.
 Energy is kept at about fifteen per unit of metal income up to tier 2,
 twenty-five at tier 3 and thirty above (the big units burn far more), and
 metal piling up while the energy store runs dry makes power the first
@@ -186,11 +193,14 @@ among its units, read from the `allies` and `threat` grid layers) the
 home army goes to help, at most every two minutes, unless the seat's own
 base is under heavy attack (five armed enemies near it).
 
-**Aircraft repair.** Once the seat flies eight attacking aircraft its
-builders put up a repair pad, one for every eight up to four; with twelve
-or more the factories also make carriers (mobile pads that can reach the
-enemy), one for every sixteen. Damaged aircraft fly to them by
-themselves (the engine's repair retreat).
+**Aircraft repair.** Once the seat flies four attacking aircraft its
+builders put up a repair pad, one for every four up to ten (a pad mends
+one aircraft at a time); with twelve or more the factories also make
+carriers (mobile pads that can reach the enemy), one for every sixteen.
+An aircraft below half health is sent on a patrol to the nearest pad: a
+patrolling aircraft under three quarters health lands on a pad within
+3 840 units by itself (the engine's repair retreat, which an attack far
+from home never triggers).
 
 **Commander.** The commander opens with an extractor, the first lab, then
 more extractors and power, and keeps to the base; it walks out only to see
