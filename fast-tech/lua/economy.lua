@@ -40,10 +40,12 @@ function economy.goals(tier)
     return metal_goal[tier], energy_goal[tier]
 end
 
--- Energy income wanted for each unit of metal income. Escalation's
--- buildings and units cost about ten energy per metal, and extractors and
--- makers burn more.
-local energy_per_metal = 15
+-- Energy income wanted for each unit of metal income, by tier. Escalation's
+-- early buildings and units cost about ten energy per metal, extractors
+-- and makers burn more, and the tier-3 and tier-4 units far more (a match
+-- spent about 36 energy a metal at tier 3). A higher ratio at tier 2 took
+-- builders off extractors and slowed the climb.
+local energy_per_metal = {[0] = 15, 15, 15, 25, 30, 30}
 
 -- "energy", "metal" or nil: what the seat should build more of, and 2
 -- when it is running dry. Building drains the small energy store nearly
@@ -56,11 +58,13 @@ function economy.need()
     if e.energy_share < 0.05 and energy_free < e.energy_demand * 0.5 then
         return "energy", 2
     end
-    if energy_free < e.metal_income * energy_per_metal * 0.8 then
-        return "energy", 1
-    end
-    -- Metal piling up while energy runs dry: energy is what holds things back.
+    -- Metal piling up while energy runs dry: energy is what holds things
+    -- back, and metal to build power is at hand, so it comes first.
     if e.metal_share > 0.7 and e.energy_share < 0.3 and e.energy_income < e.energy_demand then
+        return "energy", 2
+    end
+    local ratio = energy_per_metal[math.max(0, math.min(5, world.tier))]
+    if energy_free < e.metal_income * ratio * 0.8 then
         return "energy", 1
     end
     if e.metal_share < 0.3 or e.metal_income < metal_target then

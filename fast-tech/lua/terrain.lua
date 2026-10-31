@@ -54,10 +54,44 @@ local function enemy_starts()
     return found
 end
 
+-- Whether `class` gets from `a` to `b`. Without full awareness
+-- map:reachable counts ground the seat has never seen as open, so it is
+-- only trusted when it says no; a yes is checked with map:route, which
+-- reads the real movement map. A route is costly (tens of milliseconds on
+-- a large map), so the survey asks one a turn. Maps past the route's cap
+-- of 1 048 576 cells keep reachable's answer.
+local route_cap = 1048576
+
+local function meets(a, b, class)
+    local ok, near = pcall(function() return game.map:reachable(a, b, class) end)
+    if ok and near == false then
+        return false, false
+    end
+    local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
+    if cells > route_cap then
+        return ok and near == true, false
+    end
+    local found, route = pcall(function() return game.map:route(a, b, class) end)
+    return found and route ~= nil, true
+end
+
 -- Whether a movement class gets from the base to the enemy: to every
 -- enemy start, or to most of them when the starts are only guesses.
--- Read once per class.
+-- The survey fills this in, a class at a time.
 local class_reach = {}
+local class_hits = {}  -- class -> {asked, reached}
+local ship_reach = {}  -- boat class -> whether it reaches the water by the enemy
+
+local function verdict(class)
+    local hits = class_hits[class]
+    if hits == nil then
+        return nil
+    end
+    if terrain.targets_known then
+        return hits.reached == #terrain.targets
+    end
+    return hits.reached * 2 > #terrain.targets
+end
 
 function terrain.class_reaches(class)
     if class == nil or class == "" then
@@ -71,20 +105,21 @@ function terrain.class_reaches(class)
     if #targets == 0 or world.start == nil then
         return true
     end
+    if not terrain.ready then
+        -- Not surveyed yet: assume it does, as the map line will tell.
+        return true
+    end
+    -- A class the survey did not list: asked now, all at once.
     local from = {x = world.start.x, z = world.start.z}
     local reached = 0
     for _, target in ipairs(targets) do
-        local ok, result = pcall(function() return game.map:reachable(from, target, class) end)
-        if ok and result == true then
+        if meets(from, target, class) then
             reached = reached + 1
         end
     end
-    local result = reached * 2 > #targets
-    if terrain.targets_known then
-        result = reached == #targets
-    end
-    class_reach[class] = result
-    return result
+    class_hits[class] = {asked = #targets, reached = reached}
+    class_reach[class] = verdict(class)
+    return class_reach[class]
 end
 
 -- Whether a unit type can reach the enemy on this map. Aircraft always
@@ -95,7 +130,13 @@ function terrain.useful(entry)
     end
     local class = entry.record.movementclass
     if entry.water_only or (type(class) == "string" and string.find(string.upper(class), "BOAT", 1, true)) then
-        return terrain.ship_reaches == true
+        if terrain.ship_reaches ~= true then
+            return false
+        end
+        if type(class) == "string" and ship_reach[class] ~= nil then
+            return ship_reach[class]
+        end
+        return true
     end
     if type(class) ~= "string" or class == "" then
         return true
@@ -103,44 +144,44 @@ function terrain.useful(entry)
     return terrain.class_reaches(class)
 end
 
--- Whether ships get from the water by the base to water by the enemy:
--- the nearest open water to each enemy start, within a long reach.
-local function ships_reach(waters, class)
-    if terrain.water_point == nil or class == nil then
-        return false
-    end
-    local reached, total = 0, 0
-    for _, target in ipairs(terrain.targets) do
-        local best, best_d
-        for _, water in ipairs(waters) do
-            local d = util.dist(water, target)
-            if d <= 2500 and (best_d == nil or d < best_d) then
-                best, best_d = water, d
-            end
-        end
-        total = total + 1
-        if best ~= nil then
-            local ok, result = pcall(function() return game.map:reachable(terrain.water_point, best, class) end)
-            if ok and result == true then
-                reached = reached + 1
-            end
-        end
-    end
-    return total > 0 and reached * 2 >= total
+local function is_boat(class)
+    return string.find(string.upper(class), "BOAT", 1, true) ~= nil
 end
 
--- A ship's movement class on the seat's side.
-local function ship_class()
+-- The boat classes of the combat ships the seat's side can make, each
+-- once, in type order.
+local function boat_classes()
     local side = me.side_name
+    local found, seen = {}, {}
     for index = 1, #units do
         local entry = catalog.types[index]
-        if entry ~= nil and entry.combat and entry.water_only and not entry.air
-            and type(entry.record.movementclass) == "string" and entry.record.movementclass ~= ""
-            and (side == nil or entry.side == "" or entry.side == side) then
-            return entry.record.movementclass
+        local class = entry ~= nil and entry.record.movementclass
+        if entry ~= nil and entry.combat and not entry.air and entry.water_only
+            and type(class) == "string" and class ~= "" and is_boat(class)
+            and (side == nil or entry.side == "" or entry.side == side) and not seen[class] then
+            seen[class] = true
+            found[#found + 1] = class
         end
     end
-    return nil
+    return found
+end
+
+-- The ground movement classes of the combat units the seat's side can
+-- make, each once, in type order.
+local function ground_classes()
+    local side = me.side_name
+    local found, seen = {}, {}
+    for index = 1, #units do
+        local entry = catalog.types[index]
+        local class = entry ~= nil and entry.record.movementclass
+        if entry ~= nil and entry.combat and not entry.air and not entry.water_only
+            and type(class) == "string" and class ~= "" and not is_boat(class)
+            and (side == nil or entry.side == "" or entry.side == side) and not seen[class] then
+            seen[class] = true
+            found[#found + 1] = class
+        end
+    end
+    return found
 end
 
 -- Whether most of a line's combat units reach the enemy, over every
@@ -165,52 +206,167 @@ local function line_reaches(line)
     return total > 0 and good * 2 >= total
 end
 
--- Reads the map once the seat knows where it stands.
+-- The survey's questions: each ground class to each enemy start, then
+-- each boat class from the water by the base to the three open-water
+-- points nearest each enemy start (within a long reach; the nearest may
+-- be a pond or shallows). Answered a route at a time.
+local checks = nil
+local next_check = 1
+local ship_hits = {}  -- boat class -> {asked, reached}
+
+local function plan_checks(waters)
+    checks = {}
+    next_check = 1
+    local from = {x = world.start.x, z = world.start.z}
+    for _, class in ipairs(ground_classes()) do
+        class_hits[class] = {asked = 0, reached = 0}
+        for _, target in ipairs(terrain.targets) do
+            checks[#checks + 1] = {class = class, from = from, to = target}
+        end
+    end
+    if not terrain.ship_ok then
+        return
+    end
+    -- Only water deep and clear enough for that class counts: a cell that
+    -- is mostly water may still be shallows a ship cannot enter.
+    local function sails(boat, point)
+        local ok, pass = pcall(function() return game.map:passable(boat, point.x // 16, point.z // 16) end)
+        return ok and util.num(pass) >= 3
+    end
+    for _, boat in ipairs(boat_classes()) do
+        ship_hits[boat] = {asked = #terrain.targets, reached = 0}
+        local from, from_d
+        for _, water in ipairs(waters) do
+            local d = util.dist(water, world.start)
+            if d <= water_reach and (from_d == nil or d < from_d) and sails(boat, water) then
+                from, from_d = water, d
+            end
+        end
+        if from ~= nil then
+            for number, target in ipairs(terrain.targets) do
+                local near = {}
+                for _, water in ipairs(waters) do
+                    local d = util.dist(water, target)
+                    if d <= 2500 and sails(boat, water) then
+                        near[#near + 1] = {x = water.x, z = water.z, d = d}
+                    end
+                end
+                table.sort(near, function(a, b) return a.d < b.d end)
+                for index = 1, math.min(3, #near) do
+                    checks[#checks + 1] = {class = boat, from = from,
+                        to = {x = near[index].x, z = near[index].z}, ship = number}
+                end
+            end
+        end
+    end
+end
+
+-- Answers survey questions until one has needed a route. A ship check
+-- is skipped once another water point by the same enemy was reached.
+local ship_done = {}  -- boat class .. enemy number -> reached
+
+local function run_checks()
+    while next_check <= #checks do
+        local check = checks[next_check]
+        next_check = next_check + 1
+        local key = check.ship and (check.class .. "#" .. check.ship)
+        if not (key and ship_done[key]) then
+            local ok, routed = meets(check.from, check.to, check.class)
+            if check.ship then
+                if ok then
+                    ship_done[key] = true
+                    ship_hits[check.class].reached = ship_hits[check.class].reached + 1
+                end
+            else
+                local hits = class_hits[check.class]
+                hits.asked = hits.asked + 1
+                if ok then
+                    hits.reached = hits.reached + 1
+                end
+            end
+            if routed then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+-- Reads the map once the seat knows where it stands; the reach questions
+-- take a turn per route, so the map line comes some seconds in.
 function terrain.survey()
     if terrain.ready or world.start == nil then
         return
     end
-    local grid = brain.grid({"water"}, grid_size)
-    if grid == nil then
+    if checks == nil then
+        local grid = brain.grid({"water"}, grid_size)
+        if grid == nil then
+            return
+        end
+        local width = util.whole(game.map.world_width)
+        local height = util.whole(game.map.world_height)
+        local total, nearest, nearest_d = 0, nil, nil
+        local waters = {}
+        for index = 0, grid_size * grid_size - 1 do
+            local share = util.num(grid:get(index + 1))
+            total = total + share
+            if share > 0.6 then
+                local point = {
+                    x = (index % grid_size) * width // grid_size + width // (2 * grid_size),
+                    z = (index // grid_size) * height // grid_size + height // (2 * grid_size),
+                }
+                waters[#waters + 1] = point
+                local d = util.dist(point, world.start)
+                if d <= water_reach and (nearest_d == nil or d < nearest_d) then
+                    nearest, nearest_d = point, d
+                end
+            end
+        end
+        terrain.water_share = total / (grid_size * grid_size)
+        terrain.water_point = nearest
+        terrain.targets = enemy_starts()
+        terrain.targets_known = false
+        for _, row in ipairs(me:players()) do
+            if row.player ~= me.player and row.start_x ~= nil then
+                terrain.targets_known = true
+            end
+        end
+        terrain.ship_ok = nearest ~= nil and terrain.water_share >= some_water
+        plan_checks(waters)
+    end
+    if not run_checks() then
         return
     end
-    local width = util.whole(game.map.world_width)
-    local height = util.whole(game.map.world_height)
-    local total, nearest, nearest_d = 0, nil, nil
-    local waters = {}
-    for index = 0, grid_size * grid_size - 1 do
-        local share = util.num(grid:get(index + 1))
-        total = total + share
-        if share > 0.6 then
-            local point = {
-                x = (index % grid_size) * width // grid_size + width // (2 * grid_size),
-                z = (index // grid_size) * height // grid_size + height // (2 * grid_size),
-            }
-            waters[#waters + 1] = point
-            local d = util.dist(point, world.start)
-            if d <= water_reach and (nearest_d == nil or d < nearest_d) then
-                nearest, nearest_d = point, d
+    for class, _ in pairs(class_hits) do
+        class_reach[class] = verdict(class)
+    end
+    terrain.ready = true
+    terrain.land_ok = line_reaches("kbot") or line_reaches("vehicle")
+    terrain.hover_ok = line_reaches("hover")
+    local ships_through = {}
+    for _, boat in ipairs(boat_classes()) do
+        local hits = ship_hits[boat]
+        if hits ~= nil then
+            ship_reach[boat] = hits.asked > 0 and hits.reached * 2 >= hits.asked
+            if ship_reach[boat] then
+                ships_through[#ships_through + 1] = boat
             end
         end
     end
-    terrain.water_share = total / (grid_size * grid_size)
-    terrain.water_point = nearest
-    terrain.targets = enemy_starts()
-    terrain.targets_known = false
-    for _, row in ipairs(me:players()) do
-        if row.player ~= me.player and row.start_x ~= nil then
-            terrain.targets_known = true
+    terrain.ship_reaches = terrain.ship_ok and #ships_through > 0
+    local through = {}
+    for _, class in ipairs(ground_classes()) do
+        if class_reach[class] then
+            through[#through + 1] = class
         end
     end
-    terrain.land_ok = line_reaches("kbot") or line_reaches("vehicle")
-    terrain.hover_ok = line_reaches("hover")
-    terrain.ship_ok = nearest ~= nil and terrain.water_share >= some_water
-    terrain.ship_reaches = terrain.ship_ok and ships_reach(waters, ship_class())
-    terrain.ready = true
-    print(string.format("map: water %.0f%%, enemy by land %s, by hover %s, ships %s (reach %s), %d enemy starts%s",
+    for _, boat in ipairs(ships_through) do
+        through[#through + 1] = boat
+    end
+    print(string.format("map: water %.0f%%, enemy by land %s, by hover %s, ships %s (reach %s), %d enemy starts%s; classes through: %s",
         terrain.water_share * 100, tostring(terrain.land_ok), tostring(terrain.hover_ok),
         tostring(terrain.ship_ok), tostring(terrain.ship_reaches), #terrain.targets,
-        terrain.targets_known and "" or " guessed"))
+        terrain.targets_known and "" or " guessed", #through > 0 and table.concat(through, " ") or "none"))
 end
 
 -- How much a line is wanted on this map: 0 is the most, higher is less,

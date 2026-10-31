@@ -39,8 +39,15 @@ below plays inside that list; the brain reads it, never unit names.
 selection groups: kbots (`CTRL_K`), vehicles (`CTRL_V`), hovercraft
 (`CTRL_H`), aircraft, ships. When the seat knows where it stands it reads
 the map: how much of it is water, and whether the enemy starts can be
-reached on land or by hovercraft. The lines are then preferred in this
-order:
+reached on land or by hovercraft. Each movement class of the side's combat
+units is judged on its own: a unit is built only when its class reaches
+the enemy (a kbot for shallows may not, where a deep-water tank does). A
+seat without full awareness is told by `map:reachable` that ground it has
+never seen is open, so a yes is checked with `map:route`, one route a
+second; the `map:` line comes some seconds into the match and names the
+classes that get through. Ships are judged the same way, from water near
+the base deep enough for that class to the three such points nearest each
+enemy start. The lines are then preferred in this order:
 
 | Map | Order |
 | --- | --- |
@@ -78,19 +85,29 @@ grid, a building goes anywhere near the base instead.
 vehicle has no metal extractor, a construction kbot has. Factories make the
 builder that brings what the seat lacks first (extractors, the next lab,
 radar, metal makers, power), then more of the best kind. Half the builders
-lean on the race and half on the economy. Builders walk out to ground the
-seat has never seen before they build there, and give up a walk after 40
-seconds or when the engine reports no path.
+lean on the race and half on the economy; when metal has run out the
+economy half sees to the economy first, builds nothing else (anti-air,
+artillery, defences, storage, more factories) unless attacked, and is
+called back from helping frames that cannot rise. Builders walk out to
+ground the seat has never seen before they build there, and give up a walk
+after 40 seconds plus one for every 20 world units of the way (far
+deposits) or when the engine reports no path.
 
-**Economy.** Free metal spots near the base come first. From tier 2 a
-builder that can make a better extractor replaces the lower-tier ones,
-nearest the base first: it reclaims the old extractor and builds the new
-one on the same spot. Only then do builders walk to far spots. A free
+**Economy.** Free metal spots near the base come first. An extractor goes
+where its footprint covers the most of the deposit, and only where it
+covers at least 60 % of what the best position would: a deposit taken by
+an enemy extractor or a building is passed over, not answered with an
+extractor on the bare ground beside it. From tier 2 a builder that can
+make a better extractor replaces the lower-tier ones, nearest the base
+first: it reclaims the old extractor and builds the new one where it
+covers the deposit best. Only then do builders walk to far spots. A free
 builder with nothing else to do also upgrades extractors. Without spots the
 builders put up metal makers when energy allows, and power when the makers
 would starve.
-Energy is kept at about fifteen per unit of metal income, large plants are
-preferred to many small ones, geothermal plants go on vents, and metal
+Energy is kept at about fifteen per unit of metal income up to tier 2,
+twenty-five at tier 3 and thirty above (the big units burn far more), and
+metal piling up while the energy store runs dry makes power the first
+task. Large plants are preferred to many small ones, geothermal plants go on vents, and metal
 makers switch off when the metal store is nearly full.
 
 **Lower tiers wind down.** A factory at the top tier builds freely, one tier
@@ -130,7 +147,14 @@ badly hurt.
 
 **Storage.** When a store sits full and the income would fill it again
 within a minute or so, builders add metal storage (first) or energy
-storage, until the stores hold about two minutes of income.
+storage, until the stores hold about two minutes of income; for metal
+at most 2 000 plus twenty seconds of income, so a large late income is
+spent rather than stored.
+
+**More factories.** With metal and energy to spare and the next lab not
+going up, builders add factories of the top tier or the one below, up to
+three (fair) or four of each, never while energy is short and never past
+three times that in all.
 
 ## Files
 

@@ -117,6 +117,17 @@ error is logged once and the seat keeps playing).
   order): use sequences.
 - `map:reachable(unit_handle, ...)` can answer false from a blocked cell;
   use positions (`{x, z}`) as both ends. Points work.
+- **`map:reachable` is optimistic without full awareness**: cells the seat
+  has never seen count as open (`sight_pass` in the engine's
+  `src/sim/brains/src/lua_map.cpp`), so at the start it says yes to almost
+  everything. Only its no is reliable. `map:route` reads the real movement
+  map (nil = cannot meet) but costs real time: tens of ms on a big map,
+  and a turn over **250 ms of real time stops the seat**
+  (`tick ran for more than 250 milliseconds`). The survey asks one route a
+  turn. `os.clock` is not available to time things.
+- A water grid cell (`brain.grid({"water"})` share > 0.6) can still be
+  shallows a boat class cannot enter: check `map:passable(class, cx, cz)`
+  (3 = clear) before using it as a ship endpoint.
 - Without full awareness: `brain.place`/`brain.site` only accept explored
   ground; `me:nearest_enemy`/`game.units` are nil; enemies come from
   `me.seen`, radar/sonar contacts from `me.radar` (positions only).
@@ -197,10 +208,10 @@ error is logged once and the seat keeps playing).
   Vehicle Plant (18×18) fits nowhere on that map and the goal never
   changed. Fixed: wide search, then the lab is set aside for ten minutes
   (`tech.no_site`, log line `no site for ...`). On that map no tier-3 lab
-  found a site in the test runs; the brain still wins at tier 2 in about
-  35 minutes.
-  The map line there says `enemy by land true`, and land units do reach the
-  enemy, so the earlier expectation of `false` was wrong.
+  found a site in the test runs; the brain still wins at tier 2.
+- Crater Islands: `enemy by land false` now (routes checked); only hover,
+  deep-water tanks (`TANKDH*`), spiders/crabs and some boat classes get
+  through. Luschaven: as Arm only `BOATS6` ships reach the enemy.
 - Engine 0.8.9 (from 0.8.7): only path handling (UTF-8) and interface
   changes for brains; the brain API and docs are unchanged. `brain check`
   passes and the test matches give the same results as before.
@@ -208,8 +219,19 @@ error is logged once and the seat keeps playing).
   whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
   commander fleeing or D-gunning, jammers (depends on the AI list).
-- Known weaknesses: energy runs short at tier 3 on some maps; many factories
-  and big stockpiles late on rich levels; the `map:` line was once printed
-  twice in a 4-seat game (harmless, unexplained).
+- Fixed after user reports: extractors beside taken deposits (60 % rule),
+  Moho upgrades half off the deposit, units built that cannot reach the
+  enemy (reach per class via routes), energy short at tier 3 (ratio by
+  tier, metal-full + energy-dry is urgent), big metal stores and too many
+  factories, far deposits never reached (walk timeout by distance, starving
+  builders do economy only).
+- Matches are chaotic: a small change shifts a whole game, so judge a
+  change on several maps and both sides, not one run.
+- Known weaknesses: on the fair level (1x income) the built-in hard AI
+  beats the brain on Painted Desert (the committed version lost too);
+  energy can still run dry at tier 3 on boosted; late on rich levels
+  energy overshoots (income 2-4x spending); the `map:` line was once
+  printed twice in a 4-seat game (the survey was rewritten since; not seen
+  again, but 4-seat games cannot run headless).
 - Grid ideas proposed but not done: verify factory exits with
   `map:reachable`; two block sizes (24 for labs, 12 for town).

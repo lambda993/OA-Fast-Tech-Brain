@@ -20,7 +20,8 @@ local builders = {
     role = {},     -- builder id -> "tech" or "economy"
     parked = {},   -- builder id -> tick it was sent to patrol or assist
     wide_search = {},  -- factory index -> tick of the last search around the base
-    wide_failed = {},  -- factory index -> searches in a row that found nothing
+    wide_failed = {},
+    released = {},     -- builder id -> tick it was last called back from helping  -- factory index -> searches in a row that found nothing
     pending = {},  -- what was ordered recently, so two builders do not start the same thing
     retreat = {},  -- commander id -> tick it was sent home
 }
@@ -58,7 +59,12 @@ local function scout_site(unit, spot)
         end
     end
     if unit:move(spot) then
-        builders.walking[unit.id] = {tick = me.tick, x = spot.x, z = spot.z}
+        -- A walk may last 40 seconds plus a second for every 20 world
+        -- units: far deposits (3 000 units and more on some maps) are
+        -- beyond a slow builder's first minute.
+        local at = util.pos(unit)
+        local far = at ~= nil and util.dist(at, spot) or 0
+        builders.walking[unit.id] = {tick = me.tick, x = spot.x, z = spot.z, limit = 30 * (40 + far // 20)}
         return true
     end
     return false
@@ -218,9 +224,16 @@ end
 
 -- The site for an extractor at a deposit that covers the most metal: every
 -- footprint position a few cells around the deposit is checked, and the
--- one with the most metal under it wins, the nearest on a tie. Returns the
--- footprint's centre in world units, or nil when no site is clear.
-local function extractor_site(extractor, spot)
+-- one with the most metal under it wins, the nearest on a tie. A clear
+-- site must cover at least 60 % of what the best position over the
+-- deposit would: when the deposit is taken (an enemy extractor, a
+-- building, rocks) the bare ground beside it is not worth an extractor.
+-- With `ignore_site` the site test is skipped (an extractor to be
+-- replaced still stands there). Returns the footprint's centre in world
+-- units, or nil.
+local deposit_share = 0.6
+
+local function extractor_site(extractor, spot, ignore_site)
     local map = game.map
     local record = extractor.record
     local width = math.max(1, util.whole(record.footprintx))
@@ -228,23 +241,28 @@ local function extractor_site(extractor, spot)
     local spot_x = (spot.x - 8) // 16
     local spot_z = (spot.z - 8) // 16
     local best, best_metal, best_d
+    local richest = 0
     for dz = -3, 3 do
         for dx = -3, 3 do
             local cx = spot_x - width // 2 + dx
             local cz = spot_z - depth // 2 + dz
-            if brain.site(record, cx, cz, 0) == true then
-                local metal = 0
-                for z = 0, depth - 1 do
-                    for x = 0, width - 1 do
-                        metal = metal + util.num(map:metal(cx + x, cz + z))
-                    end
+            local metal = 0
+            for z = 0, depth - 1 do
+                for x = 0, width - 1 do
+                    metal = metal + util.num(map:metal(cx + x, cz + z))
                 end
+            end
+            richest = math.max(richest, metal)
+            if ignore_site or brain.site(record, cx, cz, 0) == true then
                 local d = dx * dx + dz * dz
                 if best == nil or metal > best_metal or (metal == best_metal and d < best_d) then
                     best, best_metal, best_d = {x = cx * 16 + width * 8, z = cz * 16 + depth * 8}, metal, d
                 end
             end
         end
+    end
+    if best == nil or best_metal <= 0 or best_metal < richest * deposit_share then
+        return nil
     end
     return best
 end
@@ -317,8 +335,11 @@ local function try_upgrade_extractor(unit, entry)
         return false
     end
     local at = util.pos(best)
+    -- The new extractor may be larger: it goes where it covers the most of
+    -- the deposit, not simply centred on the old one.
+    local site = extractor_site(extractor, at, true) or at
     if unit:reclaim(best) then
-        unit:build(extractor.record, at, 0, true)
+        unit:build(extractor.record, site, 0, true)
         builders.upgrading[best.id] = me.tick
         print(string.format("upgrade %s -> %s at %d,%d", catalog.of(best).name, extractor.name, at.x, at.z))
         return true
@@ -527,6 +548,10 @@ local function try_more_factories(unit, entry)
     if e.metal_share < 0.4 or e.metal_income < metal_goal * 0.6 or e.energy_share < 0.4 then
         return false
     end
+    -- More factories only burn more energy when it is already short.
+    if economy.need() == "energy" then
+        return false
+    end
     -- While the next lab goes up, every builder is better spent on it.
     if tech.frame_alive() then
         return false
@@ -539,6 +564,15 @@ local function try_more_factories(unit, entry)
         count[level] = (count[level] or 0) + 1
     end
     local limit = me.difficulty == "hard" and 3 or 4
+    -- All tiers together: old factories wait to be reclaimed, and the
+    -- builders and energy go to the new ones.
+    local total = 0
+    for _, n in pairs(count) do
+        total = total + n
+    end
+    if total >= limit * 3 then
+        return false
+    end
     local best, best_score
     for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end, terrain.ship_ok)) do
         local level = catalog.factory_tier(option)
@@ -613,9 +647,11 @@ local function try_storage(unit, entry)
         return false
     end
     local e = economy.now
-    -- Enough room for two minutes of income is enough.
+    -- Enough room for two minutes of income is enough, and for metal less
+    -- once the income is large: a big store late in the game only holds
+    -- metal the factories should be spending (about 11 000 at 450 a second).
     local metal_full = e.metal_share > 0.9 and e.metal_income * 45 > e.metal_cap
-        and e.metal_cap < e.metal_income * 120
+        and e.metal_cap < math.min(e.metal_income * 120, 2000 + e.metal_income * 20)
     local energy_full = e.energy_share > 0.9 and e.energy_income * 20 > e.energy_cap
         and e.energy_cap < e.energy_income * 120
     -- Metal is the scarcer store: it goes first when both are full.
@@ -1131,28 +1167,39 @@ local function builder_turn(unit, entry)
         local total = util.count(builders.role)
         builders.role[unit.id] = tech_count <= total - tech_count and "tech" or "economy"
     end
-    local critical = select(2, economy.need()) >= 2
+    local need, urgency = economy.need()
+    local critical = urgency >= 2
+    local attacked = world.alarm ~= nil and me.tick - world.alarm.tick < 30 * 60
+    -- No metal at all: anything but the economy only adds frames that
+    -- cannot rise (a map whose deposits lie far off starts like this).
+    local starving = need == "metal" and critical and not attacked
     local order
     -- The race comes first for whoever can build the next lab once the
-    -- seat can pay for it, whatever that builder's role.
+    -- seat can pay for it, whatever that builder's role; but with the
+    -- economy running dry (no metal on a map whose deposits lie far off)
+    -- the economy builders see to it first, or the lab never gets the
+    -- metal to go up.
     local racing = tech.goal ~= nil and catalog.can_build(entry, tech.goal)
         and (tech.frame_alive() or tech.affordable())
+        and not (critical and builders.role[unit.id] == "economy")
     if racing or (builders.role[unit.id] == "tech" and not critical) then
         order = {"reclaim", "radar", "goal", "economy"}
     else
         order = {"reclaim", "radar", "economy", "goal"}
     end
     -- Under attack, or with too few defences, the economy builders fortify first.
-    local attacked = world.alarm ~= nil and me.tick - world.alarm.tick < 30 * 60
     local defences = count_of(function(_, e) return e.defense end)
-    if builders.role[unit.id] == "economy" and (attacked or defences * 2 < defence_wanted[math.min(5, world.tier)]) then
+    if builders.role[unit.id] == "economy" and not starving
+        and (attacked or defences * 2 < defence_wanted[math.min(5, world.tier)]) then
         table.insert(order, 2, "defence")
     end
     -- Anti-air and long-range artillery come early, at their own pace, and
     -- the energy store the guns need to fire before either.
-    table.insert(order, 3, "artillery")
-    table.insert(order, 3, "anti-air")
-    table.insert(order, 2, "shot-storage")
+    if not starving then
+        table.insert(order, 3, "artillery")
+        table.insert(order, 3, "anti-air")
+        table.insert(order, 2, "shot-storage")
+    end
     local tasks = {
         ["shot-storage"] = try_shot_storage,
         ["anti-air"] = try_anti_air,
@@ -1175,8 +1222,9 @@ local function builder_turn(unit, entry)
         {"help", function(u) return try_help(u, 1500) end}, {"sweep", function(u) return try_sweep(u) end},
         {"assist", function(u) return try_assist(u) end},
     }
+    local spare = {wreck = true, help = true, sweep = true, assist = true}
     for _, task in ipairs(rest) do
-        if task[2](unit, entry) then
+        if (not starving or spare[task[1]]) and task[2](unit, entry) then
             return true
         end
     end
@@ -1191,7 +1239,7 @@ local function ready(unit)
         local kind = unit:head_order()
         if kind ~= "Move_Ground" and kind ~= "Move" then
             builders.walking[unit.id] = nil
-        elseif me.tick - walk.tick > 30 * 40 then
+        elseif me.tick - walk.tick > (walk.limit or 30 * 40) then
             builders.walking[unit.id] = nil
             economy.claim({x = walk.x, z = walk.z}, 300)
             unit:stop()
@@ -1211,6 +1259,25 @@ local function ready(unit)
     return util.free(unit)
 end
 
+-- An economy builder helping a frame while metal has run out is called
+-- back, at most every 30 seconds, to see to the economy: otherwise it
+-- helps a lab that cannot rise for want of metal for minutes on end.
+local function released(unit, entry)
+    if entry.commander or builders.role[unit.id] ~= "economy" then
+        return false
+    end
+    local need, urgency = economy.need()
+    if need ~= "metal" or urgency < 2 or unit:head_order() ~= "HelpBuild" then
+        return false
+    end
+    local last = builders.released[unit.id]
+    if last ~= nil and me.tick - last < 30 * 30 then
+        return false
+    end
+    builders.released[unit.id] = me.tick
+    return true
+end
+
 function builders.step()
     economy.read()
     send_repairs()
@@ -1224,7 +1291,7 @@ function builders.step()
         elseif entry.decoy then
             busy = decoy_fights(unit)
         end
-        if not busy and ready(unit) and builders.repairing[unit.id] == nil then
+        if not busy and (ready(unit) or released(unit, entry)) and builders.repairing[unit.id] == nil then
             if entry.commander then
                 if not commander_turn(unit, entry) then
                     send_home(unit)
