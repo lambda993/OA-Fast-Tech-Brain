@@ -193,10 +193,16 @@ error is logged once and the seat keeps playing).
 
 ## State and open points
 
-- Last commit `b6d335a` is installed. Its matches on Crater Islands and
-  Painted Desert were not seen to finish (the session ended): verify that
-  Crater Islands now logs `enemy by land false` and starts with hovercraft
-  or ships, and that no error appears.
+- Crater Islands (seed 4242) used to stall at tier 2 forever: the Ultra
+  Vehicle Plant (18×18) fits nowhere on that map and the goal never
+  changed. Fixed: wide search, then the lab is set aside for ten minutes
+  (`tech.no_site`, log line `no site for ...`). On that map no tier-3 lab
+  found a site in the test runs; the brain still wins at tier 2 in about
+  35 minutes.
+  The map line there says `enemy by land true`, and land units do reach the
+  enemy, so the earlier expectation of `false` was wrong.
+- `brain.place` stops after 4 096 cells (radius about 500 world units),
+  whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
   commander fleeing or D-gunning, jammers (depends on the AI list).
 - Known weaknesses: energy runs short at tier 3 on some maps; many factories

@@ -102,7 +102,13 @@ twenty-two and tier 5 thirty-four.
 
 **Old labs.** Factories two tiers behind the top, and tier-1 factories once
 tier 3 is reached, are reclaimed. When a large lab finds no room twice, the
-lowest factory near the base is reclaimed to make room.
+lowest factory near the base is reclaimed to make room. A factory that fits
+neither the grid nor a spot near the base is searched for on all explored
+ground in rings out to about 1 500 units, once a minute; between searches
+the builder walks to unexplored ground nearby. After three searches that
+found nothing, with no old lab to reclaim, the factory is set aside for ten
+minutes and the race takes another line (rough or island maps, where the
+tier-3 labs of 18×18 cells fit nowhere).
 
 **Scouting.** With no full awareness the brain builds the best radar its
 builders offer (in Escalation's AI table that starts at tier 2–3), sends one early

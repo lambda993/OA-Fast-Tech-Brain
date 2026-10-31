@@ -4,7 +4,9 @@
 -- The race up the tiers. The goal is one factory of the next tier. A
 -- builder that can put it down does so; when none can, the top factory
 -- makes one. Old factories are reclaimed once they are two tiers behind,
--- or when a large lab finds no room.
+-- or when a large lab finds no room. A lab that fits nowhere on the
+-- explored ground is set aside for a while and the race takes another
+-- line.
 
 local catalog = require("catalog")
 local terrain = require("terrain")
@@ -19,7 +21,16 @@ local tech = {
     reclaiming = {},  -- factory id -> tick the reclaim was ordered
     scout_lab = nil,  -- factory kept for scouts
     no_room = 0,      -- placements of the goal that failed in a row
+    set_aside = {},   -- factory index -> tick it was found to fit nowhere
 }
+
+-- How long a factory that fits nowhere stays out of the race.
+local aside_ticks = 30 * 600
+
+local function aside(entry)
+    local tick = tech.set_aside[entry.index]
+    return tick ~= nil and me.tick - tick < aside_ticks
+end
 
 -- The highest factory tier the brain climbs to; LEV5 units come out of
 -- LEV4 factories.
@@ -63,6 +74,7 @@ local function reach(entry, visiting)
         if built.mobile_builder and same_side(built) then
             for _, next_factory in ipairs(built.builds) do
                 if next_factory.factory and next_factory ~= entry and same_side(next_factory)
+                    and not aside(next_factory)
                     and catalog.factory_tier(next_factory) >= catalog.factory_tier(entry) then
                     best = math.max(best, reach(next_factory, visiting))
                 end
@@ -79,6 +91,28 @@ function tech.reset()
     reach_memo = {}
 end
 
+-- The goal fits nowhere on the explored ground and no old lab can make
+-- room: it leaves the race for ten minutes, and the lines are weighed
+-- again without it.
+function tech.no_site(entry)
+    if entry == nil or aside(entry) then
+        return
+    end
+    if tech.make_room() ~= nil then
+        -- An old lab can go: reclaiming it comes first.
+        tech.no_room = math.max(tech.no_room, 2)
+        return
+    end
+    tech.set_aside[entry.index] = me.tick
+    reach_memo = {}
+    print(string.format("no site for %s (footprint %dx%d): set aside for ten minutes",
+        entry.name, util.whole(entry.record.footprintx), util.whole(entry.record.footprintz)))
+    if tech.goal == entry then
+        tech.goal, tech.frame, tech.started, tech.no_room = nil, nil, nil, 0
+        tech.choose_goal()
+    end
+end
+
 -- The next factory to race for. Climbing the line the seat is on comes
 -- first: a factory of the next tier up. Among those, and when the line
 -- ends and a bridge to another line is needed, the line the map prefers
@@ -86,6 +120,12 @@ end
 -- Kbots and vehicles start; hovercraft come last unless the map calls
 -- for them.
 function tech.choose_goal()
+    for index, tick in pairs(tech.set_aside) do
+        if me.tick - tick >= aside_ticks then
+            tech.set_aside[index] = nil
+            reach_memo = {}
+        end
+    end
     local tier = world.tier
     local builders = own_types(function(e) return e.mobile_builder end)
     local factories = own_types(function(e) return e.factory end)
@@ -125,6 +165,7 @@ function tech.choose_goal()
         -- when its line leads above it and the seat holds nothing of that
         -- line at its tier or higher (a bridge to a longer line).
         local useful = rank ~= nil and not owned[entry.index] and same_side(entry)
+            and not aside(entry)
             and (not entry.water_only or terrain.ship_ok)
             and level <= top_factory_tier
             and (level > tier or (line > tier and (held[entry.line or "?"] or 0) < level))

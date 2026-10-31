@@ -19,6 +19,8 @@ local builders = {
     walking = {},  -- builder id -> {tick, x, z} while it walks to unexplored ground
     role = {},     -- builder id -> "tech" or "economy"
     parked = {},   -- builder id -> tick it was sent to patrol or assist
+    wide_search = {},  -- factory index -> tick of the last search around the base
+    wide_failed = {},  -- factory index -> searches in a row that found nothing
     pending = {},  -- what was ordered recently, so two builders do not start the same thing
     retreat = {},  -- commander id -> tick it was sent home
 }
@@ -78,6 +80,51 @@ local function base()
     return world.base or world.start
 end
 
+-- A factory that fits nowhere near the base: every explored spot in rings
+-- out to about 1 500 world units is searched (brain.place itself stops
+-- near 500). Done at most once a minute per type, it costs about 30
+-- placements. brain.place only takes explored ground: after a search that
+-- found nothing the builder walks to the nearest unexplored ring point.
+-- Returns true when ordered, and false plus true when three searches a
+-- minute apart found nothing.
+local wide_rings = {{0, 1}, {480, 8}, {960, 12}, {1440, 16}}
+
+local function place_wide(unit, entry, centre)
+    local last = builders.wide_search[entry.index]
+    if last ~= nil and me.tick - last < 30 * 60 then
+        return false, false
+    end
+    builders.wide_search[entry.index] = me.tick
+    local unseen = nil
+    for _, ring in ipairs(wide_rings) do
+        local distance, count = ring[1], ring[2]
+        for step = 0, count - 1 do
+            local near = util.clamp(util.around(centre, step / count, distance), 96)
+            if util.explored(near) then
+                local _, _, x, z = brain.place(entry.record, near, 480, 0)
+                if x ~= nil then
+                    x, z = util.whole(x), util.whole(z)
+                    if not city.on_street(entry, x, z) and unit:build(entry.record, {x = x, z = z}, 0) then
+                        builders.wide_failed[entry.index] = nil
+                        return true
+                    end
+                end
+            elseif unseen == nil then
+                unseen = near
+            end
+        end
+    end
+    local failed = (builders.wide_failed[entry.index] or 0) + 1
+    builders.wide_failed[entry.index] = failed
+    if failed >= 3 then
+        return false, true
+    end
+    if unseen ~= nil and scout_site(unit, unseen) then
+        return true
+    end
+    return false, false
+end
+
 -- Puts a building in the city grid; toward `toward` when given (the front).
 -- Water-only buildings go by the open water nearest the base. With no room
 -- on explored ground a builder other than the commander walks out to the
@@ -88,7 +135,13 @@ local function build_in_city(unit, entry, toward)
         if water == nil then
             return false
         end
-        return place(unit, entry, water, 400, true)
+        if place(unit, entry, water, 400, true) then
+            return true
+        end
+        if entry.factory then
+            return place_wide(unit, entry, water)
+        end
+        return false
     end
     if city.place(unit, entry, toward) then
         return true
@@ -98,7 +151,7 @@ local function build_in_city(unit, entry, toward)
         return true
     end
     -- Ground too rough or cramped for the grid: anywhere near the base,
-    -- but never on a street.
+    -- but never on a street. A factory found nowhere returns false plus true.
     local centre = toward or base()
     for _, distance in ipairs({160, 320, 520, 800}) do
         local near = util.clamp(util.around(centre, brain.random(1000) / 1000, distance), 96)
@@ -110,6 +163,9 @@ local function build_in_city(unit, entry, toward)
                 return true
             end
         end
+    end
+    if entry.factory then
+        return place_wide(unit, entry, centre)
     end
     return false
 end
@@ -145,7 +201,8 @@ local function try_goal(unit, entry)
     if recently("goal", 45) or not tech.affordable() then
         return false
     end
-    if build_in_city(unit, goal) then
+    local placed, nowhere = build_in_city(unit, goal)
+    if placed then
         mark("goal")
         tech.started = me.tick
         tech.no_room = 0
@@ -153,6 +210,9 @@ local function try_goal(unit, entry)
         return true
     end
     tech.no_room = tech.no_room + 1
+    if nowhere then
+        tech.no_site(goal)
+    end
     return false
 end
 
