@@ -97,12 +97,18 @@ local function build_in_city(unit, entry, toward)
     if unseen ~= nil and scout_site(unit, unseen) then
         return true
     end
-    -- Ground too rough or cramped for the grid: anywhere near the base.
+    -- Ground too rough or cramped for the grid: anywhere near the base,
+    -- but never on a street.
     local centre = toward or base()
-    for _, distance in ipairs({160, 320, 520}) do
+    for _, distance in ipairs({160, 320, 520, 800}) do
         local near = util.clamp(util.around(centre, brain.random(1000) / 1000, distance), 96)
-        if util.explored(near) and place(unit, entry, near, 320) then
-            return true
+        if util.explored(near) then
+            local facing = brain.random(4) - 1
+            local _, _, x, z = brain.place(entry.record, near, 320, facing)
+            if x ~= nil and not city.on_street(entry, util.whole(x), util.whole(z))
+                and unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) then
+                return true
+            end
         end
     end
     return false
@@ -458,6 +464,41 @@ local function try_more_factories(unit, entry)
     return false
 end
 
+-- The energy store the seat's long-range guns need: one shot of the
+-- hungriest, built or going up, and a tenth more. A B.F.G. shot takes a
+-- million, an Armageddon's or a Dictator's 120 000.
+local function shot_store_needed()
+    local needed = 0
+    for _, unit in ipairs(world.select(function(_, e) return e.artillery end)) do
+        needed = math.max(needed, catalog.of(unit).shot_energy)
+    end
+    return needed * 1.1
+end
+
+-- Energy storage until the guns can fire: before anything else but the
+-- emergencies, at a quicker pace than ordinary storage.
+local function try_shot_storage(unit, entry)
+    local needed = shot_store_needed()
+    if needed <= 0 or economy.now.energy_cap >= needed or recently("shot-storage", 12) then
+        return false
+    end
+    local best, best_value
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.energy_storage end)) do
+        local value = option.energy_capacity / math.max(1, option.cost)
+        if best_value == nil or value > best_value then
+            best, best_value = option, value
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if build_in_city(unit, best) then
+        mark("shot-storage")
+        return true
+    end
+    return false
+end
+
 -- Storage once a store sits full while the income would fill it again
 -- within a minute or so: the surplus is kept instead of wasted.
 local function try_storage(unit, entry)
@@ -577,7 +618,209 @@ local function park(unit)
     end
 end
 
+-- Static anti-air from tier 1 to 3, more when enemy aircraft were seen.
+local anti_air_wanted = {[0] = 0, 2, 5, 9, 12, 12}
+
+local function try_anti_air(unit, entry)
+    if recently("anti-air", 25) then
+        return false
+    end
+    local wanted = anti_air_wanted[math.min(5, world.tier)]
+    if world.enemy_air then
+        wanted = wanted + 3
+    end
+    local have = count_of(function(_, e) return e.defense and e.anti_air end)
+    if have >= wanted then
+        return false
+    end
+    local e = economy.now
+    local budget = math.max(250, e.metal_income * 60 + e.metal * 0.3)
+    local best
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.defense and o.anti_air end)) do
+        if option.metal <= budget and option.tier <= 3 and (best == nil or option.tier > best.tier
+            or (option.tier == best.tier and option.range > best.range)) then
+            best = option
+        end
+    end
+    if best == nil then
+        return false
+    end
+    -- Spread round the base rather than all on one side.
+    local around = util.clamp(util.around(base(), brain.random(1000) / 1000, 400 + world.tier * 150), 96)
+    if build_in_city(unit, best, around) then
+        mark("anti-air")
+        return true
+    end
+    return false
+end
+
+-- Long-range artillery from tier 2: one more each tier, toward the enemy.
+local artillery_wanted = {[0] = 0, 0, 1, 2, 4, 4}
+
+local function try_artillery(unit, entry)
+    local wanted = artillery_wanted[math.min(5, world.tier)]
+    if wanted == 0 or recently("artillery", 60) then
+        return false
+    end
+    if count_of(function(_, e) return e.artillery end) >= wanted then
+        return false
+    end
+    local e = economy.now
+    -- The largest guns (Armageddon, Dictator, B.F.G.) take long to pay for.
+    local budget = e.metal_income * (world.tier >= 4 and 600 or 240) + e.metal
+    local best
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.artillery end)) do
+        if option.metal <= budget and (best == nil or option.range > best.range) then
+            best = option
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if build_in_city(unit, best, world.front(500)) then
+        mark("artillery")
+        print("artillery: " .. best.name)
+        return true
+    end
+    return false
+end
+
+-- Clears large wrecks left in the base once the fighting there is over.
+local function try_clear_wreck(unit, entry)
+    if entry.record.canreclamate ~= true or #world.wrecks == 0 then
+        return false
+    end
+    if world.alarm ~= nil and me.tick - world.alarm.tick < 30 * 30 then
+        return false
+    end
+    local at = util.pos(unit)
+    local best, best_index, best_d
+    for index, wreck in ipairs(world.wrecks) do
+        local d = at and util.dist(at, wreck) or 0
+        if best_d == nil or d < best_d then
+            best, best_index, best_d = wreck, index, d
+        end
+    end
+    table.remove(world.wrecks, best_index)
+    if unit:reclaim({x = best.x, z = best.z}) then
+        builders.parked[unit.id] = me.tick
+        return true
+    end
+    return false
+end
+
+-- A block with free ground where nothing fits may hold rocks, trees or
+-- wrecks: a builder patrols through it, and patrolling builders reclaim
+-- what they pass.
+local function try_sweep(unit)
+    local block = table.remove(city.crowded, 1)
+    if block == nil or me.tick - block.tick > 30 * 300 then
+        return false
+    end
+    if unit:patrol(util.clamp(block, 64)) then
+        builders.parked[unit.id] = me.tick
+        return true
+    end
+    return false
+end
+
+-- Emergencies: builders drop what they do to repair buildings worth 7500
+-- metal or more that are below half health while the base is under fire,
+-- and heavy units sent home to be mended.
+builders.mend = {}      -- unit id -> tick it was sent home for repair
+builders.repairing = {} -- builder id -> id of what it repairs
+local repair_value = 7500
+local repairers_each = 3
+
+local function repair_targets()
+    local targets = {}
+    local attacked = world.alarm ~= nil and me.tick - world.alarm.tick < 30 * 60
+    if attacked then
+        for _, unit in ipairs(world.select(function(u, e)
+            return e.structure and e.metal >= repair_value and world.finished(u)
+        end)) do
+            if util.num(unit.health_percent) < 50 then
+                targets[#targets + 1] = unit
+            end
+        end
+    end
+    local home = base()
+    for id in pairs(builders.mend) do
+        local unit = world.own[id]
+        local at = unit and util.pos(unit)
+        if unit == nil or util.num(unit.health_percent) >= 95 then
+            builders.mend[id] = nil
+        elseif at ~= nil and home ~= nil and util.dist(at, home) < 900 then
+            targets[#targets + 1] = unit
+        end
+    end
+    return targets
+end
+
+local function send_repairs()
+    local targets = repair_targets()
+    if #targets == 0 then
+        builders.repairing = {}
+        return
+    end
+    local crews = {}
+    for builder_id, target_id in pairs(builders.repairing) do
+        local target = world.own[target_id]
+        if target ~= nil and util.num(target.health_percent) < 95 then
+            crews[target_id] = (crews[target_id] or 0) + 1
+        else
+            builders.repairing[builder_id] = nil
+        end
+    end
+    local free = world.select(function(u, e)
+        return e.mobile_builder and world.finished(u) and builders.repairing[u.id] == nil
+    end)
+    for _, target in ipairs(targets) do
+        local where = util.pos(target)
+        while where ~= nil and (crews[target.id] or 0) < repairers_each and #free > 0 do
+            local best, best_index, best_d
+            for index, unit in ipairs(free) do
+                local at = util.pos(unit)
+                local d = at and util.dist(at, where) or 1e9
+                if best_d == nil or d < best_d then
+                    best, best_index, best_d = unit, index, d
+                end
+            end
+            table.remove(free, best_index)
+            if best_d > 2500 then
+                break
+            end
+            if best:repair(target) then
+                builders.repairing[best.id] = target.id
+                builders.parked[best.id] = me.tick
+                crews[target.id] = (crews[target.id] or 0) + 1
+            end
+        end
+    end
+end
+
 -- Commander -------------------------------------------------------------------
+
+-- Cloaks the commander while energy is plentiful, and drops the cloak when
+-- the stores run low.
+local function cloak_commander(unit, entry)
+    local moving = util.num(entry.record.cloakcostmoving)
+    if util.num(entry.record.cloakcost) <= 0 then
+        return
+    end
+    local e = economy.now
+    local spare = e.energy_income - e.energy_demand
+    if e.energy_share > 0.6 and spare > moving then
+        if builders.cloaked ~= true then
+            unit:cloak(true)
+            builders.cloaked = true
+        end
+    elseif e.energy_share < 0.2 and builders.cloaked == true then
+        unit:cloak(false)
+        builders.cloaked = false
+    end
+end
+
 
 -- Sends the commander back toward the middle of the base when it is far
 -- away. The middle may sit under a building, so it stops on open ground
@@ -669,7 +912,15 @@ local function builder_turn(unit, entry)
     if builders.role[unit.id] == "economy" and (attacked or defences * 2 < defence_wanted[math.min(5, world.tier)]) then
         table.insert(order, 2, "defence")
     end
+    -- Anti-air and long-range artillery come early, at their own pace, and
+    -- the energy store the guns need to fire before either.
+    table.insert(order, 3, "artillery")
+    table.insert(order, 3, "anti-air")
+    table.insert(order, 2, "shot-storage")
     local tasks = {
+        ["shot-storage"] = try_shot_storage,
+        ["anti-air"] = try_anti_air,
+        artillery = try_artillery,
         reclaim = try_reclaim,
         radar = try_radar,
         goal = try_goal,
@@ -682,9 +933,11 @@ local function builder_turn(unit, entry)
         end
     end
     local rest = {
-        {"defence", try_defence}, {"upgrade", try_upgrade_extractor}, {"factory", try_more_factories},
-        {"storage", try_storage}, {"scout lab", try_scout_lab},
-        {"help", function(u) return try_help(u, 1500) end}, {"assist", function(u) return try_assist(u) end},
+        {"defence", try_defence},
+        {"factory", try_more_factories}, {"upgrade", try_upgrade_extractor},
+        {"storage", try_storage}, {"scout lab", try_scout_lab}, {"wreck", try_clear_wreck},
+        {"help", function(u) return try_help(u, 1500) end}, {"sweep", function(u) return try_sweep(u) end},
+        {"assist", function(u) return try_assist(u) end},
     }
     for _, task in ipairs(rest) do
         if task[2](unit, entry) then
@@ -724,10 +977,14 @@ end
 
 function builders.step()
     economy.read()
+    send_repairs()
     local list = world.select(function(u, e) return e.mobile_builder and world.finished(u) end)
     for _, unit in ipairs(list) do
-        if ready(unit) then
-            local entry = catalog.of(unit)
+        local entry = catalog.of(unit)
+        if entry.commander then
+            cloak_commander(unit, entry)
+        end
+        if ready(unit) and builders.repairing[unit.id] == nil then
             if entry.commander then
                 if not commander_turn(unit, entry) then
                     send_home(unit)
@@ -737,6 +994,11 @@ function builders.step()
             end
         end
     end
+end
+
+-- A heavy unit sent home for repair.
+function builders.mend_unit(unit)
+    builders.mend[unit.id] = me.tick
 end
 
 -- The commander walks home as soon as it is idle, and when badly hurt.

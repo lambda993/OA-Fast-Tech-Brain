@@ -9,6 +9,7 @@ local catalog = require("catalog")
 local util = require("util")
 
 local world = {
+    wrecks = {},        -- wrecks left in the base: {x, z, size, tick}
     tier = 0,
     own = {},           -- id -> unit, every live unit of the seat
     enemy_buildings = {}, -- id -> {x, z, tier, cost, tick}
@@ -126,6 +127,9 @@ function world.remember(unit)
         return
     end
     local entry = catalog.of(unit)
+    if entry ~= nil and entry.air and entry.combat then
+        world.enemy_air = true
+    end
     if entry ~= nil and entry.structure then
         world.enemy_buildings[unit.id] = {
             x = at.x, z = at.z, tier = entry.tier, cost = entry.cost, tick = me.tick,
@@ -144,6 +148,23 @@ end
 
 function world.forget(unit)
     world.enemy_buildings[unit.id] = nil
+end
+
+-- Remembers a large wreck left near the base, to clear it later.
+function world.note_wreck(entry, wreck)
+    if wreck == nil or wreck.x == nil or world.base == nil then
+        return
+    end
+    local at = {x = util.whole(wreck.x), z = util.whole(wreck.z)}
+    if util.dist(at, world.base) > 2500 then
+        return
+    end
+    if entry ~= nil and (entry.metal >= 500 or entry.footprint >= 4) then
+        world.wrecks[#world.wrecks + 1] = {x = at.x, z = at.z, size = entry.footprint, tick = me.tick}
+        if #world.wrecks > 40 then
+            table.remove(world.wrecks, 1)
+        end
+    end
 end
 
 -- Drops remembered buildings whose place the seat sees again empty.

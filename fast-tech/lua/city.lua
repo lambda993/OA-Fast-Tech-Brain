@@ -4,7 +4,8 @@
 -- The base as a city grid. Square blocks, as wide as the largest factory
 -- the side can build, are separated by streets as wide as its widest
 -- ground unit, so even the largest units pass. Nothing is built on a
--- street. Factories take blocks of their own, at the corners with their
+-- street, and blocks on poor ground (cliffs, lava, water) are left out.
+-- Factories stand toward the front, power and storage behind the base. Factories take blocks of their own, at the corners with their
 -- doors on the street; every other building goes in the other blocks,
 -- packed from the corner. Buildings that gain from a neighbour of their
 -- kind (fusion reactors, energy storage, resource generators, forges and
@@ -21,11 +22,14 @@ local city = {
     street = 14,  -- cells
     origin = nil, -- cell of block (0, 0)'s top-left corner
     pending = {}, -- rectangles ordered lately, before their frame appears
+    crowded = {}, -- middles of explored blocks where a building found no site
 }
 
 local cell = 16
 local rings = 4
-local site_checks = 80
+local site_checks = 160
+local alley = 1          -- free cells kept round a town building
+local fill_cap = 0.6     -- share of a town block buildings may cover
 
 -- Families that gain from an adjacent building of their own family, by
 -- words in the name. Escalation gives the bonus in unit scripts, so the
@@ -72,6 +76,10 @@ function city.setup()
         if entry ~= nil and not entry.skip and (side == nil or entry.side == "" or entry.side == side) then
             local w, d = footprint(entry)
             if entry.mobile and not entry.air and not entry.water_only then
+                if math.max(w, d) > widest and type(entry.record.movementclass) == "string"
+                    and entry.record.movementclass ~= "" then
+                    city.class = entry.record.movementclass
+                end
                 widest = math.max(widest, w, d)
             elseif entry.factory and not entry.water_only then
                 largest = math.max(largest, w, d)
@@ -172,23 +180,77 @@ local function fits(entry, x, z, w, d, block, rects, budget, facing)
     return brain.site(entry.record, x, z, facing or 0) == true
 end
 
--- Blocks around the base, nearest `toward` first.
+-- The share of a block's ground the largest ground units can stand on:
+-- not cliffs, lava, deep water or off the map. Read once per block.
+local quality = {}
+local good_ground = 0.5
+
+local function block_quality(i, j, block)
+    local key = i * 1000 + j
+    local known = quality[key]
+    if known ~= nil then
+        return known
+    end
+    local map = game.map
+    local class = city.class
+    local width, height = util.whole(map.width), util.whole(map:height())
+    local total, good = 0, 0
+    for cz = block.z0, block.z1, 3 do
+        for cx = block.x0, block.x1, 3 do
+            total = total + 1
+            if cx >= 0 and cz >= 0 and cx < width and cz < height then
+                local ok = true
+                if class ~= nil then
+                    local passable = map:passable(class, cx, cz)
+                    ok = passable ~= nil and passable > 0
+                end
+                if ok then
+                    good = good + 1
+                end
+            end
+        end
+    end
+    local share = total > 0 and good / total or 0
+    quality[key] = share
+    return share
+end
+
+-- Blocks around the base with good ground, nearest `toward` first.
 local function blocks_by_distance(toward)
     local list = {}
     for j = -rings, rings do
         for i = -rings, rings do
             local block = block_rect(i, j)
-            local middle = {
-                x = (block.x0 + city.block / 2) * cell,
-                z = (block.z0 + city.block / 2) * cell,
-            }
-            block.middle = middle
-            block.d = util.dist(middle, toward)
-            list[#list + 1] = block
+            if block_quality(i, j, block) >= good_ground then
+                local middle = {
+                    x = (block.x0 + city.block / 2) * cell,
+                    z = (block.z0 + city.block / 2) * cell,
+                }
+                block.middle = middle
+                block.d = util.dist(middle, toward)
+                list[#list + 1] = block
+            end
         end
     end
     table.sort(list, function(a, b) return a.d < b.d end)
     return list
+end
+
+-- Districts: factories toward the front, so units leave on the right side;
+-- power, makers and storage behind the base, away from the fighting;
+-- everything else round the middle. Callers may name a point instead.
+local function district(entry)
+    local home = world.base or world.start
+    local reach = (city.block + city.street) * cell
+    local front = world.front(reach)
+    if entry.factory then
+        return front
+    end
+    if entry.power or entry.metal_maker or entry.metal_storage or entry.energy_storage
+        or entry.extractor or city.family(entry) ~= nil then
+        return util.clamp({x = 2 * home.x - front.x, z = 2 * home.z - front.z}, 64)
+    end
+    return home
 end
 
 -- What a block holds now: "industry" with a factory in it, "town" with
@@ -275,11 +337,63 @@ local function place_family(unit, entry, family, rects, budget)
 end
 
 -- Packed into the first town block with room, scanning from its corner.
--- A row skips past whatever building is in the way.
+-- A row skips past whatever building is in the way. A block with free
+-- ground where nothing fits may hold rocks or wrecks: it is noted for a
+-- builder to sweep.
+local function note_crowded(block, rects)
+    local used = 0
+    for _, rect in ipairs(rects) do
+        if overlaps(block, rect) then
+            if rect.factory then
+                return
+            end
+            used = used + (rect.x1 - rect.x0 + 1) * (rect.z1 - rect.z0 + 1)
+        end
+    end
+    if used * 2 < city.block * city.block and util.explored(block.middle) then
+        city.crowded[#city.crowded + 1] = {x = block.middle.x, z = block.middle.z, tick = me.tick}
+        if #city.crowded > 8 then
+            table.remove(city.crowded, 1)
+        end
+    end
+end
+
+-- The cells of `block` that buildings cover.
+local function used_cells(block, rects)
+    local used = 0
+    for _, rect in ipairs(rects) do
+        if overlaps(block, rect) then
+            local x0, z0 = math.max(block.x0, rect.x0), math.max(block.z0, rect.z0)
+            local x1, z1 = math.min(block.x1, rect.x1), math.min(block.z1, rect.z1)
+            used = used + (x1 - x0 + 1) * (z1 - z0 + 1)
+        end
+    end
+    return used
+end
+
+-- Town buildings keep an alley of free cells round them, and no town
+-- block is filled past its cap. Blocks are tried least full first among
+-- those near the base, so the town spreads instead of piling up in the
+-- middle.
 local function place_town(unit, entry, blocks, rects, budget)
     local w, d = footprint(entry)
+    local area = city.block * city.block
+    local order_list = {}
     for _, block in ipairs(blocks) do
         if block_use(block, rects) ~= "industry" then
+            block.used = used_cells(block, rects)
+            if block.used + w * d <= area * fill_cap then
+                block.key = block.d * (1 + 2 * block.used / area)
+                order_list[#order_list + 1] = block
+            end
+        end
+    end
+    table.sort(order_list, function(a, b) return a.key < b.key end)
+    for index, block in ipairs(order_list) do
+        if index > 1 and budget.left > 0 then
+            note_crowded(order_list[index - 1], rects)
+        end
+        do
             local inside = {}
             for _, rect in ipairs(rects) do
                 if overlaps(block, rect) then
@@ -292,9 +406,11 @@ local function place_town(unit, entry, blocks, rects, budget)
                     if budget.left <= 0 then
                         return false
                     end
-                    local in_way = blocker({x0 = x, z0 = z, x1 = x + w - 1, z1 = z + d - 1}, inside)
+                    local in_way = blocker({
+                        x0 = x - alley, z0 = z - alley, x1 = x + w - 1 + alley, z1 = z + d - 1 + alley,
+                    }, inside)
                     if in_way ~= nil then
-                        x = in_way.x1 + 1
+                        x = math.max(x + 1, in_way.x1 + 1 + alley)
                     else
                         if fits(entry, x, z, w, d, block, inside, budget) then
                             return order(unit, entry, x, z, w, d, 0)
@@ -303,6 +419,29 @@ local function place_town(unit, entry, blocks, rects, budget)
                     end
                 end
             end
+        end
+    end
+    return false
+end
+
+-- Whether a building of `entry` centred at world point (x, z) would cover
+-- any street cell.
+function city.on_street(entry, x, z)
+    if not city.ready then
+        return false
+    end
+    local w, d = footprint(entry)
+    local x0 = (x - w * 8) // cell
+    local z0 = (z - d * 8) // cell
+    local period = city.block + city.street
+    for cx = x0, x0 + w - 1 do
+        if (cx - city.origin.x) % period >= city.block then
+            return true
+        end
+    end
+    for cz = z0, z0 + d - 1 do
+        if (cz - city.origin.z) % period >= city.block then
+            return true
         end
     end
     return false
@@ -331,7 +470,7 @@ function city.place(unit, entry, toward)
     end
     local rects = taken()
     local budget = {left = site_checks}
-    local blocks = blocks_by_distance(toward or world.start)
+    local blocks = blocks_by_distance(toward or district(entry))
     if entry.factory then
         -- Industrial blocks first; with none in reach, a town block's corner.
         return place_factory(unit, entry, blocks, rects, budget, false)
@@ -345,16 +484,17 @@ function city.place(unit, entry, toward)
 end
 
 -- Prints the base as a map, one character per two cells: F factory,
--- E energy family, # other building, = street, . free block ground.
+-- E energy family, # other building, = street, . free block ground,
+-- x a block left out for poor ground.
 function city.dump()
     if not city.ready then
         return
     end
     local rects = taken()
     local period = city.block + city.street
-    local x0 = city.origin.x - period
-    local z0 = city.origin.z - period
-    local size = period * 3
+    local x0 = city.origin.x - period * 2
+    local z0 = city.origin.z - period * 2
+    local size = period * 5
     for z = z0, z0 + size, 2 do
         local row = {}
         for x = x0, x0 + size, 2 do
@@ -363,6 +503,13 @@ function city.dump()
             local j = (z - city.origin.z) % period
             if i >= city.block or j >= city.block then
                 mark = "="
+            else
+                local bi = (x - city.origin.x) // period
+                local bj = (z - city.origin.z) // period
+                local share = quality[bi * 1000 + bj]
+                if share ~= nil and share < good_ground then
+                    mark = "x"
+                end
             end
             for _, rect in ipairs(rects) do
                 if x >= rect.x0 and x <= rect.x1 and z >= rect.z0 and z <= rect.z1 then

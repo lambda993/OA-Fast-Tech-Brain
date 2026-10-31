@@ -9,6 +9,7 @@
 local catalog = require("catalog")
 local economy = require("economy")
 local tech = require("tech")
+local terrain = require("terrain")
 local util = require("util")
 local world = require("world")
 
@@ -23,6 +24,7 @@ local tier_weight = {[0] = 0, 1, 8, 14, 22, 34}
 local builders_wanted = {[0] = 0, 7, 6, 5, 4, 4}
 
 local scout_cap = 8
+local decoys_wanted = 15
 
 -- Worth of the army the seat keeps at home, by tier, before racing on.
 local guard_worth = {[0] = 0, 1200, 5000, 15000, 40000, 60000}
@@ -79,7 +81,7 @@ end
 
 local function count_builders(tier)
     return #world.select(function(_, e)
-        return e.mobile_builder and not e.commander and math.max(1, e.tier) == tier
+        return e.mobile_builder and not e.commander and not e.decoy and math.max(1, e.tier) == tier
     end)
 end
 
@@ -99,7 +101,11 @@ local function pick_scout(entry)
 end
 
 local function pick_combat(entry)
-    local options = catalog.buildable(entry, function(e) return e.combat end, true)
+    -- Torpedo-only units are no use without water to fight in.
+    local wet = terrain.ship_ok
+    local options = catalog.buildable(entry, function(e)
+        return e.combat and (wet or not e.torpedo_only)
+    end, true)
     return util.weighted(options, function(e)
         local weight = tier_weight[math.min(5, e.tier)] or 1
         -- Air keeps a smaller part of the army: it cannot hold ground.
@@ -134,7 +140,7 @@ local function pick_builder(entry, tier)
     local owned = owned_abilities()
     local best, best_score
     for _, built in ipairs(entry.builds) do
-        if built.mobile_builder then
+        if built.mobile_builder and not built.decoy then
             local abilities = catalog.abilities(built)
             if tech.goal ~= nil and catalog.can_build(built, tech.goal) then
                 abilities.goal = true
@@ -199,6 +205,17 @@ local function one_factory(unit)
         unit:queue(builder.record, 1)
         return
     end
+    -- Decoy commanders, a few at a time from tier 2 on, until fifteen
+    -- stand: they draw fire meant for the commander and build like it.
+    if top >= 2 and util.chance(0.25) and #world.select(function(_, e) return e.decoy end) < decoys_wanted then
+        local e = economy.now or economy.read()
+        for _, built in ipairs(entry.builds) do
+            if built.decoy and e.metal_share > 0.3 then
+                unit:queue(built.record, 1)
+                return
+            end
+        end
+    end
     -- One early scout from the first factory that can make one.
     if top <= 2 and #scouts() < 1 then
         local scout = pick_scout(entry)
@@ -259,8 +276,40 @@ local function choose_scout_lab()
     end
 end
 
+-- Buildings that upgrade themselves (Escalation's reactor and geothermal
+-- armour) take the upgrade once the stores can spare it, one at a time.
+factories.upgraded = {} -- building id -> tick the upgrade was queued
+
+local function upgrade_buildings()
+    local e = economy.now or economy.read()
+    if e.metal_share < 0.4 or e.energy_share < 0.4 then
+        return
+    end
+    for id, tick in pairs(factories.upgraded) do
+        if world.own[id] == nil or me.tick - tick > 30 * 600 then
+            factories.upgraded[id] = nil
+        end
+    end
+    for _, unit in ipairs(world.select(function(u, e2)
+        return (e2.power or e2.geo) and e2.builder and world.finished(u)
+    end)) do
+        if factories.upgraded[unit.id] == nil and util.free(unit) then
+            for _, built in ipairs(catalog.of(unit).builds) do
+                if built.upgrade and built.metal <= e.metal_income * 120 + e.metal then
+                    if unit:queue(built.record, 1) then
+                        factories.upgraded[unit.id] = me.tick
+                        print("upgrade " .. catalog.of(unit).name .. ": " .. built.name)
+                        return
+                    end
+                end
+            end
+        end
+    end
+end
+
 function factories.step()
     choose_scout_lab()
+    util.guard("upgrades", upgrade_buildings)
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
         one_factory(unit)
     end

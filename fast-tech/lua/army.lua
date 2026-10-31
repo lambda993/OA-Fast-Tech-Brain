@@ -6,6 +6,7 @@
 -- building, a recent contact, or a start nobody has looked at. Units at
 -- home turn on whoever hits the base.
 
+local builders = require("builders")
 local catalog = require("catalog")
 local factories = require("factories")
 local util = require("util")
@@ -110,10 +111,40 @@ local function push(attackers)
     end
 end
 
+-- Heavy units (tier 3 and up) below 30 % health go home to be repaired,
+-- and rejoin once mended.
+army.mending = {} -- unit id -> true
+
+local function send_to_mend(unit)
+    local entry = catalog.of(unit)
+    if entry == nil or not entry.combat or entry.tier < 3 or army.mending[unit.id] then
+        return
+    end
+    if util.num(unit.health_percent) >= 30 then
+        return
+    end
+    local home = world.base or world.start
+    if home == nil then
+        return
+    end
+    army.mending[unit.id] = true
+    army.attacking[unit.id] = nil
+    unit:move(util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64))
+    builders.mend_unit(unit)
+end
+
 function army.step()
     local home, attackers = {}, {}
+    for id in pairs(army.mending) do
+        local unit = world.own[id]
+        if unit == nil or util.num(unit.health_percent) >= 95 then
+            army.mending[id] = nil
+        end
+    end
     for _, unit in ipairs(soldiers()) do
-        if army.attacking[unit.id] then
+        if army.mending[unit.id] then
+            -- Waiting at home for the builders.
+        elseif army.attacking[unit.id] then
             attackers[#attackers + 1] = unit
         else
             home[#home + 1] = unit
@@ -150,6 +181,7 @@ end
 -- Something of the seat was hit: remember where, and let the factories
 -- answer.
 function army.on_damaged(unit, attacker)
+    send_to_mend(unit)
     local at = util.pos(unit)
     if at == nil then
         return

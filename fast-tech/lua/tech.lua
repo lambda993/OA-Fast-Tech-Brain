@@ -125,6 +125,7 @@ function tech.choose_goal()
         -- when its line leads above it and the seat holds nothing of that
         -- line at its tier or higher (a bridge to a longer line).
         local useful = rank ~= nil and not owned[entry.index] and same_side(entry)
+            and (not entry.water_only or terrain.ship_ok)
             and level <= top_factory_tier
             and (level > tier or (line > tier and (held[entry.line or "?"] or 0) < level))
         if useful then

@@ -41,6 +41,37 @@ local function has_weapon(record)
     return string.find(string.upper(weapon), "NULL", 1, true) == nil
 end
 
+local function flag(value)
+    return value == true or num(value) > 0
+end
+
+-- What a type's weapons do: whether any hits aircraft, whether all of them
+-- only work in water (torpedoes), and the longest range. Escalation's
+-- RANGE_ and LAB_ weapons only mark a range or a factory door.
+local function weapon_info(record)
+    local anti_air, any, water, range, shot = false, false, true, 0, 0
+    for slot = 1, 3 do
+        local weapon_name = record["weapon" .. slot]
+        if type(weapon_name) == "string" and weapon_name ~= "" then
+            local upper = string.upper(weapon_name)
+            local weapon = weapons[weapon_name]
+            if weapon ~= nil and string.find(upper, "NULL", 1, true) == nil
+                and string.sub(upper, 1, 6) ~= "RANGE_" and string.sub(upper, 1, 4) ~= "LAB_" then
+                any = true
+                if flag(weapon.toairweapon) then
+                    anti_air = true
+                end
+                if not flag(weapon.waterweapon) then
+                    water = false
+                end
+                range = math.max(range, num(weapon.range))
+                shot = math.max(shot, num(weapon.energypershot))
+            end
+        end
+    end
+    return anti_air, any and water, range, shot
+end
+
 local function text(value)
     if type(value) == "string" then
         return value
@@ -94,11 +125,17 @@ local function classify(index, record)
     }
     entry.cost = entry.metal + entry.energy / 60
     entry.energy_yield, entry.metal_yield = yields(record)
+    -- An upgrade a building makes of itself, such as a reactor's armour.
+    -- The unit-level upgrades (LEV_2) stay out.
+    entry.upgrade = words.LEV_2 ~= true and string.find(string.upper(name), "UPGRADE", 1, true) ~= nil
     entry.skip = tier == nil
         or words.LEV_2 == true
-        or string.find(string.upper(name), "UPGRADE", 1, true) ~= nil
         or string.find(unit_name, "MAKENUKE", 1, true) ~= nil
         or string.find(unit_name, "MAKEANTI", 1, true) ~= nil
+    entry.decoy = string.find(unit_name, "DECOM", 1, true) ~= nil
+    entry.commander = entry.commander and not entry.decoy
+    -- shot_energy: what one shot of the hungriest weapon draws from the store.
+    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy = weapon_info(record)
     entry.mobile = not entry.structure
     entry.factory = entry.structure and entry.builder
     entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0
@@ -121,6 +158,14 @@ local function classify(index, record)
     entry.power = entry.structure and not entry.extractor and not entry.metal_maker
         and entry.energy_yield > 0 and num(record.energystorage) < num(record.energymake) * 4 + 1
         and string.find(string.upper(name), "STORAGE", 1, true) == nil
+    -- Long-range plasma cannons and the like.
+    entry.artillery = entry.defense and entry.range >= 3000
+    if entry.upgrade then
+        for _, role in ipairs({"factory", "mobile_builder", "scout", "combat", "defense", "radar_tower",
+            "extractor", "metal_maker", "metal_storage", "energy_storage", "geo", "power", "artillery"}) do
+            entry[role] = false
+        end
+    end
     return entry
 end
 
@@ -168,7 +213,7 @@ function catalog.refresh_builds()
         if entry.structure and entry.builder then
             local mobile = false
             for _, built in ipairs(entry.builds) do
-                if built.mobile then
+                if built.mobile and not built.upgrade then
                     mobile = true
                     break
                 end

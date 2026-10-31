@@ -17,7 +17,7 @@ local util = require("util")
 local world = require("world")
 
 local hooks = {}
-hooks.dump_city = false
+hooks.dump_city = true
 local armed = false
 local refreshed = false
 
@@ -47,6 +47,16 @@ local function status()
     end
     table.sort(kinds)
     print("builders: " .. table.concat(kinds, ", "))
+    local shot = 0
+    for _, unit in ipairs(world.select(function(_, e) return e.artillery end)) do
+        shot = math.max(shot, catalog.of(unit).shot_energy)
+    end
+    print(string.format("artillery shot needs %.0f energy, store holds %.0f", shot, e.energy_cap))
+    print(string.format("defence: decoys %d, anti-air %d, artillery %d, commander cloaked %s",
+        #world.select(function(_, e) return e.decoy end),
+        #world.select(function(_, e) return e.defense and e.anti_air end),
+        #world.select(function(_, e) return e.artillery end),
+        tostring(builders.cloaked == true)))
     print(string.format(
         "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d | foes known %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
@@ -154,7 +164,8 @@ function hooks.onUnitDamaged(unit, attacker, _, kind)
     end)
 end
 
-function hooks.onUnitDestroyed(unit)
+function hooks.onUnitDestroyed(unit, _, wreck)
+    util.guard("wreck", world.note_wreck, catalog.of(unit), wreck)
     world.own[unit.id] = nil
     world.forget(unit)
 end
