@@ -1181,15 +1181,16 @@ local function try_sweep(unit)
     return false
 end
 
--- Emergencies: builders drop what they do to repair buildings worth 7500
+-- Emergencies: builders drop what they do to repair buildings worth 5000
 -- metal or more that are below half health while the base is under fire,
 -- and heavy units sent home to be mended.
 builders.mend = {}      -- unit id -> tick it was sent home for repair
 builders.repairing = {} -- builder id -> id of what it repairs
-local repair_value = 7500
+local repair_value = 5000
 local repairers_each = 3
--- The commander is mended from below 75 % health, by more builders, and
--- holds still meanwhile (builders.commander_mending).
+-- The commander is mended from below 75 % health, by more builders: it
+-- walks back to the base and waits there until mended
+-- (builders.commander_mending).
 local commander_mend_below = 75
 local commander_repairers = 4
 
@@ -1438,18 +1439,27 @@ end
 -- Builders run from danger too, and from anything that hits them: back
 -- toward the base when it lies away from the threat, else straight away
 -- from it. A walk they were on is given up and its spot set aside.
+local base_radius = 800
+
 local function builder_threat(unit, entry)
     local threat = danger(unit, entry)
     if threat ~= nil then
         return threat
     end
     local last = builders.hit[unit.id]
+    -- Inside the base, where the defences stand, a hit alone sends a
+    -- builder away only once it is below half health: raids on the base
+    -- otherwise stopped all building (81 flights in one game).
+    local at, home = util.pos(unit), base()
+    local in_base = at ~= nil and home ~= nil and util.dist(at, home) <= base_radius
+    if in_base and util.num(unit.health_percent) >= 50 then
+        last = nil
+    end
     if last ~= nil and me.tick - last.tick < 30 * 4 then
         if last.x ~= nil then
             return {x = last.x, z = last.z}
         end
         -- Hit by something unseen: the nearest armed enemy in sight.
-        local at = util.pos(unit)
         local best, best_d
         for _, enemy in ipairs(world.visible_enemies()) do
             local kind = catalog.of(enemy)
@@ -1781,13 +1791,28 @@ function builders.step()
         if entry.commander then
             cloak_commander(unit, entry)
             busy = guard_commander(unit, entry)
-            -- Hurt and with builders on their way: it holds still until
-            -- mended (danger still sends it running).
-            if not busy and builders.commander_mending and builders.crew_for(unit) > 0 then
-                if not util.free(unit) then
+            -- Hurt: it walks back to the base (where the attack is not) and
+            -- waits there for the builders until mended; danger still sends
+            -- it running. With no builder left to mend it, it works on.
+            if not busy and builders.commander_mending and builders.can_mend() then
+                busy = true
+                local at, home = util.pos(unit), base()
+                if at ~= nil and home ~= nil and util.dist(at, home) > 350 then
+                    local kind = unit:head_order()
+                    if kind ~= "Move_Ground" and kind ~= "Move" then
+                        builders.retreat[unit.id] = nil
+                        send_home(unit)
+                        if not builders.mend_walk then
+                            print(string.format("commander walks home for repair (health %d%%)",
+                                util.whole(util.num(unit.health_percent))))
+                            builders.mend_walk = true
+                        end
+                    end
+                elseif not util.free(unit) and unit:head_order() ~= "Move_Ground" and unit:head_order() ~= "Move" then
                     unit:stop()
                 end
-                busy = true
+            elseif not builders.commander_mending then
+                builders.mend_walk = nil
             end
         elseif entry.decoy then
             busy = guard_decoy(unit, entry)
@@ -1855,6 +1880,13 @@ function builders.check_extractor(unit, entry)
     end
 end
 
+-- Whether any builder besides the commander could come to mend it.
+function builders.can_mend()
+    return #world.select(function(u, e)
+        return e.mobile_builder and not e.commander and world.finished(u)
+    end) > 0
+end
+
 -- How many builders are repairing `unit`.
 function builders.crew_for(unit)
     local count = 0
@@ -1874,7 +1906,7 @@ end
 -- The commander walks home as soon as it is idle, and when badly hurt.
 function builders.on_idle(unit, entry)
     if entry.commander and world.located() and builders.fleeing == nil
-        and not (builders.commander_mending and builders.crew_for(unit) > 0) then
+        and not (builders.commander_mending and builders.can_mend()) then
         economy.read()
         if not commander_turn(unit, entry) then
             send_home(unit)

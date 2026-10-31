@@ -1,7 +1,7 @@
 # Fast Tech — notes for continuing the work
 
 Fast Tech is a computer player ("brain", Lua) for the **TA: Escalation** mod
-in **Open Annihilation** (OA, engine 0.8.9). It races up the tech tiers,
+in **Open Annihilation** (OA, engine 0.8.10). It races up the tech tiers,
 winds the lower tiers down, builds the base as a city grid and plays without
 full awareness. The brain package is `fast-tech/`; this file, the README and
 `.gitignore` sit outside it because a brain package may hold only its own
@@ -208,7 +208,7 @@ error is logged once and the seat keeps playing).
    (not on metal maps); extractors on bare ground on metal maps; metal and
    energy storage for surpluses; energy storage for the hungriest gun's shot;
    wind/tidal only if their best output ≥ 50 % of a solar collector.
-8. Repairs: buildings ≥ 7 500 metal below 50 % during an attack (3 builders
+8. Repairs: buildings ≥ 5 000 metal (was 7 500) below 50 % during an attack (3 builders
    each); T3/T4 units below 30 % go home and get repaired.
 9. Clear large wrecks in the base after fights; sweep blocks where nothing
    fits (feature positions are not in the API).
@@ -236,6 +236,16 @@ error is logged once and the seat keeps playing).
 - Engine 0.8.9 (from 0.8.7): only path handling (UTF-8) and interface
   changes for brains; the brain API and docs are unchanged. `brain check`
   passes and the test matches give the same results as before.
+- Engine 0.8.10: six commits after 0.8.9 (3D view speed, fonts, macOS),
+  nothing in `src/sim/brains`, `src/sim/match-runtime` or `docs/brains`.
+  `brain check` passes and six test matches give the same results.
+- User's 4-seat game on Coast To Coast (54 % water, hover line): weak
+  economies (1-4 extractors, the map has few deposits near the starts),
+  two seats dead by 7-10 minutes, one stuck at tier 1 for 16 minutes
+  while harassed: its builders fled 81 times and metal sat full. Fleeing
+  builders may stall a base under constant raids. Fixed: inside the base
+  (800 units) a hit alone makes a builder flee only below 50 % health;
+  real danger (big groups, T3+, enemy commanders) still does.
 - `brain.place` stops after 4 096 cells (radius about 500 world units),
   whatever radius is passed.
 - Not yet seen in a match: guns firing at remembered buildings or contacts,
@@ -279,7 +289,9 @@ error is logged once and the seat keeps playing).
   helps an ally in grave danger (`ally in danger at ...`; needs a game
   with allies, never tested headless); repair pads and carriers with
   enough aircraft (aircraft go to pads by the engine's repair retreat);
-  commander under 75 % is repaired by up to four builders and holds still;
+  commander under 75 % is repaired by up to four builders; it walks back
+  to the base and waits there until mended (it used to hold still where
+  it was hit, an easy target);
   commander upgrade building from tier 3 (Arm Research Facility `ARMTECH`,
   Core Upgrade Center `CORTECH`, both in the AI lists); lines that do not
   reach the enemy are no tech goal and no extra factory.

@@ -209,8 +209,14 @@ next lab's frame, then the factories (they are short of build power); with nothi
 of its own to build it helps what goes up at the base, then the factories,
 and looks for work again every fifteen seconds. It walks back toward the
 middle only when far away, and when badly hurt. Below 75 % health up to
-four builders come to repair it and it holds still until mended (95 %),
-unless danger sends it running. From tier 3 the builders put up the
+four builders come to repair it: it walks back to the base, out of the
+fight (`commander walks home for repair`), and waits there until mended
+(95 %) before it works again, unless danger sends it running. With no
+other builder left it works on.
+
+**Emergency repairs.** While the base is under attack (an alarm within
+the last minute), buildings worth 5 000 metal or more below half health
+get three builders each, who drop what they do. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other
@@ -224,7 +230,9 @@ repair (the commander or a large building) never runs, and decoys are
 picked first for those repairs (`decoy flees from x,z`).
 
 **Builders in danger.** Builders run from the same dangers, and from
-anything that hits them: back to the base when it lies away from the
+anything that hits them (inside the base, within 800 units of its middle
+where the defences stand, a hit alone sends them away only below half
+health): back to the base when it lies away from the
 threat, else 700 units straight away from it; they work again after eight
 quiet seconds. A walk they were on is given up and its spot set aside for
 two minutes. Aircraft count only once they hit (`builders flee: N`).
