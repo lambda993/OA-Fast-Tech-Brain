@@ -31,6 +31,24 @@ function economy.read()
     }
     e.metal_share = e.metal / e.metal_cap
     e.energy_share = e.energy / e.energy_cap
+    -- Extractors and makers yield nothing on a tick the energy cannot pay
+    -- for (the engine closes their gate), so in an energy stall the metal
+    -- income falls to a fraction and the seat would build extractors
+    -- instead of the power it lacks. The peak income, fading slowly, says
+    -- what the extractors give when fed; the energy income and demand are
+    -- averaged over about twenty seconds, as one build swings them.
+    local before = economy.now
+    local seconds = before ~= nil and math.max(0, (me.tick - before.tick) / 30) or 0
+    e.tick = me.tick
+    if before == nil then
+        e.metal_peak = e.metal_income
+        e.energy_income_avg, e.energy_demand_avg = e.energy_income, e.energy_demand
+    else
+        e.metal_peak = math.max(e.metal_income, before.metal_peak * 0.997 ^ seconds)
+        local weight = math.min(1, seconds / 20)
+        e.energy_income_avg = before.energy_income_avg + (e.energy_income - before.energy_income_avg) * weight
+        e.energy_demand_avg = before.energy_demand_avg + (e.energy_demand - before.energy_demand_avg) * weight
+    end
     economy.now = e
     return e
 end
@@ -63,11 +81,21 @@ function economy.need()
     if e.metal_share > 0.7 and e.energy_share < 0.3 and e.energy_income < e.energy_demand then
         return "energy", 2
     end
-    local ratio = energy_per_metal[math.max(0, math.min(5, world.tier))]
-    if energy_free < e.metal_income * ratio * 0.8 then
+    -- Spending more energy than comes in, the store sinking: a stall is
+    -- near, and with it the extractors stop. Not on tier 1, where the race
+    -- for the second lab drains the store all the time: there it cost a
+    -- minute on the way to tier 2.
+    if world.tier >= 2 and e.energy_demand_avg > e.energy_income_avg and e.energy_share < 0.5 then
         return "energy", 1
     end
-    if e.metal_share < 0.3 or e.metal_income < metal_target then
+    -- The peak from tier 2, when the extractors are many and stalls cost
+    -- most; on tier 1 it kept the builders on power on the way to tier 2.
+    local metal = world.tier >= 2 and e.metal_peak or e.metal_income
+    local ratio = energy_per_metal[math.max(0, math.min(5, world.tier))]
+    if energy_free < metal * ratio * 0.8 then
+        return "energy", 1
+    end
+    if e.metal_share < 0.3 or metal < metal_target then
         return "metal", e.metal_share < 0.05 and 2 or 1
     end
     if e.energy_income < energy_target then

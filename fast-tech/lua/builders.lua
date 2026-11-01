@@ -142,7 +142,7 @@ local function place(unit, entry, near, radius, walk)
             return attempt == 1 and walk == true and scout_site(unit, spot)
         end
         x, z = util.whole(x), util.whole(z)
-        if not crowds_factory(entry, x, z, facing) then
+        if not crowds_factory(entry, x, z, facing) and util.reachable(unit, {x = x, z = z}, entry.factory) then
             return unit:build(entry.record, {x = x, z = z}, facing) == true
         end
     end
@@ -180,6 +180,7 @@ local function place_wide(unit, entry, centre)
                 if x ~= nil then
                     x, z = util.whole(x), util.whole(z)
                     if not city.on_street(entry, x, z) and not crowds_factory(entry, x, z, 0)
+                        and util.reachable(unit, {x = x, z = z}, true)
                         and unit:build(entry.record, {x = x, z = z}, 0) then
                         builders.wide_failed[entry.index] = nil
                         return true
@@ -235,6 +236,7 @@ local function build_in_city(unit, entry, toward)
                 local _, _, x, z = brain.place(entry.record, near, 320, facing)
                 if x ~= nil and not city.on_street(entry, util.whole(x), util.whole(z))
                     and not crowds_factory(entry, util.whole(x), util.whole(z), facing)
+                    and util.reachable(unit, {x = util.whole(x), z = util.whole(z)}, entry.factory)
                     and unit:build(entry.record, {x = util.whole(x), z = util.whole(z)}, facing) then
                     return true
                 end
@@ -400,12 +402,19 @@ local function try_extractor(unit, entry, reach)
         if extractor ~= nil then
             if util.explored(spot) then
                 local site = extractor_site(extractor, spot)
-                if site ~= nil and unit:build(extractor.record, site, 0) then
+                -- Out of this builder's reach (a plateau, an island) is
+                -- not out of every builder's: the deposit stays free.
+                if site ~= nil and not util.reachable(unit, site) then
+                    site = false
+                end
+                if site and unit:build(extractor.record, site, 0) then
                     economy.claim(spot)
                     return true
                 end
                 -- Taken, or no room: left alone for a while.
-                economy.claim(spot)
+                if site ~= false then
+                    economy.claim(spot)
+                end
             else
                 unseen[#unseen + 1] = spot
             end
@@ -485,7 +494,8 @@ local function try_geo(unit, entry, reach)
     for _, spot in ipairs(economy.free_geo(reach)) do
         local _, _, x, z = brain.place(plant.record, spot, 48, 0)
         economy.claim(spot)
-        if x ~= nil and unit:build(plant.record, {x = util.whole(x), z = util.whole(z)}, 0) then
+        if x ~= nil and util.reachable(unit, {x = util.whole(x), z = util.whole(z)})
+            and unit:build(plant.record, {x = util.whole(x), z = util.whole(z)}, 0) then
             return true
         end
         if x == nil and scout_site(unit, spot) then

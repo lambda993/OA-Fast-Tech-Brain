@@ -110,7 +110,12 @@ path. With metal piling up, builders help the next lab's frame first,
 then add factories, then help the factories, before smaller work. A
 builder parked by the engine (hovercraft "park", aircraft land)
 counts as free, and so does one left on a guard or a move the brain did
-not order.
+not order. No builder is sent to a site it cannot get to: every site is
+checked with `map:reachable` from the builder (from the nearest open cell
+when it stands beside a building or in its factory), and a lab's site
+also with `map:route` (one a turn), as `map:reachable` takes ground never
+seen for open. A deposit out of one builder's reach stays free for the
+others.
 
 **Economy.** Free metal spots near the base come first, those the seat
 can already see before those it must walk to. An extractor goes where its
@@ -136,7 +141,12 @@ solar collector's.
 Energy is kept at about fifteen per unit of metal income up to tier 2,
 twenty-five at tier 3 and thirty above (the big units burn far more), and
 metal piling up while the energy store runs dry makes power the first
-task. Large plants are preferred to many small ones, geothermal plants go on vents, and metal
+task. Extractors and makers yield nothing while the energy cannot pay for
+them (the engine closes their gate), so in a stall the metal income drops
+to a fraction: from tier 2 the brain measures metal by its peak income,
+fading slowly, not by what comes in that second, and builds power, not
+extractors, while the energy spent (averaged over about twenty seconds)
+passes the income and the store is below half. Large plants are preferred to many small ones, geothermal plants go on vents, and metal
 makers switch off when the metal store is nearly full.
 
 **Water.** With open water by the base the builders also use the

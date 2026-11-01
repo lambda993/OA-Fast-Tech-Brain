@@ -291,6 +291,11 @@ end
 
 local function order(unit, entry, x, z, w, d, facing)
     local centre = {x = x * cell + w * 8, z = z * cell + d * 8}
+    -- A block on a plateau the builder cannot climb to: its order would
+    -- stand at the head of the queue for minutes (Core Prime).
+    if not util.reachable(unit, centre, entry.factory) then
+        return false
+    end
     if unit:build(entry.record, centre, facing) then
         city.pending[#city.pending + 1] = {
             x0 = x, z0 = z, x1 = x + w - 1, z1 = z + d - 1, tick = me.tick,
@@ -318,8 +323,9 @@ local function place_factory(unit, entry, blocks, rects, budget, anywhere)
                 spots = {{block.x0 + (city.block - w) // 2, block.z1 - d + 1, 0}}
             end
             for _, spot in ipairs(spots) do
-                if fits(entry, spot[1], spot[2], w, d, block, rects, budget, spot[3]) then
-                    return order(unit, entry, spot[1], spot[2], w, d, spot[3])
+                if fits(entry, spot[1], spot[2], w, d, block, rects, budget, spot[3])
+                    and order(unit, entry, spot[1], spot[2], w, d, spot[3]) then
+                    return true
                 end
             end
         end
@@ -347,8 +353,9 @@ local function place_family(unit, entry, family, rects, budget)
                     {rect.x0, rect.z1 + 1}, {rect.x0, rect.z0 - d},
                 }
                 for _, spot in ipairs(spots) do
-                    if fits(entry, spot[1], spot[2], w, d, block, rects, budget) then
-                        return order(unit, entry, spot[1], spot[2], w, d, 0)
+                    if fits(entry, spot[1], spot[2], w, d, block, rects, budget)
+                        and order(unit, entry, spot[1], spot[2], w, d, 0) then
+                        return true
                     end
                 end
             end
@@ -433,8 +440,9 @@ local function place_town(unit, entry, blocks, rects, budget)
                     if in_way ~= nil then
                         x = math.max(x + 1, in_way.x1 + 1 + alley)
                     else
-                        if fits(entry, x, z, w, d, block, inside, budget) then
-                            return order(unit, entry, x, z, w, d, 0)
+                        if fits(entry, x, z, w, d, block, inside, budget)
+                            and order(unit, entry, x, z, w, d, 0) then
+                            return true
                         end
                         x = x + 1
                     end

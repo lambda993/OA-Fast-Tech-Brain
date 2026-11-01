@@ -1,7 +1,7 @@
 # Fast Tech — notes for continuing the work
 
 Fast Tech is a computer player ("brain", Lua) for the **TA: Escalation** mod
-in **Open Annihilation** (OA, engine 0.8.10). It races up the tech tiers,
+in **Open Annihilation** (OA, engine 0.8.11). It races up the tech tiers,
 winds the lower tiers down, builds the base as a city grid and plays without
 full awareness. The brain package is `fast-tech/`; this file, the README and
 `.gitignore` sit outside it because a brain package may hold only its own
@@ -119,7 +119,14 @@ error is logged once and the seat keeps playing).
 - The sandbox forbids `pairs` over tables with table keys (non-deterministic
   order): use sequences.
 - `map:reachable(unit_handle, ...)` can answer false from a blocked cell;
-  use positions (`{x, z}`) as both ends. Points work.
+  use positions (`{x, z}`) as both ends. Points work. A position on a
+  blocked cell (a builder beside a building or in its factory) is no good
+  start either: `util.reachable` starts from the nearest open cell.
+- **Extractors and makers stop in an energy stall**: the engine credits
+  their metal only on a tick whose energy gate is open
+  (`src/sim/match-runtime/src/tick_economy.cpp`), so `me.metal_produced`
+  falls to a fraction while energy runs short. Reading that as "metal
+  short" builds extractors instead of power (fixed with a fading peak).
 - **`map:reachable` is optimistic without full awareness**: cells the seat
   has never seen count as open (`sight_pass` in the engine's
   `src/sim/brains/src/lua_map.cpp`), so at the start it says yes to almost
@@ -239,6 +246,30 @@ error is logged once and the seat keeps playing).
 - Engine 0.8.10: six commits after 0.8.9 (3D view speed, fonts, macOS),
   nothing in `src/sim/brains`, `src/sim/match-runtime` or `docs/brains`.
   `brain check` passes and six test matches give the same results.
+- Engine 0.8.11: battle room (one human against computer players, the
+  `setup.allow-start-with-ai` hack retired), key bindings on AZERTY and
+  other layouts, order wheel, water explosions, rendering speed. Nothing
+  in `src/sim/brains`, `src/sim/match-runtime` or `docs/brains` (only a
+  model-runtime test). `brain check` passes.
+- Fixed after the user's 4-seat Core Prime game on 0.8.11 (all Fast Tech,
+  rich; "economy hiccuping on a metal map"): metal income swung 45 ↔ 1 000
+  with the same extractors, as energy stalls closed the extractors' gate,
+  and `economy.need` then asked for extractors. Now from tier 2 metal is
+  the fading peak income (`metal_peak`, 0.997 a second) and energy
+  spending above income (20 s averages) with the store under half asks
+  for power. Also on Core Prime: most grid blocks are poor ground
+  (`passable` 0 on about half the cells even for small classes), the
+  18×18 labs fit only on far plateaus, and the one vehicle builder that
+  could build the Ultra Vehicle Plant was sent there again and again
+  (unreachable, 20+ minutes at tier 2). In the user's game one seat
+  stayed at tier 0 for 3 minutes and another kept the Aircraft Plant goal
+  19 minutes ("building" again and again, no frame): likely the same
+  cause, not checked (4 seats cannot run headless). Every
+  build site is now checked with `util.reachable`, lab sites also with
+  one `map:route` a turn. Tests (Core Prime seeds 7/99/4242/951589622,
+  Painted Desert, Crater Islands, Ashap): 5 wins, 2 draws; tier-1 timing
+  equal to before; Crater Islands now reaches tier 3. Applied to the
+  economy rules only from tier 2: on tier 1 they cost a minute.
 - User's 4-seat game on Coast To Coast (54 % water, hover line): weak
   economies (1-4 extractors, the map has few deposits near the starts),
   two seats dead by 7-10 minutes, one stuck at tier 1 for 16 minutes
