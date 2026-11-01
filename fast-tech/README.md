@@ -32,8 +32,16 @@ Escalation). The players' menu pages in `guiE` are not part of it, and the
 engine refuses any other build order. Escalation's AI table is written by
 hand and fills most of the 36 entries, with duplicates that weigh a choice,
 so the list is much shorter than the players' menus: the commander's and
-the tier-1 builders' radar towers, for one, are not in it. Everything
+the tier-1 builders' radar towers, for one, are not in it. Neither are
+the nuke and anti-nuke silos, nor the rounds (`MAKENUKE`, `MAKEANTI`)
+that the units with stockpile weapons would need: the mobile anti-nukes
+(Scarab, Hedgehog) have nothing else to fire and are never built; ships
+and carriers that also carry other weapons are built for those. Escalation's
+Big Bertha, Intimidator, Guardian and Punisher are builders (each makes
+its own armour upgrade), and count as defences all the same. Everything
 below plays inside that list; the brain reads it, never unit names.
+Core's builders cannot put down a Vehicle Plant at all, so Core has no
+vehicle line.
 
 **Which line first.** Each factory belongs to a line, read from its units'
 selection groups: kbots (`CTRL_K`), vehicles (`CTRL_V`), hovercraft
@@ -110,7 +118,11 @@ path. With metal piling up, builders help the next lab's frame first,
 then add factories, then help the factories, before smaller work. A
 builder parked by the engine (hovercraft "park", aircraft land)
 counts as free, and so does one left on a guard or a move the brain did
-not order. No builder is sent to a site it cannot get to: every site is
+not order. A frame worth 5 000 metal or more that nobody works on any
+more (its builders ran, went to an emergency or on to other work) is
+taken up again by a builder within 1 500 units before it starts anything
+new (`resume <building>`); helpers are not held on a frame, which left
+the economy short of builders in the test matches. No builder is sent to a site it cannot get to: every site is
 checked with `map:reachable` from the builder (from the nearest open cell
 when it stands beside a building or in its factory), and a lab's site
 also with `map:route` (one a turn), as `map:reachable` takes ground never
@@ -156,6 +168,14 @@ when it gives more for its cost, floating makers, anti-air and defences
 when the land has no room). They go into the sea nearest the base that a
 hovercraft reaches (checked with a route), by its shore.
 
+**Unit upgrades.** A factory that offers one of Escalation's unit
+upgrades (Level 2 in the advanced kbot and vehicle labs, Level 3 in the
+tier-3 ones) builds it first, once per factory (`unit upgrade <factory>:
+<upgrade>`); a second would only hold up production. The finished
+upgrade stays with the factory, which goes on building. Factories being
+wound down (two tiers below the top) skip it, and so does a seat whose
+metal store is under 30 %.
+
 **Lower tiers wind down.** A factory at the top tier builds freely, one tier
 below builds 40 % of its turns, two tiers below 10 %, and tier 1 builds 15 %
 once tier 2 is reached and nothing after that. While the next lab is going
@@ -198,6 +218,14 @@ sit out the next minute; bombers stay. While the seat has strike
 aircraft (scouts do not count), its long-range guns fire at anti-air in
 range first, seen or remembered.
 
+**Long-range artillery.** From tier 2 the builders put up long-range
+guns toward the enemy: one at tier 2, three at tier 3, five at tier 4,
+six above. Each gun is the kind the seat has fewest of, the cheapest
+first, among those the income pays for within four minutes (ten from
+tier 4): so Big Bertha or Intimidator comes first, then Vulcan or
+Buzzsaw, then Armageddon or Dictator, and the B.F.G. at tier 5. The
+brain aims them, as they rarely see their targets.
+
 **Allies.** When an ally is in grave danger (eight or more armed enemies
 among its units, read from the `allies` and `threat` grid layers) the
 home army goes to help, at most every two minutes, unless the seat's own
@@ -214,7 +242,12 @@ from home never triggers).
 
 **Commander.** The commander opens with an extractor, the first lab, then
 more extractors and power, and keeps to the base; it walks out only to see
-deposits within 800 units. With metal piling up from tier 1 it helps the
+deposits within 800 units. Nothing it is told to build, help or guard may
+lie more than 900 units from the base: such an order is dropped and that
+task rests for twenty seconds. The base is the middle of the seat's
+buildings within 1 500 units of the start, extractors left out (far
+deposits used to drag it, and the commander with it, a thousand units
+away). With metal piling up from tier 1 it helps the
 next lab's frame, then the factories (they are short of build power); with nothing
 of its own to build it helps what goes up at the base, then the factories,
 and looks for work again every fifteen seconds. It walks back toward the
@@ -226,7 +259,10 @@ other builder left it works on.
 
 **Emergency repairs.** While the base is under attack (an alarm within
 the last minute), buildings worth 5 000 metal or more below half health
-get three builders each, who drop what they do. From tier 3 the builders put up the
+get three builders each, who drop what they do. Units worth 5 000 metal
+or more, whatever their tier, go home below 30 % health; within 900
+units of the base three builders mend each, and the unit rejoins the
+army at 95 %. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other

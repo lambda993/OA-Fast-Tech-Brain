@@ -90,10 +90,14 @@ function world.update_base()
     if not world.located() then
         return
     end
+    -- The middle of the buildings round the start. Extractors on far
+    -- deposits and buildings put far out for want of room pulled it 1 100
+    -- units away (A tale of two cities), and the commander, sent home,
+    -- went there.
     local sum_x, sum_z, count = 0, 0, 0
-    for _, unit in ipairs(world.select(function(u, e) return e.structure and world.finished(u) end)) do
+    for _, unit in ipairs(world.select(function(u, e) return e.structure and not e.extractor and world.finished(u) end)) do
         local at = util.pos(unit)
-        if at then
+        if at and util.dist(at, world.start) <= 1500 then
             sum_x, sum_z, count = sum_x + at.x, sum_z + at.z, count + 1
         end
     end

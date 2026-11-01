@@ -312,13 +312,15 @@ local function send_aircraft_to_pads()
     end
 end
 
--- Heavy units (tier 3 and up) below 30 % health go home to be repaired,
--- and rejoin once mended.
+-- Units worth 5 000 metal or more, of any tier (the same bar as for
+-- buildings), go home below 30 % health to be repaired, and rejoin once
+-- mended.
 army.mending = {} -- unit id -> true
+local mend_value = 5000
 
 local function send_to_mend(unit)
     local entry = catalog.of(unit)
-    if entry == nil or not entry.combat or entry.tier < 3 or army.mending[unit.id] then
+    if entry == nil or not entry.combat or entry.metal < mend_value or army.mending[unit.id] then
         return
     end
     if util.num(unit.health_percent) >= 30 then

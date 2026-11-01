@@ -114,6 +114,17 @@ error is logged once and the seat keeps playing).
   stops at tier 2, vehicles and aircraft at tier 3, only hovercraft reach the
   tier-4 Exp. Unit Fabricator. A fix would need the engine to validate brain
   orders against the full menus (an issue was proposed, not filed).
+- Escalation buildings with `builder=true` besides fusion: Big Bertha,
+  Intimidator, Guardian, Punisher (their armour upgrade). `defense` used
+  to need `not builder`, so they were no defences/artillery; now only a
+  real factory (builds mobile units) is excluded.
+- Stockpile: a weapon with `stockpile` fires rounds built by the unit
+  (engine `build_weapon` mission, order kind 13); a round is a build-list
+  entry whose unit name holds `MAKENUKE`/`MAKEANTI`.
+- `HelpBuild` on a finished factory that is producing never ends (it is
+  help on each unit). Holding helpers on frames until done cost wins (3
+  wins/5 draws vs 5/3); kept instead: `try_resume` for frames nobody
+  works on.
 - `game.build_list` lists contain duplicates (Escalation weighs AI choices
   with them); the catalog removes them.
 - The sandbox forbids `pairs` over tables with table keys (non-deterministic
@@ -216,19 +227,38 @@ error is logged once and the seat keeps playing).
    energy storage for surpluses; energy storage for the hungriest gun's shot;
    wind/tidal only if their best output ≥ 50 % of a solar collector.
 8. Repairs: buildings ≥ 5 000 metal (was 7 500) below 50 % during an attack (3 builders
-   each); T3/T4 units below 30 % go home and get repaired.
+   each); units worth ≥ 5 000 metal (any tier; was T3/T4 only) below 30 %
+   go home and get repaired.
 9. Clear large wrecks in the base after fights; sweep blocks where nothing
    fits (feature positions are not in the API).
 10. Fusion and geothermal armour upgrades.
 11. Lots of static anti-air T1–T3; long-range artillery (Bertha/Intimidator,
-    Vulcan/Buzzsaw, Armageddon/Dictator, B.F.G.), aimed by the brain.
+    Vulcan/Buzzsaw, Armageddon/Dictator, B.F.G.), aimed by the brain. Every
+    kind gets built (fewest owned first, cheapest among them; 1/3/5/6 guns
+    at tiers 2/3/4/5): before, the longest range won and only
+    Armageddon/Dictator were built, and Bertha/Intimidator were not even
+    defences (they are `builder=true`, see engine facts).
 12. Target priority: commander/decoy > T4 > T3 > economy, factories and
     builders > rest; focus fire on commanders; radar/sonar contacts are
     targets when nothing is in sight.
 13. **Not possible** (not in the AI build list): nukes and anti-nukes 3:1,
-    Tribulation, tier-1 radar.
+    Tribulation, tier-1 radar. Rechecked: no static silo or anti-nuke is in
+    any AI list; mobile stockpile units are (Scarab/Hedgehog in the adv.
+    vehicle plants, carriers Colossus/Hive, Atlantis/Nexus, Armada/
+    Anchorage), but their rounds (`MAKENUKE`/`MAKEANTI`, queued with
+    `unit:queue` on the carrier, engine `queue_factory_build`) are in no
+    AI list, and Scarab/Hedgehog are not even builders. Units armed only
+    with stockpile weapons are no longer combat units.
 14. Builders run from danger and when hit; with a store below 20 %
     wrecks/features nearby are reclaimed before new extractors or power.
+15. Escalation unit upgrades (`ALL_L2` Level 2 in ARMALAB/ARMAVP/CORALAB/
+    CORAVP, `ALL_L3` Level 3 in ARMELAB/ARMGANT/COREVP/CORGANT, category
+    `LEV_2`): first thing a factory builds, max 1 per factory (else it
+    blocks production). They stay out of `builds` (skipped) and sit in
+    `entry.unit_upgrades`. In a match it takes ~2 minutes, then stays
+    attached to the factory (`BeCarried`) and the factory goes on.
+16. Commander stays near the base (see state below).
+17. Big frames left half built get taken up again (see state below).
 
 ## State and open points
 
@@ -270,6 +300,27 @@ error is logged once and the seat keeps playing).
   Painted Desert, Crater Islands, Ashap): 5 wins, 2 draws; tier-1 timing
   equal to before; Crater Islands now reaches tier 3. Applied to the
   economy rules only from tier 2: on tier 1 they cost a minute.
+- Arm vs Core (user: Arm wins far more often): Core's builders have no
+  Vehicle Plant in their AI lists (Arm's commander and Construction KBot
+  do), so Core goes kbot (ends tier 2) -> air -> hover, Arm kbot ->
+  vehicle. Mirror matches Fast Tech vs Fast Tech (6 maps, rich, 30 min):
+  all draws, Core's economy even larger in 5. In the user's 4-seat game
+  the Core seats were the ones hit by the unreachable-site bug. Proposed,
+  not done: let Core rank hover with air on land maps.
+- Commander far from base (user): it went 1 300-2 100 units out (far
+  build sites from the anywhere/wide fallbacks, help on far frames and
+  factories) and `world.base` (middle of all buildings) drifted 1 100
+  from the start. Now a 900-unit leash on every commander task
+  (`leashed` in builders.lua drops the order and rests the task 20 s)
+  and the base is the middle of non-extractor buildings within 1 500 of
+  the start: max distance about 900-980 in tests.
+- Builders leaving big frames (user: Armageddon, experimental reactor):
+  helpers are `parked`, and after 15 s `ready()` gives them new work even
+  mid-help. `try_resume` (after the goal) sends a builder to a frame of
+  ≥ 5 000 metal nobody works on (`resume <name>`, logged once per builder
+  and frame).
+- Test after all of the above (8 matches vs built-in): 5 wins, 3 draws,
+  same as before the changes.
 - User's 4-seat game on Coast To Coast (54 % water, hover line): weak
   economies (1-4 extractors, the map has few deposits near the starts),
   two seats dead by 7-10 minutes, one stuck at tier 1 for 16 minutes

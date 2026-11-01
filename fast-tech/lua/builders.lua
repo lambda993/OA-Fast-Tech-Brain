@@ -876,6 +876,71 @@ local function try_help_frame(unit)
     return false
 end
 
+-- Large frames left with nobody on them (their builders ran, were called
+-- to an emergency or went on to other work) are taken up again before
+-- anything new is started: the half-built Armageddons and reactors
+-- stood for minutes. Helpers are not held on a frame (that starved the
+-- economy in the test matches); a frame nobody works on is what counts.
+local big_frame = 5000
+builders.resumed = {} -- builder id -> id of the frame it last took up
+
+local function frame_worked(frame, workers)
+    local where = util.pos(frame)
+    for _, worker in ipairs(workers) do
+        local orders = worker:orders()
+        local head = type(orders) == "table" and orders[1] or nil
+        if head ~= nil and (head.kind == "HelpBuild" or head.kind == "MobileBuild") then
+            local target = head.target
+            if (type(target) == "userdata" or type(target) == "table") and target.id == frame.id then
+                return true
+            end
+            local x, z = util.num(head.x), util.num(head.z)
+            if where ~= nil and (x > 0 or z > 0) and util.dist(where, {x = x, z = z}) < 48 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function try_resume(unit)
+    local need, urgency = economy.need()
+    if need == "metal" and urgency >= 2 then
+        return false
+    end
+    local at = util.pos(unit)
+    if at == nil then
+        return false
+    end
+    local frames = world.select(function(u, e) return e.structure and e.metal >= big_frame and u.finished ~= true end)
+    if #frames == 0 then
+        return false
+    end
+    local workers = world.select(function(u, e) return e.mobile_builder and u.id ~= unit.id end)
+    local best, best_left
+    for _, frame in ipairs(frames) do
+        local where = util.pos(frame)
+        if where ~= nil and util.dist(at, where) <= 1500 and util.reachable(unit, where)
+            and not frame_worked(frame, workers) then
+            local left = util.num(frame.build_remaining)
+            if best_left == nil or left < best_left then
+                best, best_left = frame, left
+            end
+        end
+    end
+    if best ~= nil and unit:help(best) then
+        builders.parked[unit.id] = me.tick
+        -- Logged once per builder and frame: a lone helper is looked at
+        -- again every fifteen seconds and comes straight back.
+        if builders.resumed[unit.id] ~= best.id then
+            builders.resumed[unit.id] = best.id
+            print("resume " .. catalog.of(best).name)
+        end
+        return true
+    end
+    return false
+end
+
 -- Keeps one cheap factory for scouts once the seat has reached tier 3:
 -- aircraft if the builder can make them, otherwise vehicles.
 local function try_scout_lab(unit, entry)
@@ -979,24 +1044,37 @@ local function try_anti_air(unit, entry)
     return false
 end
 
--- Long-range artillery from tier 2: one more each tier, toward the enemy.
-local artillery_wanted = {[0] = 0, 0, 1, 2, 4, 4}
+-- Long-range artillery from tier 2, toward the enemy: one at tier 2,
+-- three at tier 3, five at tier 4, six above.
+local artillery_wanted = {[0] = 0, 0, 1, 3, 5, 6}
 
 local function try_artillery(unit, entry)
     local wanted = artillery_wanted[math.min(5, world.tier)]
     if wanted == 0 or recently("artillery", 60) then
         return false
     end
-    if count_of(function(_, e) return e.artillery end) >= wanted then
+    local guns = world.select(function(_, e) return e.artillery end)
+    if #guns >= wanted then
         return false
+    end
+    local owned = {}
+    for _, gun in ipairs(guns) do
+        local index = catalog.of(gun).index
+        owned[index] = (owned[index] or 0) + 1
     end
     local e = economy.now
     -- The largest guns (Armageddon, Dictator, B.F.G.) take long to pay for.
     local budget = e.metal_income * (world.tier >= 4 and 600 or 240) + e.metal
-    local best
+    -- Every kind gets built: the kind the seat has fewest of first, the
+    -- cheapest among those. Taking the longest range went straight to
+    -- the Armageddon and Dictator and never built a Big Bertha, an
+    -- Intimidator, a Vulcan or a Buzzsaw.
+    local best, best_owned
     for _, option in ipairs(catalog.buildable(entry, function(o) return o.artillery end)) do
-        if option.metal <= budget and (best == nil or option.range > best.range) then
-            best = option
+        local have = owned[option.index] or 0
+        if option.metal <= budget and (best == nil or have < best_owned
+            or (have == best_owned and option.metal < best.metal)) then
+            best, best_owned = option, have
         end
     end
     if best == nil then
@@ -1570,22 +1648,76 @@ end
 
 builders.send_home = send_home
 
+-- The commander's leash: nothing it is told to build, help or guard may
+-- lie more than this far from the base. Placements that fall back to
+-- open ground, wide searches for a lab and help for far frames and
+-- factories took it 1 300 to 2 100 units out (test matches).
+local commander_leash = 900
+builders.leashed = {} -- task name -> tick a far order of it was dropped
+
+-- Where the head order of `unit` leads: the build site or the unit it
+-- helps or guards.
+local function order_point(unit)
+    local orders = unit:orders()
+    local head = type(orders) == "table" and orders[1] or nil
+    if head == nil then
+        return nil
+    end
+    local target = head.target
+    if (type(target) == "userdata" or type(target) == "table") and util.pos(target) ~= nil then
+        return util.pos(target)
+    end
+    local x, z = util.num(head.x), util.num(head.z)
+    if string.find(tostring(head.kind), "Build", 1, true) ~= nil and (x > 0 or z > 0) then
+        return {x = x, z = z}
+    end
+    return nil
+end
+
+-- Runs a commander task; an order it gave beyond the leash is dropped,
+-- what the task marked is put back, and the task rests twenty seconds.
+local function leashed(name, unit, task, ...)
+    local last = builders.leashed[name]
+    if last ~= nil and me.tick - last < 30 * 20 then
+        return false
+    end
+    local pending = {}
+    for key, tick in pairs(builders.pending) do
+        pending[key] = tick
+    end
+    local started, no_room = tech.started, tech.no_room
+    if not task(unit, ...) then
+        return false
+    end
+    local at = order_point(unit)
+    local home = base()
+    if at == nil or home == nil or util.dist(at, home) <= commander_leash then
+        return true
+    end
+    unit:stop()
+    builders.pending = pending
+    tech.started, tech.no_room = started, no_room
+    builders.walking[unit.id] = nil
+    builders.leashed[name] = me.tick
+    return false
+end
+
 local function commander_turn(unit, entry)
     if world.tier == 0 then
         -- Opening: an extractor, the first lab, then more extractors and
         -- power. The lab brings builders, which do the rest far faster.
         local extractors = count_of(function(_, e) return e.extractor end)
         local power = count_of(function(_, e) return e.power end)
-        if extractors < 1 and try_extractor(unit, entry, commander_reach) then
+        if extractors < 1 and leashed("extractor", unit, try_extractor, entry, commander_reach) then
             return true
         end
-        if try_goal(unit, entry) then
+        if leashed("goal", unit, try_goal, entry) then
             return true
         end
-        if extractors < 2 and try_extractor(unit, entry, commander_reach) then
+        if extractors < 2 and leashed("extractor", unit, try_extractor, entry, commander_reach) then
             return true
         end
-        if power < 2 and try_power(unit, entry, base(), 160) then
+        if power < 2 and leashed("power", unit, try_power, entry, base(), 160) then
             return true
         end
     end
@@ -1593,31 +1725,31 @@ local function commander_turn(unit, entry)
     -- so the commander lends its own before anything else.
     local e = economy.now
     if world.tier >= 1 and e.metal_share > 0.7 and e.energy_share > 0.3 then
-        if try_goal(unit, entry) or try_help_frame(unit) or try_assist(unit) or try_help(unit, 900) then
+        if leashed("goal", unit, try_goal, entry) or leashed("help frame", unit, try_help_frame) or leashed("assist", unit, try_assist) or leashed("help", unit, try_help, 900) then
             return true
         end
     end
-    if try_salvage(unit, entry) or try_economy(unit, entry, true) then
+    if leashed("salvage", unit, try_salvage, entry) or leashed("economy", unit, try_economy, entry, true) then
         return true
     end
-    if try_radar(unit, entry) then
+    if leashed("radar", unit, try_radar, entry) then
         return true
     end
-    if try_goal(unit, entry) then
+    if leashed("goal", unit, try_goal, entry) then
         return true
     end
-    if try_scout_lab(unit, entry) then
+    if leashed("scout lab", unit, try_scout_lab, entry) then
         return true
     end
-    if try_storage(unit, entry) then
+    if leashed("storage", unit, try_storage, entry) then
         return true
     end
     -- Nothing of its own to build: help what goes up at the base, then
     -- the factories.
-    if try_help(unit, 900) then
+    if leashed("help", unit, try_help, 900) then
         return true
     end
-    return try_assist(unit)
+    return leashed("assist", unit, try_assist)
 end
 
 -- Dispatch ------------------------------------------------------------------
@@ -1649,9 +1781,9 @@ local function builder_turn(unit, entry)
         and (tech.frame_alive() or tech.affordable())
         and not (critical and builders.role[unit.id] == "economy")
     if racing or (builders.role[unit.id] == "tech" and not critical) then
-        order = {"reclaim", "radar", "goal", "salvage", "economy"}
+        order = {"reclaim", "radar", "goal", "resume", "salvage", "economy"}
     else
-        order = {"reclaim", "radar", "salvage", "economy", "goal"}
+        order = {"reclaim", "radar", "resume", "salvage", "economy", "goal"}
     end
     -- Under attack, or with too few defences, the economy builders fortify first.
     local defences = count_of(function(_, e) return e.defense end)
@@ -1687,6 +1819,7 @@ local function builder_turn(unit, entry)
         salvage = try_salvage,
         radar = try_radar,
         goal = try_goal,
+        resume = function(u) return try_resume(u) end,
         defence = try_defence,
         economy = function(u, e) return try_economy(u, e, false) end,
     }

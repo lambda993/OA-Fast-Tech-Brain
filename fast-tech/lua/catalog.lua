@@ -52,7 +52,7 @@ end
 -- range or a factory door.
 local function weapon_info(record)
     local anti_air, any, water, range, shot = false, false, true, 0, 0
-    local ground, bomb = false, false
+    local ground, bomb, stockpile, other = false, false, false, false
     for slot = 1, 3 do
         local weapon_name = record["weapon" .. slot]
         if type(weapon_name) == "string" and weapon_name ~= "" then
@@ -69,6 +69,11 @@ local function weapon_info(record)
                 if flag(weapon.dropped) then
                     bomb = true
                 end
+                if flag(weapon.stockpile) then
+                    stockpile = true
+                else
+                    other = true
+                end
                 if not flag(weapon.waterweapon) then
                     water = false
                 end
@@ -77,7 +82,7 @@ local function weapon_info(record)
             end
         end
     end
-    return anti_air, any and water, range, shot, ground, bomb
+    return anti_air, any and water, range, shot, ground, bomb, stockpile, stockpile and not other
 end
 
 local function text(value)
@@ -154,11 +159,15 @@ local function classify(index, record)
         or words.LEV_2 == true
         or string.find(unit_name, "MAKENUKE", 1, true) ~= nil
         or string.find(unit_name, "MAKEANTI", 1, true) ~= nil
+    -- Escalation's unit upgrades (Level 2 and Level 3 Unit Upgrade): a
+    -- factory builds one and its units come out stronger. They stay out
+    -- of every other role (skipped) and go in the factory's own list.
+    entry.unit_upgrade = words.LEV_2 == true and not entry.structure
     entry.decoy = string.find(unit_name, "DECOM", 1, true) ~= nil
     entry.commander = entry.commander and not entry.decoy
     -- shot_energy: what one shot of the hungriest weapon draws from the store.
     local ground, bomb
-    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb = weapon_info(record)
+    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb, entry.stockpile, entry.stockpile_only = weapon_info(record)
     -- Whether its weapons can hit ground targets: units with only
     -- anti-air weapons cannot, units without them cannot hit aircraft.
     entry.hits_ground = ground
@@ -173,9 +182,16 @@ local function classify(index, record)
     entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0
     entry.scout = entry.mobile and not entry.builder and entry.metal <= 80
         and entry.speed >= 2.5 and entry.sight >= 300
+    -- Stockpile weapons fire only rounds built in the unit (MAKENUKE,
+    -- MAKEANTI), and no AI build list holds them: a unit armed with
+    -- nothing else (Scarab, Hedgehog: mobile anti-nukes) never fires.
     entry.combat = entry.mobile and not entry.builder and entry.armed and not entry.scout
-    entry.defense = entry.structure and not entry.builder and entry.armed
-        and record.canattack == true
+        and not entry.stockpile_only
+    -- Escalation's Big Bertha, Intimidator, Guardian and Punisher are
+    -- builders (they make their own armour upgrade): only a real factory
+    -- is no defence (catalog.refresh_builds).
+    entry.defense = entry.structure and entry.armed and record.canattack == true
+        and not entry.stockpile_only
     entry.radar_tower = entry.structure and not entry.armed and entry.radar >= 1000
     entry.sonar_tower = entry.structure and not entry.armed and not entry.radar_tower
         and num(record.sonardistance) >= 600
@@ -195,7 +211,9 @@ local function classify(index, record)
         and entry.energy_yield > 0 and num(record.energystorage) < num(record.energymake) * 4 + 1
         and string.find(string.upper(name), "STORAGE", 1, true) == nil
     -- Long-range plasma cannons and the like.
-    entry.artillery = entry.defense and entry.range >= 3000
+    -- Not the stockpile weapons (nuke and tactical silos, anti-nukes):
+    -- they shoot what they have built up, not plasma shells.
+    entry.artillery = entry.defense and entry.range >= 3000 and not entry.stockpile
     if entry.upgrade then
         for _, role in ipairs({"factory", "mobile_builder", "scout", "combat", "defense", "radar_tower",
             "sonar_tower", "jammer",
@@ -224,6 +242,7 @@ end
 function catalog.refresh_builds()
     for index, entry in pairs(catalog.types) do
         entry.builds = {}
+        entry.unit_upgrades = {}
         if entry.builder then
             local list = game.build_list(entry.record)
             if type(list) == "table" then
@@ -238,6 +257,9 @@ function catalog.refresh_builds()
                     if keep and not seen[built_index] then
                         seen[built_index] = true
                         entry.builds[#entry.builds + 1] = other
+                    elseif other ~= nil and other.unit_upgrade and not seen[built_index] then
+                        seen[built_index] = true
+                        entry.unit_upgrades[#entry.unit_upgrades + 1] = other
                     end
                 end
             end
@@ -255,6 +277,9 @@ function catalog.refresh_builds()
                 end
             end
             entry.factory = mobile
+            if mobile then
+                entry.defense, entry.artillery = false, false
+            end
         end
     end
     for _, entry in pairs(catalog.types) do

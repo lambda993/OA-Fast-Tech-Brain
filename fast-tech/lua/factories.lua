@@ -186,6 +186,28 @@ local function pick_builder(entry, tier)
     return best
 end
 
+-- Escalation's unit upgrades: a factory that can build one (Level 2 in
+-- the advanced labs, Level 3 in the tier-3 ones) builds it before
+-- anything else, once: a second would only hold up production. Not in a
+-- factory that is being wound down, and only when the stores can pay.
+factories.unit_upgraded = {} -- factory id -> tick the upgrade was queued
+
+local function unit_upgrade(unit, entry, tier)
+    if factories.unit_upgraded[unit.id] ~= nil or #entry.unit_upgrades == 0 or tier < world.tier - 1 then
+        return false
+    end
+    local e = economy.now or economy.read()
+    for _, upgrade in ipairs(entry.unit_upgrades) do
+        if e.metal_share > 0.3 and upgrade.metal <= e.metal_income * 120 + e.metal
+            and unit:queue(upgrade.record, 1) then
+            factories.unit_upgraded[unit.id] = me.tick
+            print("unit upgrade " .. entry.name .. ": " .. upgrade.name)
+            return true
+        end
+    end
+    return false
+end
+
 local function one_factory(unit)
     if not util.free(unit) or tech.reclaiming[unit.id] ~= nil then
         return
@@ -200,6 +222,9 @@ local function one_factory(unit)
                 unit:queue(scout.record, 1)
             end
         end
+        return
+    end
+    if unit_upgrade(unit, entry, tier) then
         return
     end
     local short = factories.guard_short() and tier >= top - 1
