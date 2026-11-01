@@ -103,7 +103,15 @@ units of the base; past that (islands, a thin ring of land) a building
 goes anywhere near the base, and the commander tries that first.
 Outside the grid nothing hems a factory in: no building stands at a
 factory's door or back, and a factory is not put where a deposit or a
-building would sit there. Fusion reactors, energy storage, resource generators and
+building would sit there. Every factory site, in the grid or outside it,
+also needs open ground for its widest unit three cells out of both ends
+along the axis its units leave by: `map:passable` sees trees, rocks,
+cliffs, water for a land plant and buildings already up (factories were
+put down between trees and a building and their units stayed in). When a
+finished factory's lanes are blocked anyway, a builder within 1 200 units
+reclaims what stands there (reclaiming a point takes features only; under
+the sea or inside an own building is skipped), at most three times per
+factory, a minute apart (`clear door of ...`). Fusion reactors, energy storage, resource generators and
 forges or vaults gain from a neighbour of their kind, so they are put edge
 to edge with one, never only corner to corner; the families are a table in
 `lua/city.lua`, matched by name, because Escalation gives the bonus in unit
@@ -217,7 +225,9 @@ ground in rings out to about 1 500 units, once a minute; between searches
 the builder walks to unexplored ground nearby. After three searches that
 found nothing, with no old lab to reclaim, the factory is set aside for ten
 minutes and the race takes another line (rough or island maps, where the
-tier-3 labs of 18×18 cells fit nowhere).
+tier-3 labs of 18×18 cells fit nowhere). A lab ordered six times
+without its frame ever rising (a site no builder gets to) is set aside the
+same way (`<lab> ordered 6 times, never begun`).
 
 **Scouting.** With no full awareness the brain builds the best radar its
 builders offer (in Escalation's AI table that starts at tier 2–3), sends one early
@@ -277,7 +287,12 @@ from home never triggers).
 more extractors and power, and keeps to the base; it walks out only to see
 deposits within 800 units. Nothing it is told to build, help or guard may
 lie more than 900 units from the base: such an order is dropped and that
-task rests for twenty seconds. The base is the middle of the seat's
+task rests for twenty seconds (`leash: commander <task> at x,z dropped`).
+Its wide search for a lab site keeps to sites within 900 units and runs
+on its own clock, so a search of its never holds the other builders off
+(on Ring Atoll a Shipyard was ordered thirteen times by the commander,
+dropped each time, while the construction kbots that could build it
+waited for the next search). The base is the middle of the seat's
 buildings within 1 500 units of the start, extractors left out (far
 deposits used to drag it, and the commander with it, a thousand units
 away). With metal piling up from tier 1 it helps the

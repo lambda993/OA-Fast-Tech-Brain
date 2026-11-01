@@ -274,8 +274,35 @@ error is logged once and the seat keeps playing).
     long-range units keep their distance; commander to an ally when
     75 % of the base is lost, else stands; resurrect wrecks ≥ 2 500
     metal (1 250 heap) — **not possible**, no API order.
+21. Factories stuck between trees and buildings (user, Ring Atoll):
+    factory sites need open lanes out of both ends (`map:passable`),
+    blocked lanes of finished factories are reclaimed.
 
 ## State and open points
+
+- User's 4-seat Ring Atoll game (96 % water, rich, all Fast Tech; seat
+  logs of the 2026-11-01 game): seat 1 (Arm, start 5312,9376) logged
+  `building Shipyard` 13 times in 14 minutes and never raised it, metal
+  full, then died. Cause: `place` near the shore failed, the wide search
+  (once a minute per type) was run by the commander, found a site past
+  the 900 leash, and `leashed` dropped the order but not the search
+  clock, so the construction kbots that could build it never searched.
+  Fixed: the commander's wide search keeps to 900 units on its own
+  clock; a lab ordered 6 times with no frame is set aside
+  (`tech.no_site(goal, true)`, no lab reclaimed for it); leash drops are
+  logged. Factories stuck between trees and buildings: `map:passable`
+  reads blocking features and settled buildings (engine
+  `spatial-state/src/cell_classifier.cpp`), so factory sites need three
+  open cells for the widest built unit at both ends of the exit axis
+  (`exit_cells` in builders.lua, also for city sites via
+  `city.exit_blocked`), and builders reclaim blocked lanes of finished
+  factories (`try_clear_door`, task `door` after `resume`). Idle units
+  in a lane also read as blocked: a placement is just tried elsewhere,
+  a reclaim of a point with no feature is a short walk. Seats 2-4 also
+  logged `no site` for 7×7/8×6 plants all game (most blocks poor ground
+  on the islets). Tests after the fix (8 matches): 7 wins; the loss is
+  Crater Islands seed 4242 as Arm, lost by the committed version too
+  (also Crater Islands seed 99 as Core: both versions lose).
 
 - Crater Islands (seed 4242) used to stall at tier 2 forever: the Ultra
   Vehicle Plant (18×18) fits nowhere on that map and the goal never

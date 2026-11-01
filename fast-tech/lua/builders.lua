@@ -20,6 +20,7 @@ local builders = {
     role = {},     -- builder id -> "tech" or "economy"
     parked = {},   -- builder id -> tick it was sent to patrol or assist
     wide_search = {},  -- factory index -> tick of the last search around the base
+    wide_search_commander = {}, -- the same for the commander's own searches
     wide_failed = {},  -- factory index -> searches in a row that found nothing
     released = {},     -- builder id -> tick it was last called back from helping
     upgrade_tried = {}, -- deposit and extractor type -> tick an upgrade was tried there
@@ -177,9 +178,91 @@ local function rings(fx, fz, fhalf, ox, oz, ohalf)
         and math.abs(oz - fz) < fhalf + ohalf + water_factory_margin
 end
 
+-- The movement class of the widest unit a factory turns out, or nil for a
+-- factory of aircraft only.
+local exit_classes = {}
+
+local function exit_class(entry)
+    local known = exit_classes[entry.index]
+    if known ~= nil then
+        return known or nil
+    end
+    local best, best_size = false, 0
+    for _, built in ipairs(entry.builds or {}) do
+        local record = built.record
+        local class = record.movementclass
+        if record.canfly ~= true and type(class) == "string" and class ~= "" then
+            local size = math.max(util.num(record.footprintx), util.num(record.footprintz))
+            if size > best_size then
+                best, best_size = class, size
+            end
+        end
+    end
+    exit_classes[entry.index] = best
+    return best or nil
+end
+
+-- Whether the ground at both ends of a factory, along the axis its units
+-- leave by, lets its widest unit out: trees, rocks, cliffs, water for a
+-- land plant, or buildings already up. map:passable sees blocking
+-- features and settled buildings (a factory put down between trees and a
+-- building held its units in; Ring Atoll).
+local exit_depth = 3
+
+-- The cells (world points) where the factory's widest unit cannot stand,
+-- in the lanes out of both ends along `axis` ("z" for facing 0 and 2).
+-- `first` stops at the first one.
+local function exit_cells(entry, x, z, axis, first)
+    local found = {}
+    local class = exit_class(entry)
+    if class == nil then
+        return found
+    end
+    local fx, fz = util.num(entry.record.footprintx), util.num(entry.record.footprintz)
+    if axis == "x" then
+        fx, fz = fz, fx
+    end
+    local unit_size = 2
+    for _, built in ipairs(entry.builds or {}) do
+        if built.record.movementclass == class then
+            unit_size = math.max(unit_size, util.num(built.record.footprintx), util.num(built.record.footprintz))
+        end
+    end
+    local map = game.map
+    local cx, cz = x // 16, z // 16
+    for side = -1, 1, 2 do
+        for step = 0, exit_depth - 1 do
+            local ax, az
+            if axis == "z" then
+                ax = cx - unit_size // 2
+                az = side > 0 and (cz + (fz + 1) // 2 + step) or (cz - fz // 2 - unit_size - step)
+            else
+                az = cz - unit_size // 2
+                ax = side > 0 and (cx + (fx + 1) // 2 + step) or (cx - fx // 2 - unit_size - step)
+            end
+            local ok, cell = pcall(function() return map:passable(class, ax, az) end)
+            if ok and cell == 0 then
+                found[#found + 1] = {x = ax * 16 + unit_size * 8, z = az * 16 + unit_size * 8}
+                if first then
+                    return found
+                end
+            end
+        end
+    end
+    return found
+end
+
+local function exit_blocked(entry, x, z, facing)
+    return #exit_cells(entry, x, z, facing % 2 == 0 and "z" or "x", true) > 0
+end
+
 local function crowds_factory(entry, x, z, facing)
     local half = half_size(entry)
-    local axis = (facing or 0) % 2 == 0 and "z" or "x"
+    facing = facing or 0
+    local axis = facing % 2 == 0 and "z" or "x"
+    if entry.factory and exit_blocked(entry, x, z, facing) then
+        return true
+    end
     for _, other in ipairs(world.select(function(u, e) return e.structure end)) do
         local kind = catalog.of(other)
         local at = util.pos(other)
@@ -210,6 +293,7 @@ local function crowds_factory(entry, x, z, facing)
 end
 
 builders.crowds_factory = crowds_factory
+city.exit_blocked = exit_blocked
 
 -- Puts `entry` down near `near`, searching `radius` world units. When
 -- `walk` is set and the ground is unexplored, the builder walks there.
@@ -244,13 +328,26 @@ end
 local wide_rings = {{0, 1}, {480, 8}, {960, 12}, {1440, 16}}
 
 local function place_wide(unit, entry, centre)
-    local last = builders.wide_search[entry.index]
+    -- The commander keeps to its leash: it takes only sites within 900 of
+    -- the base and keeps its own clock, so a search of its that found
+    -- only far sites does not hold the other builders off for a minute
+    -- (Ring Atoll: a Shipyard ordered 13 times, dropped by the leash
+    -- each time, while three construction kbots that could build it
+    -- idled).
+    local kind = catalog.of(unit)
+    local commander = kind ~= nil and kind.commander
+    local clock = commander and builders.wide_search_commander or builders.wide_search
+    local last = clock[entry.index]
     -- The first lab cannot wait three minutes to learn it fits nowhere.
     local pause = world.tier == 0 and 30 * 30 or 30 * 60
     if last ~= nil and me.tick - last < pause then
         return false, false
     end
-    builders.wide_search[entry.index] = me.tick
+    clock[entry.index] = me.tick
+    local home = base()
+    local function near_home(x, z)
+        return not commander or home == nil or util.dist(home, {x = x, z = z}) <= 900
+    end
     local unseen = nil
     for _, ring in ipairs(wide_rings) do
         local distance, count = ring[1], ring[2]
@@ -260,7 +357,7 @@ local function place_wide(unit, entry, centre)
                 local _, _, x, z = brain.place(entry.record, near, 480, 0)
                 if x ~= nil then
                     x, z = util.whole(x), util.whole(z)
-                    if not city.on_street(entry, x, z) and not crowds_factory(entry, x, z, 0)
+                    if near_home(x, z) and not city.on_street(entry, x, z) and not crowds_factory(entry, x, z, 0)
                         and util.reachable(unit, {x = x, z = z}, true)
                         and unit:build(entry.record, {x = x, z = z}, 0) then
                         builders.wide_failed[entry.index] = nil
@@ -271,6 +368,11 @@ local function place_wide(unit, entry, centre)
                 unseen = near
             end
         end
+    end
+    -- A commander's search counts towards "fits nowhere" only while no
+    -- other builder could build the lab.
+    if commander and #tech.goal_builders() > 1 then
+        return false, false
     end
     local failed = (builders.wide_failed[entry.index] or 0) + 1
     builders.wide_failed[entry.index] = failed
@@ -376,15 +478,26 @@ local function try_reclaim(unit, entry)
     return false
 end
 
+local goal_orders = 6
+
 local function try_goal(unit, entry)
     local goal = tech.goal
     if goal == nil or not catalog.can_build(entry, goal) then
         return false
     end
     if tech.frame_alive() then
+        tech.orders = 0
         return unit:help(tech.frame) == true
     end
     if recently("goal", 45) or not tech.affordable() then
+        return false
+    end
+    -- Ordered again and again and never begun (a site no builder gets
+    -- to): the goal is set aside like one that fits nowhere.
+    if (tech.orders or 0) >= goal_orders then
+        print(string.format("%s ordered %d times, never begun", goal.name, tech.orders))
+        tech.orders = 0
+        tech.no_site(goal, true)
         return false
     end
     local placed, nowhere = build_in_city(unit, goal)
@@ -392,6 +505,7 @@ local function try_goal(unit, entry)
         mark("goal")
         tech.started = me.tick
         tech.no_room = 0
+        tech.orders = (tech.orders or 0) + 1
         -- A builder sent to see unexplored ground first is not building yet.
         local walk = builders.walking[unit.id]
         if walk == nil or walk.tick ~= me.tick then
@@ -964,6 +1078,70 @@ end
 -- ones went up). Helpers are not held on a frame (that starved the
 -- economy in the test matches); a frame nobody works on is what counts.
 builders.resumed = {} -- builder id -> id of the frame it last took up
+
+-- A finished factory whose door or back is blocked: a builder near it
+-- reclaims what stands there (trees and rocks; reclaiming a point takes
+-- features only). Land under the sea, cliffs and own buildings are no
+-- feature: cells inside an own building are skipped, and each factory
+-- gets three tries a minute apart.
+builders.door_tries = {} -- factory id -> {count, tick}
+local door_reach = 1200
+
+local function inside_building(point)
+    for _, other in ipairs(world.select(function(_, e) return e.structure end)) do
+        local at = util.pos(other)
+        local kind = catalog.of(other)
+        if at ~= nil and kind ~= nil then
+            local hx = util.num(kind.record.footprintx) * 8
+            local hz = util.num(kind.record.footprintz) * 8
+            if axis_of_heading(other.heading) == "x" then
+                hx, hz = hz, hx
+            end
+            if math.abs(point.x - at.x) < hx and math.abs(point.z - at.z) < hz then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function try_clear_door(unit, entry)
+    if entry.record.canreclamate ~= true or recently("door", 10) then
+        return false
+    end
+    local at = util.pos(unit)
+    if at == nil then
+        return false
+    end
+    local sea = util.num(game.map.sea_level)
+    for _, factory in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
+        local where = util.pos(factory)
+        local kind = catalog.of(factory)
+        local tries = builders.door_tries[factory.id] or {count = 0, tick = -1000000}
+        if where ~= nil and tries.count < 3 and me.tick - tries.tick >= 30 * 60
+            and util.dist(at, where) <= door_reach and not kind.water_only then
+            builders.door_tries[factory.id] = {count = tries.count, tick = me.tick}
+            local cells = {}
+            for _, cell in ipairs(exit_cells(kind, where.x, where.z, axis_of_heading(factory.heading), false)) do
+                local ok, ground = pcall(function() return game.map:ground(cell.x, cell.z) end)
+                if ok and ground ~= nil and util.num(ground) >= sea and not inside_building(cell) then
+                    cells[#cells + 1] = cell
+                end
+            end
+            if #cells > 0 and util.reachable(unit, cells[1]) then
+                for index, cell in ipairs(cells) do
+                    unit:reclaim(cell, index > 1)
+                end
+                builders.door_tries[factory.id] = {count = tries.count + 1, tick = me.tick}
+                builders.parked[unit.id] = me.tick
+                mark("door")
+                print(string.format("clear door of %s at %d,%d (%d cells)", kind.name, where.x, where.z, #cells))
+                return true
+            end
+        end
+    end
+    return false
+end
 
 local function try_resume(unit)
     local need, urgency = economy.need()
@@ -1863,7 +2041,7 @@ local function leashed(name, unit, task, ...)
     for key, tick in pairs(builders.pending) do
         pending[key] = tick
     end
-    local started, no_room = tech.started, tech.no_room
+    local started, no_room, orders = tech.started, tech.no_room, tech.orders
     if not task(unit, ...) then
         return false
     end
@@ -1874,9 +2052,10 @@ local function leashed(name, unit, task, ...)
     end
     unit:stop()
     builders.pending = pending
-    tech.started, tech.no_room = started, no_room
+    tech.started, tech.no_room, tech.orders = started, no_room, orders
     builders.walking[unit.id] = nil
     builders.leashed[name] = me.tick
+    print(string.format("leash: commander %s at %d,%d dropped (%d from base)", name, util.whole(at.x), util.whole(at.z), util.whole(util.dist(at, home))))
     return false
 end
 
@@ -1966,6 +2145,13 @@ local function builder_turn(unit, entry)
     else
         order = {"reclaim", "resume", "radar", "salvage", "economy", "goal"}
     end
+    -- A factory whose units cannot get out makes nothing: its door first.
+    for index, name in ipairs(order) do
+        if name == "resume" then
+            table.insert(order, index + 1, "door")
+            break
+        end
+    end
     -- Under attack, or with too few defences, the economy builders fortify first.
     local defences = count_of(function(_, e) return e.defense end)
     if builders.role[unit.id] == "economy" and not starving
@@ -2001,6 +2187,7 @@ local function builder_turn(unit, entry)
         radar = try_radar,
         goal = try_goal,
         resume = function(u) return try_resume(u) end,
+        door = try_clear_door,
         defence = try_defence,
         economy = function(u, e) return try_economy(u, e, false) end,
     }

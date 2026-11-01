@@ -21,6 +21,7 @@ local tech = {
     reclaiming = {},  -- factory id -> tick the reclaim was ordered
     scout_lab = nil,  -- factory kept for scouts
     no_room = 0,      -- placements of the goal that failed in a row
+    orders = 0,       -- placements of the goal ordered with no frame since
     set_aside = {},   -- factory index -> tick it was found to fit nowhere
 }
 
@@ -94,11 +95,13 @@ end
 -- The goal fits nowhere on the explored ground and no old lab can make
 -- room: it leaves the race for ten minutes, and the lines are weighed
 -- again without it.
-function tech.no_site(entry)
+-- With `unreached` the goal had sites but no builder got to them: making
+-- room would not help.
+function tech.no_site(entry, unreached)
     if entry == nil or aside(entry) then
         return
     end
-    if tech.make_room() ~= nil then
+    if not unreached and tech.make_room() ~= nil then
         -- An old lab can go: reclaiming it comes first.
         tech.no_room = math.max(tech.no_room, 2)
         return
@@ -108,7 +111,7 @@ function tech.no_site(entry)
     print(string.format("no site for %s (footprint %dx%d): set aside for ten minutes",
         entry.name, util.whole(entry.record.footprintx), util.whole(entry.record.footprintz)))
     if tech.goal == entry then
-        tech.goal, tech.frame, tech.started, tech.no_room = nil, nil, nil, 0
+        tech.goal, tech.frame, tech.started, tech.no_room, tech.orders = nil, nil, nil, 0, 0
         tech.choose_goal()
     end
 end
@@ -210,7 +213,7 @@ function tech.choose_goal()
         end
     end
     if best ~= tech.goal then
-        tech.frame, tech.started, tech.no_room = nil, nil, 0
+        tech.frame, tech.started, tech.no_room, tech.orders = nil, nil, 0, 0
         if best then
             print(string.format("tech goal: %s (tier %d, %s line, reaches %d)",
                 best.name, best.tier, tostring(best.line), reach(best)))

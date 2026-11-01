@@ -296,6 +296,11 @@ local function order(unit, entry, x, z, w, d, facing)
     if not util.reachable(unit, centre, entry.factory) then
         return false
     end
+    -- Trees, rocks or a building across a factory's door or back
+    -- (city.exit_blocked is set by builders.lua).
+    if entry.factory and city.exit_blocked ~= nil and city.exit_blocked(entry, centre.x, centre.z, facing or 0) then
+        return false
+    end
     if unit:build(entry.record, centre, facing) then
         city.pending[#city.pending + 1] = {
             x0 = x, z0 = z, x1 = x + w - 1, z1 = z + d - 1, tick = me.tick,
