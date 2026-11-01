@@ -11,6 +11,7 @@
 local builders = require("builders")
 local catalog = require("catalog")
 local factories = require("factories")
+local terrain = require("terrain")
 local util = require("util")
 local world = require("world")
 
@@ -46,6 +47,42 @@ local function nearest_enemy(from, reach, unit)
     return world.best_target(from, reach, unit and catalog.of(unit))
 end
 
+-- Long-range units (weapons reaching 700 or more) keep to the edge of
+-- their reach: when an armed enemy comes within half of it they step back
+-- away from it, a good part of their range, and leave the close fight to
+-- the units with shorter weapons. Returns whether it stepped back.
+local long_range = 700
+
+local function keep_range(unit)
+    local entry = catalog.of(unit)
+    if entry == nil or entry.air or entry.range < long_range then
+        return false
+    end
+    local at = util.pos(unit)
+    if at == nil then
+        return false
+    end
+    local near, near_d
+    for _, enemy in ipairs(world.visible_enemies()) do
+        local kind = catalog.of(enemy)
+        if kind ~= nil and kind.armed and not kind.air and kind.hits_ground then
+            local where = util.pos(enemy)
+            local d = where and util.dist(at, where)
+            if d ~= nil and d < entry.range * 0.5 and (near_d == nil or d < near_d) then
+                near, near_d = where, d
+            end
+        end
+    end
+    if near == nil then
+        return false
+    end
+    local step = entry.range * 0.4
+    local dx, dz = at.x - near.x, at.z - near.z
+    local length = math.max(1, math.sqrt(dx * dx + dz * dz))
+    local back = util.clamp({x = util.whole(at.x + dx / length * step), z = util.whole(at.z + dz / length * step)}, 64)
+    return unit:move(back) == true
+end
+
 -- Each unit at `from` turns on the best target it can hit near `centre`;
 -- returns whether any had one.
 local function engage(units, centre, reach)
@@ -53,7 +90,9 @@ local function engage(units, centre, reach)
     for _, unit in ipairs(units) do
         local target = nearest_enemy(centre, reach, unit)
         if target ~= nil then
-            unit:attack(target)
+            if not keep_range(unit) then
+                unit:attack(target)
+            end
             any = true
         end
     end
@@ -71,7 +110,9 @@ local function defend(home)
     end
     for _, unit in ipairs(home) do
         local target = nearest_enemy(alarm, 700, unit)
-        if target ~= nil then
+        if keep_range(unit) then
+            -- Stepped back from a close enemy.
+        elseif target ~= nil then
             unit:attack(target)
         else
             unit:patrol(util.clamp(alarm, 64))
@@ -118,7 +159,9 @@ local function push(attackers)
         -- Bombers look further for anti-air to take out.
         local enemy = at and nearest_enemy(at, entry.bomber and 1400 or 800, unit)
         local contact = enemy == nil and at and world.nearest_contact(at, 1200)
-        if enemy ~= nil then
+        if keep_range(unit) then
+            -- Stepped back from a close enemy.
+        elseif enemy ~= nil then
             unit:attack(enemy)
         elseif contact then
             -- Seen only on radar or sonar: close in, fighting on the way.
@@ -326,14 +369,58 @@ local function send_to_mend(unit)
     if util.num(unit.health_percent) >= 30 then
         return
     end
-    local home = world.base or world.start
-    if home == nil then
+    local point = army.mend_point(unit)
+    if point == nil then
         return
     end
     army.mending[unit.id] = true
+    army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1}
     army.attacking[unit.id] = nil
-    unit:move(util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64))
+    unit:move(point)
     builders.mend_unit(unit)
+end
+
+-- Where a hurt unit waits for repair: by the base, or for a ship (and
+-- anything that cannot get to the base) on the water by it. A Torrent
+-- sent onto land stood still in Standby, badly hurt, for the rest of
+-- the match.
+army.mend_to = {} -- unit id -> {x, z, tries}
+
+function army.mend_point(unit)
+    local home = world.base or world.start
+    if home == nil then
+        return nil
+    end
+    local entry = catalog.of(unit)
+    local point = util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64)
+    if entry.water_only or not util.reachable(unit, point) then
+        local water = terrain.shore or terrain.water_point
+        if water ~= nil then
+            point = util.clamp(util.around(water, brain.random(1000) / 1000, 120), 64)
+        end
+    end
+    return point
+end
+
+-- A unit sent home for repair that stands idle short of its spot is sent
+-- again; after three tries it rejoins the army rather than stand there.
+local function keep_mending()
+    for id in pairs(army.mending) do
+        local unit = world.own[id]
+        local to = army.mend_to[id]
+        local at = unit and util.pos(unit)
+        if unit ~= nil and to ~= nil and at ~= nil and util.free(unit) and util.dist(at, to) > 300 then
+            if to.tries >= 3 then
+                army.mending[id] = nil
+                army.mend_to[id] = nil
+            else
+                to.tries = to.tries + 1
+                local point = army.mend_point(unit)
+                to.x, to.z = point.x, point.z
+                unit:move(point)
+            end
+        end
+    end
 end
 
 -- Long-range guns rarely see their targets, so they are told what to hit:
@@ -435,8 +522,10 @@ function army.step()
         local unit = world.own[id]
         if unit == nil or util.num(unit.health_percent) >= 95 then
             army.mending[id] = nil
+            army.mend_to[id] = nil
         end
     end
+    util.guard("mending", keep_mending)
     for _, unit in ipairs(soldiers()) do
         if army.mending[unit.id] or army.air_mending[unit.id] then
             -- Waiting at home for the builders, or on a repair pad.

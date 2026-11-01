@@ -69,10 +69,13 @@ local function status()
 end
 
 local function think()
+    -- The first turn only reads the build lists again: with everything
+    -- else on top of it a first turn passed 250 ms and stopped the seat.
     if not refreshed then
         catalog.refresh_builds()
         tech.reset()
         refreshed = true
+        return
     end
     util.guard("world", function()
         world.update_tier()

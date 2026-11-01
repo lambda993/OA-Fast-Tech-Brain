@@ -185,6 +185,20 @@ local function classify(index, record, inferred_tier)
     -- Stockpile weapons fire only rounds built in the unit (MAKENUKE,
     -- MAKEANTI), and no AI build list holds them: a unit armed with
     -- nothing else (Scarab, Hedgehog: mobile anti-nukes) never fires.
+    -- Submarines (Escalation's selection group CTRL_U), and among them the
+    -- hunters (Piranha, Shark) whose sniping torpedoes are made for
+    -- other submarines. Resurrecting units raise units from wrecks.
+    entry.sub = entry.mobile and words.CTRL_U == true
+    entry.sub_hunter = false
+    if entry.sub then
+        for slot = 1, 3 do
+            local weapon = record["weapon" .. slot]
+            if type(weapon) == "string" and string.find(string.upper(weapon), "SNIPE", 1, true) then
+                entry.sub_hunter = true
+            end
+        end
+    end
+    entry.resurrector = record.canresurrect == true
     entry.combat = entry.mobile and not entry.builder and entry.armed and not entry.scout
         and not entry.stockpile_only
     -- Escalation's Big Bertha, Intimidator, Guardian and Punisher are

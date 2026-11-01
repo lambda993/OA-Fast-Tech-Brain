@@ -203,7 +203,13 @@ function world.prune()
 end
 
 -- Live enemies the seat sees now.
+-- Built once a tick: every unit of the army asks for it.
+local visible_tick, visible_list = -1, {}
+
 function world.visible_enemies()
+    if visible_tick == me.tick then
+        return visible_list
+    end
     local found = {}
     local seen = me.seen
     if type(seen) ~= "table" then
@@ -215,6 +221,7 @@ function world.visible_enemies()
             found[#found + 1] = unit
         end
     end
+    visible_tick, visible_list = me.tick, found
     return found
 end
 
@@ -277,6 +284,12 @@ function world.best_target(from, reach, shooter)
             local priority = world.priority(entry)
             if shooter ~= nil and shooter.bomber and world.anti_air(entry) then
                 priority = 7
+            end
+            -- Submarine hunters (Piranha, Shark) go for submarines,
+            -- commanders and decoys above all else.
+            if shooter ~= nil and shooter.sub_hunter and entry ~= nil
+                and (entry.sub or entry.commander or entry.decoy) then
+                priority = 8
             end
             local limit = priority == world.commander_priority and reach * 2 or reach
             local d = util.dist(from, at)

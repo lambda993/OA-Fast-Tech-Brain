@@ -382,7 +382,37 @@ local function upgrade_buildings()
     end
 end
 
+-- Some of Escalation's factories carry a special weapon (weapon3) that
+-- does no damage and only turns the way their units come out; left at
+-- fire at will they turned it on enemies. Each armed factory is set to
+-- hold fire once.
+factories.held = {} -- factory id -> true
+
+local function hold_fire()
+    for id in pairs(factories.held) do
+        if world.own[id] == nil then
+            factories.held[id] = nil
+        end
+    end
+    for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
+        if not factories.held[unit.id] then
+            local record = catalog.of(unit).record
+            local armed = false
+            for slot = 1, 3 do
+                local weapon = record["weapon" .. slot]
+                if type(weapon) == "string" and weapon ~= "" then
+                    armed = true
+                end
+            end
+            if not armed or unit:stance({fire = "hold"}) ~= false then
+                factories.held[unit.id] = true
+            end
+        end
+    end
+end
+
 function factories.step()
+    util.guard("hold fire", hold_fire)
     choose_scout_lab()
     util.guard("upgrades", upgrade_buildings)
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do

@@ -167,6 +167,16 @@ local function hems(axis, fx, fz, fhalf, ox, oz, ohalf)
     return across < fhalf + ohalf and along < fhalf + ohalf + factory_margin
 end
 
+-- A shipyard or floating plant keeps open water all round it: ships are
+-- wide, turn slowly and leave by more than one side, and floating power
+-- and defences put down by the shore boxed a shipyard in (Icy Bergs).
+local water_factory_margin = 160
+
+local function rings(fx, fz, fhalf, ox, oz, ohalf)
+    return math.abs(ox - fx) < fhalf + ohalf + water_factory_margin
+        and math.abs(oz - fz) < fhalf + ohalf + water_factory_margin
+end
+
 local function crowds_factory(entry, x, z, facing)
     local half = half_size(entry)
     local axis = (facing or 0) % 2 == 0 and "z" or "x"
@@ -178,6 +188,12 @@ local function crowds_factory(entry, x, z, facing)
                 return true
             end
             if entry.factory and hems(axis, x, z, half, at.x, at.z, half_size(kind)) then
+                return true
+            end
+            if kind.factory and kind.water_only and rings(at.x, at.z, half_size(kind), x, z, half) then
+                return true
+            end
+            if entry.factory and entry.water_only and rings(x, z, half, at.x, at.z, half_size(kind)) then
                 return true
             end
         end
@@ -1383,7 +1399,9 @@ local function repair_targets()
         local at = unit and util.pos(unit)
         if unit == nil or util.num(unit.health_percent) >= 95 then
             builders.mend[id] = nil
-        elseif at ~= nil and home ~= nil and util.dist(at, home) < 900 then
+        -- Ships wait on the water by the base, further out.
+        elseif at ~= nil and home ~= nil
+            and util.dist(at, home) < (catalog.of(unit).water_only and 1600 or 900) then
             targets[#targets + 1] = unit
         end
     end
@@ -1566,8 +1584,73 @@ local function try_dgun(unit, entry)
 end
 
 -- The commander's own safety comes before its work.
+-- The base lost: once three quarters of the metal the seat ever had in
+-- finished buildings is gone, the commander leaves for the nearest live
+-- ally's start (`commander leaves for ally at x,z`). With no ally left it
+-- stays and defends what remains, and no longer runs from danger.
+builders.base_peak = 0
+
+local function base_lost()
+    local worth = 0
+    for _, building in ipairs(world.select(function(u, e) return e.structure and world.finished(u) end)) do
+        worth = worth + catalog.of(building).metal
+    end
+    builders.base_peak = math.max(builders.base_peak, worth)
+    return builders.base_peak >= 3000 and worth <= builders.base_peak * 0.25
+end
+
+local function ally_refuge(unit)
+    local at = util.pos(unit)
+    local best, best_d
+    for _, row in ipairs(me:players()) do
+        if row.player ~= me.player and row.allied and row.alive ~= false and row.start_x ~= nil then
+            local point = {x = util.whole(row.start_x), z = util.whole(row.start_z)}
+            local d = at and util.dist(at, point) or 0
+            if best_d == nil or d < best_d then
+                best, best_d = point, d
+            end
+        end
+    end
+    return best
+end
+
+local function evacuate(unit)
+    if not base_lost() then
+        builders.evacuating = nil
+        return false
+    end
+    local refuge = ally_refuge(unit)
+    if refuge == nil then
+        if builders.evacuating ~= "stand" then
+            builders.evacuating = "stand"
+            print("base lost, no ally: the commander stands and defends")
+        end
+        return false
+    end
+    local at = util.pos(unit)
+    if at ~= nil and util.dist(at, refuge) > 400 then
+        local last = builders.retreat[unit.id]
+        if last == nil or me.tick - last > 30 * 15 then
+            unit:move(util.clamp(refuge, 64))
+            builders.retreat[unit.id] = me.tick
+            if builders.evacuating ~= "ally" then
+                builders.evacuating = "ally"
+                print(string.format("commander leaves for ally at %d,%d", refuge.x, refuge.z))
+            end
+        end
+        return true
+    end
+    return false
+end
+
 local function guard_commander(unit, entry)
+    if evacuate(unit) then
+        return true
+    end
     local threat = danger(unit, entry)
+    if builders.evacuating == "stand" then
+        threat = nil
+    end
     if threat ~= nil then
         if builders.fleeing == nil or me.tick - builders.fleeing > 30 * 4 then
             flee(unit, threat)
@@ -1721,6 +1804,10 @@ end
 -- away. The middle may sit under a building, so it stops on open ground
 -- short of it, and is not sent again while it walks there.
 local function send_home(unit)
+    -- Gone to an ally once its own base was lost: it stays there.
+    if builders.evacuating == "ally" and catalog.of(unit).commander then
+        return
+    end
     local centre = base()
     local at = util.pos(unit)
     if at == nil or centre == nil then

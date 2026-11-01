@@ -90,6 +90,7 @@ end
 -- One real route a turn at most: a route costs tens of milliseconds on a
 -- large map, and a turn over 250 ms stops the seat.
 local route_turn = -1
+local reach_cache = {} -- "class:from>to" -> {tick, result}
 local route_cap = 1048576
 
 -- Whether `unit` can travel to `point`. Aircraft and units without a
@@ -142,8 +143,19 @@ function util.reachable(unit, point, sure)
         end
     end
     local to = {x = math.floor(point.x), z = math.floor(point.z)}
-    local ok, result = pcall(function() return game.map:reachable(from, to, class) end)
-    if ok and result == false then
+    -- map:reachable costs milliseconds on a large map: answers are kept a
+    -- minute for the same class between the same 256-unit squares.
+    local key = class .. ":" .. (from.x // 256) .. "," .. (from.z // 256) .. ">" .. (to.x // 256) .. "," .. (to.z // 256)
+    local known = reach_cache[key]
+    local result
+    if known ~= nil and me.tick - known.tick < 30 * 60 then
+        result = known.result
+    else
+        local ok, answer = pcall(function() return game.map:reachable(from, to, class) end)
+        result = ok and answer or nil
+        reach_cache[key] = {tick = me.tick, result = result}
+    end
+    if result == false then
         return false
     end
     if not sure or route_turn == me.tick then

@@ -184,7 +184,9 @@ water-only buildings of their lists: tidal, floating and underwater power
 when it gives more for its cost, floating makers, anti-air and defences
 (some on the water by choice when much of the map is water, otherwise
 when the land has no room). They go into the sea nearest the base that a
-hovercraft reaches (checked with a route), by its shore.
+hovercraft reaches (checked with a route), by its shore. A shipyard or
+floating plant keeps 160 units of open water all round it, so nothing
+put down by the shore boxes its ships in.
 
 **Unit upgrades.** A factory that offers one of Escalation's unit
 upgrades (Level 2 in the advanced kbot and vehicle labs, Level 3 in the
@@ -231,7 +233,14 @@ small guard stays home, and when the base is hit, every factory builds and
 the home army answers. Torpedo-only units (torpedo bombers too) are built
 only when ships reach the enemy.
 
-**Targets.** Each unit shoots what its weapons can hit: only anti-air
+**Range.** Units whose weapons reach 700 or more keep to the edge of
+their reach: when an armed enemy comes within half of it they step back
+from it by four tenths of their range and leave the close fight to the
+units with shorter weapons.
+
+**Targets.** Submarine hunters (Escalation's submarines, selection group
+`CTRL_U`, with sniping torpedoes: Piranha, Shark) shoot submarines,
+commanders and decoys before anything else. Each unit shoots what its weapons can hit: only anti-air
 weapons fire at aircraft, so the rest ignore them, and pure anti-air
 units ignore the ground. Commanders and decoys come first, then tier 4
 and 5, tier 3, anti-air, the economy and the rest; bombers go for
@@ -281,12 +290,24 @@ fight (`commander walks home for repair`), and waits there until mended
 (95 %) before it works again, unless danger sends it running. With no
 other builder left it works on.
 
+**Base lost.** Once three quarters of the metal the seat ever had in
+finished buildings is gone (and it had 3 000 or more), the commander
+leaves for the start of the nearest live ally and stays there
+(`commander leaves for ally at x,z`). With no ally left it stays, stops
+running from danger and defends what remains (`base lost, no ally`).
+
+**Factories hold fire.** Some of Escalation's factories carry a special
+weapon (weapon3) that does no damage and only turns the way their units
+come out; every armed factory is set to hold fire once it is finished.
+
 **Emergency repairs.** While the base is under attack (an alarm within
 the last minute), buildings worth 5 000 metal or more below half health
 get three builders each, who drop what they do. Units worth 5 000 metal
 or more, whatever their tier, go home below 30 % health; within 900
 units of the base three builders mend each, and the unit rejoins the
-army at 95 %. From tier 3 the builders put up the
+army at 95 %. Ships, and any unit that cannot get to the base, wait on
+the water by it (within 1 600 units); one that stands idle short of its
+spot is sent again, and after three tries rejoins the army. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other
@@ -398,6 +419,18 @@ seen and how; whether it is a fault is for the engine's author to judge.
    world units, whatever radius is asked.
 10. **A failed path leaves its move at the head of the queue.** The unit
     is not free again until the brain stops it (`onPathFailed`).
+
+11. **No resurrect order.** The engine runs resurrection (ground mission
+    `resurrect`, kind 37, for units with `canresurrect`), but the unit
+    methods offer no `resurrect`, and `reclaim` on a wreck consumes it.
+    A brain cannot raise wrecks with Escalation's Rector, Necro and their
+    tier-3 kin; this brain uses them as builders.
+12. **`map:reachable` is costly on a large map.** On Icy Bergs (99 %
+    water, about 13 000 world units across) a few hundred calls in the
+    first fifteen seconds cost about 2 s of real time per seat, more
+    than `map:route` for the same pairs; four seats made the game stall
+    at the start. The brain now asks routes only and caches its
+    `map:reachable` answers.
 
 ## Files
 

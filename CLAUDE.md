@@ -270,6 +270,10 @@ error is logged once and the seat keeps playing).
 19. Ships by weapon reach, not hull reach; Core amphibious T3 ships
     cross land. Frames finished before new ones; diverted builders
     resume their frame. Units and buildings chosen within the economy.
+20. Factories hold fire (weapon3); sub hunters on subs/commanders;
+    long-range units keep their distance; commander to an ally when
+    75 % of the base is lost, else stands; resurrect wrecks ≥ 2 500
+    metal (1 250 heap) — **not possible**, no API order.
 
 ## State and open points
 
@@ -343,6 +347,39 @@ error is logged once and the seat keeps playing).
   vehicles instead of air and stay far ahead (Core Prime seed 7: 377
   units vs 181, metal 620k vs 82k) without finishing in 30 minutes.
   Mirror matches: Arm and Core take the same lines, all draws.
+- User's 4-seat game on Icy Bergs (99 % water, ~13 000 units across)
+  and fixes after it:
+  - Lag at the start: the survey called `map:reachable` before each
+    route; on a big map it costs more than the route (~2 s per seat in
+    the first 15 s). `meets` now routes only (reachable only past the
+    route cap); `util.reachable` caches answers 60 s per class and
+    256-unit squares; the ship-survey planning asked `map:passable` for
+    every water point × class × enemy (~50 000 calls in one turn, a
+    first turn over 250 ms on Flooded Glaciers): now sorted by distance,
+    first 5 sailable, memoised; the first think only refreshes the
+    catalog. Timing with `/usr/bin/time` of 500-tick headless runs vs
+    builtin,builtin is the way to measure (no clock in the sandbox, no
+    perf on this machine); disable modules in a copy to bisect.
+  - Shipyard boxed in: water factories keep 160 units clear all round
+    (`rings` in crowds_factory).
+  - Armed factories (weapon3 turns the unit exit) set to hold fire
+    (`unit:stance({fire = "hold"})`, factories.hold_fire).
+  - Sub hunters (`CTRL_U` + weapon name with SNIPE: ARMSUBK, CORSHARK)
+    target subs/commanders/decoys first (priority 8).
+  - Long-range units (range ≥ 700) step back when an armed enemy is
+    within half their range (`keep_range` in army.lua).
+  - Commander leaves for the nearest live ally's start when 75 % of the
+    peak building metal is gone; with no ally it stands and stops
+    fleeing (`builders.evacuating`).
+  - Resurrection: no brain order exists (README limitation 11).
+    Resurrectors (`canresurrect`: ARMFARK, CORNECRO, ARMREZ, CORREZ)
+    stay builders.
+  - Torrent idle when badly hurt: mend point was on land; now water by
+    the base for ships/unreachable, re-sent up to 3 times
+    (`army.mend_to`).
+  - Icy Bergs logs: ships first everywhere; 18×18/24×24 shipyards often
+    find no site; one seat had energy income 45 760 and an army of 2
+    (energy overshoot still open).
 - User's games on Core Prime, Dark Side, Flooded Glaciers (only the
   last one's seat logs survive: they are overwritten each game; the
   engine log in `~/.local/share/open-annihilation/logs/` lists the

@@ -62,13 +62,13 @@ end
 -- of 1 048 576 cells keep reachable's answer.
 local route_cap = 1048576
 
+-- map:reachable is no cheap first test: on a large map it cost more than
+-- the route itself (Icy Bergs: about 2 s of the first 15 seconds per
+-- seat, a lag every player saw), so only maps past the route's cap use it.
 local function meets(a, b, class)
-    local ok, near = pcall(function() return game.map:reachable(a, b, class) end)
-    if ok and near == false then
-        return false, false
-    end
     local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
     if cells > route_cap then
+        local ok, near = pcall(function() return game.map:reachable(a, b, class) end)
         return ok and near == true, false
     end
     local found, route = pcall(function() return game.map:route(a, b, class) end)
@@ -296,9 +296,19 @@ local function plan_checks(waters)
     end
     -- Only water deep and clear enough for that class counts: a cell that
     -- is mostly water may still be shallows a ship cannot enter.
+    -- Answers are kept: on a sea map nearly every grid point is water, and
+    -- asking each of them for every class and enemy took a first turn past
+    -- 250 ms (Flooded Glaciers).
+    local sail_memo = {}
     local function sails(boat, point)
-        local ok, pass = pcall(function() return game.map:passable(boat, point.x // 16, point.z // 16) end)
-        return ok and util.num(pass) >= 3
+        local key = boat .. ":" .. point.x .. "," .. point.z
+        local known = sail_memo[key]
+        if known == nil then
+            local ok, pass = pcall(function() return game.map:passable(boat, point.x // 16, point.z // 16) end)
+            known = ok and util.num(pass) >= 3
+            sail_memo[key] = known
+        end
+        return known
     end
     -- Water points are looked for as far from each enemy start as the
     -- longest-ranged ship can shoot.
@@ -322,15 +332,26 @@ local function plan_checks(waters)
         end
         if from ~= nil then
             for number, target in ipairs(terrain.targets) do
-                local near = {}
+                -- The water points nearest the enemy first; only the first
+                -- five a ship of this class sails on are asked.
+                local by_distance = {}
                 for _, water in ipairs(waters) do
                     local d = util.dist(water, target)
-                    if d <= radius and sails(boat, water) then
-                        near[#near + 1] = {x = water.x, z = water.z, d = d}
+                    if d <= radius then
+                        by_distance[#by_distance + 1] = {x = water.x, z = water.z, d = d}
                     end
                 end
-                table.sort(near, function(a, b) return a.d < b.d end)
-                local last = math.min(5, #near)
+                table.sort(by_distance, function(a, b) return a.d < b.d end)
+                local near = {}
+                for _, water in ipairs(by_distance) do
+                    if #near >= 5 then
+                        break
+                    end
+                    if sails(boat, water) then
+                        near[#near + 1] = water
+                    end
+                end
+                local last = #near
                 for index = 1, last do
                     checks[#checks + 1] = {class = boat, from = from,
                         to = {x = near[index].x, z = near[index].z}, ship = number, last = index == last,
