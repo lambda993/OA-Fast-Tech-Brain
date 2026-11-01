@@ -277,8 +277,57 @@ error is logged once and the seat keeps playing).
 21. Factories stuck between trees and buildings (user, Ring Atoll):
     factory sites need open lanes out of both ends (`map:passable`),
     blocked lanes of finished factories are reclaimed.
+22. User's Steel Jungle game (2026-11-01, 4 seats, rich, stopped at 52
+    min): reclaim what blocks building; commander built more factories
+    instead of guarding the tier-1 lab; geothermal upgrades sooner; FPS
+    in big fights; shields/charge fields beside heavy reactors and
+    long-range guns; paralyzers ignore immune units and aircraft;
+    Bastion never fires near own/allied units (its blast) nor at
+    aircraft; old factories stop producing, reclaimed only for room;
+    repair pads/carriers sooner; units without anti-air fall back to
+    anti-air in air raids, 3+ mobile anti-air per group; mobile anti-air
+    a bomber target (already was); fighters intercept raiders on own and
+    allied units.
 
 ## State and open points
+
+- User's Steel Jungle game (2026-11-01, 4 seats all Fast Tech, rich,
+  52 minutes, stopped): all seats stuck at tier 2, labs `no site` all
+  game (even a 6×6 Kbot Lab), one seat no extractor in 52 minutes. Probe:
+  the map has 43 deposits, every one with all 25 cells round it blocked
+  (features, 20-60 metal each; some features are not reclaimable), and
+  starts 1 and 5 have no deposit within 1 500. `map:passable` reads
+  blocking features; `unit:reclaim(point)` takes the feature on that
+  exact cell (engine `feature_at_position`, cell = world >> 20) and an
+  empty cell fails at once. Probe: reclaiming 30 blocked cells round the
+  commander freed 12 in 20 s; reclaiming the full 2×2 probe footprint
+  freed 3 more; 15 stayed (slopes or unreclaimable). Added
+  `feature_cells`/`clear_cells`/`clear_for`/`clear_deposit` in
+  builders.lua (`builders.sweeping` keeps the builder on it 3 minutes,
+  `builders.tried` avoids tiles still blocked after two clearings).
+  Tests: Vehicle Plant now goes up after clearing; the 17×18 Ultra
+  Aircraft Hangar still finds no clear ground; extractors there are not
+  asked for (metal sits full because nothing can be built).
+- FPS in big fights: `best_target` walked every visible enemy for every
+  shooter (util.pos = pcall per f32), keep_range and builder danger too,
+  `world.select` walked and sorted all own units per call (dozens a
+  turn, inside placement loops), attack orders re-issued every 3 s.
+  Now: per-tick enemy grid (`world.enemy_rows`, `enemies_near`,
+  `friends_near`), per-tick own list, `army.attack` dedupes orders.
+  Core Prime two Fast Tech 30 min: 193 s vs 251 s.
+- Engine: hold fire (`fire_order != at_will`) skips the auto-targeting
+  pass (`match-runtime/src/targeting.cpp`); attack orders are forced
+  (`combat-state` `issue_attack_order`), so careful units (paralyzers,
+  Bastion `CORSPUN`, blast 352) hold fire and get brain targets.
+- Escalation data (probe): paralyzer first weapons ARMSPID Spider,
+  ARMHSTUN Medusa, ARMSTUN Warden, ARMCBT Mirage, mSCORP Scorpion (Gorgon
+  ARMASPID has it as weapon2: left out); `immunetoparalyzer` on ~90 types
+  (aircraft, commanders, Spider, Warden...). Shields ARMSHGEN Aegis /
+  CORSHGEN Corona (8 000 E/s, `ActivateWhenBuilt=0`: switched with
+  `unit:on`), charge fields ARMFIELD Obelisk / CORFIELD Monolith (250
+  E/s). Heavy reactors ARMSFUS Heavy Fusion, CORSFUS Anti-Matter.
+- Tests after all of it (10 maps vs built-in hard, both sides): 10 wins,
+  no errors; `booster:` and `air raid` seen once each.
 
 - User's 4-seat Ring Atoll game (96 % water, rich, all Fast Tech; seat
   logs of the 2026-11-01 game): seat 1 (Arm, start 5312,9376) logged

@@ -57,18 +57,8 @@ local function production_share(tier, top)
         end
         return 1
     end
-    if tier == 1 then
-        if behind == 1 then
-            return 0.15
-        end
-        return 0
-    end
-    if behind == 1 then
-        return 0.4
-    end
-    if behind == 2 then
-        return 0.1
-    end
+    -- Factories below the top tier make no more combat units (the user's
+    -- rule: they stop, and are reclaimed only when their room is needed).
     return 0
 end
 
@@ -133,6 +123,27 @@ local function pick_combat(entry)
         end
     end
     options = fitting
+    -- Every group that leaves takes anti-air along: at least three mobile
+    -- anti-air units, one more for every ten other ground units.
+    local ground, anti_air = 0, 0
+    for _, unit in ipairs(world.select(function(u, e) return e.combat and not e.air end)) do
+        if catalog.of(unit).mobile_anti_air then
+            anti_air = anti_air + 1
+        else
+            ground = ground + 1
+        end
+    end
+    if anti_air < 3 + ground // 10 then
+        local guns = {}
+        for _, option in ipairs(options) do
+            if option.mobile_anti_air then
+                guns[#guns + 1] = option
+            end
+        end
+        if #guns > 0 then
+            options = guns
+        end
+    end
     return util.weighted(options, function(e)
         local weight = tier_weight[math.min(5, e.tier)] or 1
         -- Air keeps a smaller part of the army: it cannot hold ground.
@@ -356,8 +367,12 @@ end
 factories.upgraded = {} -- building id -> tick the upgrade was queued
 
 local function upgrade_buildings()
+    -- Upgrades waited for both stores to be 40 % full, which a seat
+    -- spending all it makes seldom is: a geothermal plant went half an
+    -- hour without its armour (user's game). Now an upgrade the income
+    -- pays for in about two minutes goes in whenever energy is not dry.
     local e = economy.now or economy.read()
-    if e.metal_share < 0.4 or e.energy_share < 0.4 then
+    if e.energy_share < 0.15 then
         return
     end
     for id, tick in pairs(factories.upgraded) do
@@ -370,7 +385,7 @@ local function upgrade_buildings()
     end)) do
         if factories.upgraded[unit.id] == nil and util.free(unit) then
             for _, built in ipairs(catalog.of(unit).builds) do
-                if built.upgrade and built.metal <= e.metal_income * 120 + e.metal then
+                if built.upgrade and economy.affords(built, 120, 0.5) then
                     if unit:queue(built.record, 1) then
                         factories.upgraded[unit.id] = me.tick
                         print("upgrade " .. catalog.of(unit).name .. ": " .. built.name)

@@ -63,13 +63,12 @@ local function keep_range(unit)
         return false
     end
     local near, near_d
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local kind = catalog.of(enemy)
+    for _, row in ipairs(world.enemies_near(at, entry.range * 0.5)) do
+        local kind = row.entry
         if kind ~= nil and kind.armed and not kind.air and kind.hits_ground then
-            local where = util.pos(enemy)
-            local d = where and util.dist(at, where)
-            if d ~= nil and d < entry.range * 0.5 and (near_d == nil or d < near_d) then
-                near, near_d = where, d
+            local d = util.dist(at, row)
+            if near_d == nil or d < near_d then
+                near, near_d = {x = row.x, z = row.z}, d
             end
         end
     end
@@ -83,6 +82,23 @@ local function keep_range(unit)
     return unit:move(back) == true
 end
 
+-- An attack order, given again only for a new target, or when the unit
+-- dropped the old one, or after twelve seconds: each order sends the unit
+-- to the path search, and with hundreds of units every three seconds the
+-- game slowed down in big fights.
+army.aimed = {} -- unit id -> {target id, tick}
+
+local function attack(unit, target)
+    local last = army.aimed[unit.id]
+    if last ~= nil and last.id == target.id and me.tick - last.tick < 30 * 12 and not util.free(unit) then
+        return true
+    end
+    army.aimed[unit.id] = {id = target.id, tick = me.tick}
+    return unit:attack(target)
+end
+
+army.attack = attack
+
 -- Each unit at `from` turns on the best target it can hit near `centre`;
 -- returns whether any had one.
 local function engage(units, centre, reach)
@@ -91,7 +107,7 @@ local function engage(units, centre, reach)
         local target = nearest_enemy(centre, reach, unit)
         if target ~= nil then
             if not keep_range(unit) then
-                unit:attack(target)
+                attack(unit, target)
             end
             any = true
         end
@@ -113,7 +129,7 @@ local function defend(home)
         if keep_range(unit) then
             -- Stepped back from a close enemy.
         elseif target ~= nil then
-            unit:attack(target)
+            attack(unit, target)
         else
             unit:patrol(util.clamp(alarm, 64))
         end
@@ -162,7 +178,7 @@ local function push(attackers)
         if keep_range(unit) then
             -- Stepped back from a close enemy.
         elseif enemy ~= nil then
-            unit:attack(enemy)
+            attack(unit, enemy)
         elseif contact then
             -- Seen only on radar or sonar: close in, fighting on the way.
             unit:patrol(util.clamp(contact, 64))
@@ -181,7 +197,6 @@ local function strength(entry)
 end
 
 local function pull_back_aircraft(attackers)
-    local enemies = world.visible_enemies()
     local keep = {}
     for _, unit in ipairs(attackers) do
         local entry = catalog.of(unit)
@@ -189,11 +204,9 @@ local function pull_back_aircraft(attackers)
         local retreat = false
         if entry.air and not entry.bomber and at ~= nil then
             local guns = 0
-            for _, enemy in ipairs(enemies) do
-                local kind = catalog.of(enemy)
-                local where = util.pos(enemy)
-                if world.anti_air(kind) and where ~= nil and util.dist(at, where) <= 1100 then
-                    guns = guns + strength(kind)
+            for _, row in ipairs(world.enemies_near(at, 1100)) do
+                if world.anti_air(row.entry) then
+                    guns = guns + strength(row.entry)
                 end
             end
             if guns > 0 then
@@ -234,10 +247,9 @@ local function heavy_attack_at_home()
         return false
     end
     local armed = 0
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local kind = catalog.of(enemy)
-        local at = util.pos(enemy)
-        if kind ~= nil and at ~= nil and (kind.combat or kind.commander) and util.dist(at, base) < 1500 then
+    for _, row in ipairs(world.enemies_near(base, 1500)) do
+        local kind = row.entry
+        if kind ~= nil and (kind.combat or kind.commander) then
             armed = armed + 1
         end
     end
@@ -437,13 +449,12 @@ end
 
 local function anti_air_in_reach(at, reach)
     local best, best_key
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local kind = catalog.of(enemy)
-        local where = util.pos(enemy)
-        if world.anti_air(kind) and not kind.air and where ~= nil then
-            local d = util.dist(at, where)
-            if d <= reach and (best_key == nil or kind.tier * 100000 - d > best_key) then
-                best, best_key = enemy, kind.tier * 100000 - d
+    for _, row in ipairs(world.enemies_near(at, reach)) do
+        local kind = row.entry
+        if world.anti_air(kind) and not kind.air then
+            local d = util.dist(at, row)
+            if best_key == nil or kind.tier * 100000 - d > best_key then
+                best, best_key = row.unit, kind.tier * 100000 - d
             end
         end
     end
@@ -514,6 +525,156 @@ local function aim_guns()
     end
 end
 
+-- Careful shooters hold fire and are given their targets: paralyzers
+-- (they would waste shots on units immune to them) and Bastion (its blast
+-- hits own and allied units near the target, and it must never fire at
+-- aircraft). A careful building with no fit target stops.
+army.held = {} -- unit id -> true once put on hold fire
+
+local function aim_careful()
+    for _, unit in ipairs(world.select(function(u, e) return e.careful and world.finished(u) end)) do
+        if not army.held[unit.id] then
+            unit:stance({fire = "hold"})
+            army.held[unit.id] = true
+        end
+        local entry = catalog.of(unit)
+        if entry.structure then
+            local at = util.pos(unit)
+            if at ~= nil then
+                local target = world.best_target(at, entry.range, entry)
+                if target ~= nil then
+                    attack(unit, target)
+                elseif army.aimed[unit.id] ~= nil then
+                    army.aimed[unit.id] = nil
+                    unit:stop()
+                end
+            end
+        end
+    end
+end
+
+-- Air raids on ground units. A swarm is four or more enemy aircraft that
+-- hit ground targets within 600 units of own or allied ground units. Own
+-- ground units without anti-air near a swarm fall back to the nearest
+-- anti-air (mobile or a tower, own or allied) within 2 000 units, and
+-- every fighter of the seat goes for the raiders.
+local swarm_size = 4
+army.sheltering = {} -- unit id -> tick it fell back to anti-air
+army.intercepting = {} -- fighter id -> tick it was sent
+
+local function swarms()
+    local raiders = {}
+    for _, row in ipairs(world.enemy_rows()) do
+        local kind = row.entry
+        if kind ~= nil and kind.air and kind.armed and kind.hits_ground then
+            raiders[#raiders + 1] = row
+        end
+    end
+    local found = {}
+    if #raiders < swarm_size then
+        return found, raiders
+    end
+    local used = {}
+    for index, row in ipairs(raiders) do
+        if not used[index] then
+            local count, sx, sz = 0, 0, 0
+            for other, near in ipairs(raiders) do
+                if not used[other] and util.dist2(row, near) <= 600 * 600 then
+                    count, sx, sz = count + 1, sx + near.x, sz + near.z
+                    used[other] = true
+                end
+            end
+            if count >= swarm_size then
+                local centre = {x = sx // count, z = sz // count, count = count}
+                local victims = 0
+                for _, friend in ipairs(world.friends_in(centre, 600)) do
+                    if friend.entry ~= nil and not friend.entry.air then
+                        victims = victims + 1
+                    end
+                end
+                if victims > 0 then
+                    found[#found + 1] = centre
+                end
+            end
+        end
+    end
+    return found, raiders
+end
+
+local function nearest_anti_air(at, reach)
+    local best, best_d
+    for _, row in ipairs(world.friends_in(at, reach)) do
+        local kind = row.entry
+        if kind ~= nil and not kind.air and kind.anti_air and kind.armed and (kind.mobile_anti_air or kind.defense) then
+            local d = util.dist(at, row)
+            if d > 150 and (best_d == nil or d < best_d) then
+                best, best_d = row, d
+            end
+        end
+    end
+    return best
+end
+
+local function air_cover(units)
+    local found, raiders = swarms()
+    if #found == 0 then
+        return
+    end
+    local sheltered, sent = 0, 0
+    for _, unit in ipairs(units) do
+        local entry = catalog.of(unit)
+        local at = util.pos(unit)
+        if at ~= nil and not entry.air and not entry.anti_air and not entry.structure then
+            for _, swarm in ipairs(found) do
+                if util.dist(at, swarm) <= 700 then
+                    local shelter = nearest_anti_air(at, 2000)
+                    if shelter ~= nil then
+                        unit:move(util.clamp(util.around(shelter, brain.random(1000) / 1000, 80), 64))
+                        army.sheltering[unit.id] = me.tick
+                        sheltered = sheltered + 1
+                    end
+                    break
+                end
+            end
+        end
+    end
+    for _, fighter in ipairs(world.select(function(u, e) return e.fighter and world.finished(u) end)) do
+        local at = util.pos(fighter)
+        if at ~= nil and not army.air_mending[fighter.id] then
+            local best, best_d
+            for _, swarm in ipairs(found) do
+                local d = util.dist(at, swarm)
+                if best_d == nil or d < best_d then
+                    best, best_d = swarm, d
+                end
+            end
+            local target = world.best_target(best, 900, catalog.of(fighter))
+            if target ~= nil then
+                attack(fighter, target)
+            else
+                fighter:patrol(util.clamp(best, 64))
+            end
+            army.intercepting[fighter.id] = me.tick
+            sent = sent + 1
+        end
+    end
+    if sheltered + sent > 0 and (army.cover_log == nil or me.tick - army.cover_log > 30 * 30) then
+        army.cover_log = me.tick
+        print(string.format("air raid (%d raiders): %d units to anti-air, %d fighters sent", #raiders, sheltered, sent))
+    end
+end
+
+-- Units falling back to anti-air or chasing raiders are left to it for a
+-- while.
+local function busy(unit)
+    local shelter = army.sheltering[unit.id]
+    if shelter ~= nil and me.tick - shelter < 30 * 10 then
+        return true
+    end
+    local chase = army.intercepting[unit.id]
+    return chase ~= nil and me.tick - chase < 30 * 8
+end
+
 function army.step()
     util.guard("guns", aim_guns)
     util.guard("air repair", send_aircraft_to_pads)
@@ -526,8 +687,10 @@ function army.step()
         end
     end
     util.guard("mending", keep_mending)
+    util.guard("careful", aim_careful)
+    util.guard("air cover", air_cover, soldiers())
     for _, unit in ipairs(soldiers()) do
-        if army.mending[unit.id] or army.air_mending[unit.id] then
+        if army.mending[unit.id] or army.air_mending[unit.id] or busy(unit) then
             -- Waiting at home for the builders, or on a repair pad.
         elseif army.attacking[unit.id] then
             attackers[#attackers + 1] = unit

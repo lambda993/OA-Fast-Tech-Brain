@@ -185,7 +185,11 @@ to a fraction: from tier 2 the brain measures metal by its peak income,
 fading slowly, not by what comes in that second, and builds power, not
 extractors, while the energy spent (averaged over about twenty seconds)
 passes the income and the store is below half. Large plants are preferred to many small ones, geothermal plants go on vents, and metal
-makers switch off when the metal store is nearly full.
+makers switch off when the metal store is nearly full. Fusion and
+geothermal plants build their own upgrade (armour, shield, weapon) once
+the income pays for it in about two minutes at half share, whenever the
+energy store holds more than 15 % (they used to wait for both stores to
+be 40 % full and a geothermal plant went half an hour without one).
 
 **Water.** With open water by the base the builders also use the
 water-only buildings of their lists: tidal, floating and underwater power
@@ -210,16 +214,17 @@ about two minutes, metal and energy both, plus a third of the stores;
 with nothing that cheap it builds the cheapest units it offers. The tier
 weights below then choose among them.
 
-**Lower tiers wind down.** A factory at the top tier builds freely, one tier
-below builds 40 % of its turns, two tiers below 10 %, and tier 1 builds 15 %
-once tier 2 is reached and nothing after that. While the next lab is going
-up the lower factories halve again. Inside a factory's list, tier 2 units
+**Lower tiers stop.** A factory at the top tier builds freely; factories
+below the top tier make no more combat units (builders still, when an
+ability is missing). Inside a factory's list, tier 2 units
 weigh eight times as much as tier 1, tier 3 fourteen times, tier 4
 twenty-two and tier 5 thirty-four.
 
-**Old labs.** Factories two tiers behind the top, and tier-1 factories once
-tier 3 is reached, are reclaimed. When a large lab finds no room twice, the
-lowest factory near the base is reclaimed to make room. A factory that fits
+**Old labs.** Old factories are not reclaimed for being old: they stop
+making units (above). When a large lab finds no room twice, the lowest
+factory near the base is reclaimed to make room, but only one whose
+footprint is at least six tenths of the lab's (an 8×6 plant gone leaves
+no room for an 18×18 lab). A factory that fits
 neither the grid nor a spot near the base is searched for on all explored
 ground in rings out to about 1 500 units, once a minute; between searches
 the builder walks to unexplored ground nearby. After three searches that
@@ -228,6 +233,20 @@ minutes and the race takes another line (rough or island maps, where the
 tier-3 labs of 18×18 cells fit nowhere). A lab ordered six times
 without its frame ever rising (a site no builder gets to) is set aside the
 same way (`<lab> ordered 6 times, never begun`).
+
+**Features in the way.** Trees and rocks are not in the API, but
+`map:passable` reads blocking features: a cell blocked for the smallest
+kbot class, on land above the sea and outside own buildings, most likely
+holds one. Reclaiming a point takes only the feature on that very cell
+and fails at once on an empty one, so a builder is given every cell of
+each blocked probe tile, up to 120, then the build. A lab that finds no
+room is given ground cleared this way: spots in rings 240-720 units round
+the base whose footprint (and a factory's exit lanes) holds nothing but
+features, the fewest first (`clearing ground for <lab> at x,z (n
+cells)`); a deposit covered by features is cleared and its extractor
+queued (`clearing deposit at x,z`). A builder clearing ground is left to
+it up to three minutes. A tile still blocked after two clearings is
+taken for a slope or an unreclaimable feature and avoided.
 
 **Scouting.** With no full awareness the brain builds the best radar its
 builders offer (in Escalation's AI table that starts at tier 2–3), sends one early
@@ -252,7 +271,13 @@ units with shorter weapons.
 `CTRL_U`, with sniping torpedoes: Piranha, Shark) shoot submarines,
 commanders and decoys before anything else. Each unit shoots what its weapons can hit: only anti-air
 weapons fire at aircraft, so the rest ignore them, and pure anti-air
-units ignore the ground. Commanders and decoys come first, then tier 4
+units ignore the ground. Paralyzers (first weapon a paralyzer: Spider,
+Medusa, Warden, Mirage, Scorpion) ignore units immune to paralysis
+(`immunetoparalyzer`) and aircraft. Bastion (Core's hardened battery)
+never fires at aircraft nor at a target with an own or allied ground unit
+within its weapon's blast (352). Both hold fire and are given their
+targets by the brain (a unit on hold fire picks nothing itself but
+obeys an attack order). Fighters go for aircraft first. Commanders and decoys come first, then tier 4
 and 5, tier 3, anti-air, the economy and the rest; bombers go for
 anti-air before anything else, and look further for it. Aircraft
 attacking a base pull back to the front of their own base when the
@@ -260,6 +285,31 @@ anti-air around them outweighs half their number (tiers counted), and
 sit out the next minute; bombers stay. While the seat has strike
 aircraft (scouts do not count), its long-range guns fire at anti-air in
 range first, seen or remembered.
+
+**Air raids.** Four or more enemy aircraft that hit the ground, within
+600 units of each other and of own or allied ground units, are a swarm.
+Own ground units without anti-air near one fall back to the nearest
+anti-air (mobile or a tower, own or allied) within 2 000 units for ten
+seconds, and every fighter of the seat goes for the raiders (`air raid
+(n raiders): a units to anti-air, b fighters sent`). Factories keep at
+least three mobile anti-air units in the army, one more for every ten
+other ground units, so every group that leaves has some.
+
+**Orders and speed.** An attack order is given again only for a new
+target, when the unit dropped the old one, or after twelve seconds (each
+order sends the unit to the path search). Targets are picked from a grid
+of the enemies in sight built once a tick, and the seat's own units are
+listed once a tick: a 30-minute match of two Fast Tech seats on Core
+Prime ran in 193 s instead of 251 s.
+
+**Shields and charge fields.** From tier 3, beside each heavy reactor
+(tier-3 power: Heavy Fusion, Anti-Matter) and long-range gun, builders
+put a shield generator (Aegis, Corona) and a charge field emitter
+(Obelisk, Monolith) within 350 units, when the spare energy income is
+half again what it burns (a shield takes 8 000 a second) and the income
+pays for it in three minutes (`booster: <name> beside <building>`).
+They do not switch on when built: they are on while the energy store
+holds a fifth, off below a twentieth.
 
 **Long-range artillery.** From tier 2 the builders put up long-range
 guns toward the enemy: one at tier 2, three at tier 3, five at tier 4,
@@ -275,7 +325,8 @@ home army goes to help, at most every two minutes, unless the seat's own
 base is under heavy attack (five armed enemies near it).
 
 **Aircraft repair.** Once the seat flies four attacking aircraft its
-builders put up a repair pad, one for every four up to ten (a pad mends
+builders put up a repair pad, one for every four up to ten, right after
+the anti-air in their order while pads are short (a pad mends
 one aircraft at a time); with twelve or more the factories also make
 carriers (mobile pads that can reach the enemy), one for every sixteen.
 An aircraft below half health is sent on a patrol to the nearest pad: a
@@ -288,6 +339,8 @@ more extractors and power, and keeps to the base; it walks out only to see
 deposits within 800 units. Nothing it is told to build, help or guard may
 lie more than 900 units from the base: such an order is dropped and that
 task rests for twenty seconds (`leash: commander <task> at x,z dropped`).
+With metal piling up it adds a factory before guarding one (it used to
+stand guard at the tier-1 lab).
 Its wide search for a lab site keeps to sites within 900 units and runs
 on its own clock, so a search of its never holds the other builders off
 (on Ring Atoll a Shipyard was ordered thirteen times by the commander,

@@ -316,14 +316,17 @@ function tech.could_scout(unit, entry)
 end
 
 -- The lowest, nearest factory below the top tier: room for a large lab.
+-- Only one whose ground is a good part of the lab's: an 8x6 plant gone
+-- leaves no room for an 18x18 lab (it was reclaimed for nothing).
 function tech.make_room()
     local base = world.base or world.start
     local best, best_key
+    local wanted = tech.goal ~= nil and tech.goal.footprint or 0
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
         local entry = catalog.of(unit)
         local tier = catalog.factory_tier(entry)
         if unit ~= tech.scout_lab and tier < world.tier and tech.reclaiming[unit.id] == nil
-            and not tech.leads_on(entry) then
+            and not tech.leads_on(entry) and entry.footprint >= wanted * 0.6 then
             local at = util.pos(unit)
             local key = tier * 100000 + (at and util.dist(at, base) or 0)
             if best_key == nil or key < best_key then
@@ -341,11 +344,8 @@ function tech.reclaim_target()
             tech.reclaiming[id] = nil
         end
     end
-    for _, unit in ipairs(tech.obsolete()) do
-        if tech.reclaiming[unit.id] == nil then
-            return unit
-        end
-    end
+    -- Old factories are no longer reclaimed for being old (the user's
+    -- rule): they stop making units and are reclaimed only for room.
     if tech.no_room >= 2 then
         local unit = tech.make_room()
         if unit ~= nil then

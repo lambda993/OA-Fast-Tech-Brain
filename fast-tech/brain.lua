@@ -91,6 +91,7 @@ local function think()
     if second % 2 == 0 then
         util.guard("factories", factories.step)
         util.guard("makers", require("economy").toggle_makers)
+        util.guard("boosters", require("economy").toggle_boosters)
     end
     if second % 3 == 0 then
         util.guard("army", army.step)

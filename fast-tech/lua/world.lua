@@ -64,20 +64,41 @@ function world.located()
     return world.start ~= nil
 end
 
--- Units of the seat that `test(unit, entry)` accepts.
-function world.select(test)
+-- The seat's live units with their entries, sorted by id, built once a
+-- tick: world.select is called dozens of times a turn (placement checks
+-- run it per candidate site) and used to walk and sort every unit each
+-- time.
+local own_tick, own_list = -1, {}
+
+local function own_units()
+    if own_tick == me.tick then
+        return own_list
+    end
     local found = {}
     for id, unit in pairs(world.own) do
         if not util.alive(unit) then
             world.own[id] = nil
         else
             local entry = catalog.of(unit)
-            if entry ~= nil and test(unit, entry) then
-                found[#found + 1] = unit
+            if entry ~= nil then
+                found[#found + 1] = {unit = unit, entry = entry}
             end
         end
     end
-    table.sort(found, function(a, b) return a.id < b.id end)
+    table.sort(found, function(a, b) return a.unit.id < b.unit.id end)
+    own_tick, own_list = me.tick, found
+    return found
+end
+
+-- Units of the seat that `test(unit, entry)` accepts.
+function world.select(test)
+    local found = {}
+    for _, row in ipairs(own_units()) do
+        local unit = row.unit
+        if unit.alive == true and test(unit, row.entry) then
+            found[#found + 1] = unit
+        end
+    end
     return found
 end
 
@@ -260,9 +281,18 @@ end
 
 -- Whether `shooter` (a catalog entry, or nil for any) can fire at `target`:
 -- only anti-air weapons hit aircraft, and only other weapons hit the rest.
+-- Paralyzers skip units immune to them; Bastion never fires at aircraft.
 function world.can_hit(shooter, target)
     if shooter == nil or target == nil then
         return true
+    end
+    -- (Aircraft only for paralyzers without anti-air: none in Escalation
+    -- has any, Mirage and Scorpion included.)
+    if shooter.paralyzer and (target.immune or (target.air and not shooter.anti_air)) then
+        return false
+    end
+    if shooter.blast ~= nil and shooter.blast > 0 and target.air then
+        return false
     end
     if target.air then
         return shooter.anti_air == true
@@ -270,17 +300,150 @@ function world.can_hit(shooter, target)
     return shooter.hits_ground == true
 end
 
+-- Enemies and friends in sight, as records {unit, x, z, entry} in a grid
+-- of 512-unit squares, built once a tick. Every unit of the army asks for
+-- a target; reading positions (f32 values) and entries for every enemy
+-- for every shooter cost tens of thousands of calls a step in big fights.
+local grid_size = 512
+local index_tick = -1
+local enemy_rows, enemy_cells = {}, {}
+local friend_tick = -1
+local friend_cells = {}
+
+local function cell_key(x, z)
+    return (x // grid_size) * 65536 + (z // grid_size)
+end
+
+local function add_row(cells, row)
+    local key = cell_key(row.x, row.z)
+    local list = cells[key]
+    if list == nil then
+        list = {}
+        cells[key] = list
+    end
+    list[#list + 1] = row
+end
+
+function world.enemy_rows()
+    if index_tick == me.tick then
+        return enemy_rows
+    end
+    enemy_rows, enemy_cells = {}, {}
+    for _, enemy in ipairs(world.visible_enemies()) do
+        local at = util.pos(enemy)
+        local entry = catalog.of(enemy)
+        if at ~= nil then
+            local row = {unit = enemy, x = at.x, z = at.z, entry = entry}
+            enemy_rows[#enemy_rows + 1] = row
+            add_row(enemy_cells, row)
+        end
+    end
+    index_tick = me.tick
+    return enemy_rows
+end
+
+-- Calls fn(row) for every record of `cells` in the squares within `reach`
+-- of `from`, until fn returns true.
+local function each_near(cells, from, reach, fn)
+    local x0, x1 = (from.x - reach) // grid_size, (from.x + reach) // grid_size
+    local z0, z1 = (from.z - reach) // grid_size, (from.z + reach) // grid_size
+    for gx = x0, x1 do
+        for gz = z0, z1 do
+            local list = cells[gx * 65536 + gz]
+            if list ~= nil then
+                for index = 1, #list do
+                    if fn(list[index]) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Enemies within `reach` of `from`, as records.
+function world.enemies_near(from, reach)
+    world.enemy_rows()
+    local found = {}
+    local limit = reach * reach
+    each_near(enemy_cells, from, reach, function(row)
+        local dx, dz = row.x - from.x, row.z - from.z
+        if dx * dx + dz * dz <= limit then
+            found[#found + 1] = row
+        end
+    end)
+    return found
+end
+
+-- Own and allied units, built once a tick when asked.
+local function friend_index()
+    if friend_tick == me.tick then
+        return friend_cells
+    end
+    friend_cells = {}
+    for _, row in ipairs(own_units()) do
+        local at = util.pos(row.unit)
+        if at ~= nil then
+            add_row(friend_cells, {unit = row.unit, x = at.x, z = at.z, entry = row.entry})
+        end
+    end
+    local seen = me.seen
+    if type(seen) == "table" then
+        for index = 1, #seen do
+            local unit = seen[index]
+            local owner = unit ~= nil and unit.owner
+            if owner ~= nil and owner ~= me.player and me:allied(owner) == true and util.alive(unit) then
+                local at = util.pos(unit)
+                if at ~= nil then
+                    add_row(friend_cells, {unit = unit, x = at.x, z = at.z, entry = catalog.of(unit), ally = true})
+                end
+            end
+        end
+    end
+    friend_tick = me.tick
+    return friend_cells
+end
+
+-- Whether an own or allied unit (aircraft aside: they fly over the blast)
+-- stands within `radius` of `point`.
+function world.friends_near(point, radius)
+    local limit = radius * radius
+    return each_near(friend_index(), point, radius, function(row)
+        if row.entry ~= nil and row.entry.air then
+            return false
+        end
+        local dx, dz = row.x - point.x, row.z - point.z
+        return dx * dx + dz * dz <= limit
+    end)
+end
+
+-- Own and allied ground units within `reach` of `from`, as records.
+function world.friends_in(from, reach)
+    local found = {}
+    local limit = reach * reach
+    each_near(friend_index(), from, reach, function(row)
+        local dx, dz = row.x - from.x, row.z - from.z
+        if dx * dx + dz * dz <= limit then
+            found[#found + 1] = row
+        end
+    end)
+    return found
+end
+
 -- The visible enemy to shoot from `from` within `reach`: the highest
 -- priority, the nearest among equals. A commander is chased twice as far,
 -- so everything near one turns on it. With `shooter` (the catalog entry of
 -- the unit that fires) only what it can hit counts, and a bomber goes for
--- anti-air first.
+-- anti-air first (mobile anti-air too). Bastion leaves out targets with an
+-- own or allied unit within its blast.
 function world.best_target(from, reach, shooter)
+    world.enemy_rows()
     local best, best_key
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local at = util.pos(enemy)
-        local entry = catalog.of(enemy)
-        if at ~= nil and world.can_hit(shooter, entry) then
+    local blast = shooter ~= nil and shooter.blast or 0
+    each_near(enemy_cells, from, reach * 2, function(row)
+        local entry = row.entry
+        if world.can_hit(shooter, entry) then
             local priority = world.priority(entry)
             if shooter ~= nil and shooter.bomber and world.anti_air(entry) then
                 priority = 7
@@ -291,16 +454,22 @@ function world.best_target(from, reach, shooter)
                 and (entry.sub or entry.commander or entry.decoy) then
                 priority = 8
             end
+            -- Fighters go for aircraft first.
+            if shooter ~= nil and shooter.fighter and entry ~= nil and entry.air then
+                priority = 8
+            end
             local limit = priority == world.commander_priority and reach * 2 or reach
-            local d = util.dist(from, at)
-            if d <= limit then
-                local key = priority * 100000 - d
-                if best_key == nil or key > best_key then
-                    best, best_key = enemy, key
+            local dx, dz = row.x - from.x, row.z - from.z
+            local d2 = dx * dx + dz * dz
+            if d2 <= limit * limit then
+                local key = priority * 100000 - math.sqrt(d2)
+                if (best_key == nil or key > best_key)
+                    and (blast <= 0 or not world.friends_near(row, blast)) then
+                    best, best_key = row.unit, key
                 end
             end
         end
-    end
+    end)
     return best
 end
 

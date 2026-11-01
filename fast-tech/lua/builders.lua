@@ -295,6 +295,189 @@ end
 builders.crowds_factory = crowds_factory
 city.exit_blocked = exit_blocked
 
+-- Features (trees, rocks) that block building. Their positions are not in
+-- the API, but map:passable reads blocking features: a cell blocked for
+-- the smallest kbot class, on land above the sea and outside own
+-- buildings, most likely holds one. Reclaiming a point takes only a
+-- feature on that very cell and fails at once on an empty one, so every
+-- cell of a blocked probe tile is queued. On Steel Jungle (a map of
+-- trees) one seat never put down an extractor in 52 minutes and labs of
+-- every size found no site.
+local probe_class, probe_size = nil, nil
+
+local function probe()
+    if probe_class ~= nil then
+        return probe_class, probe_size
+    end
+    local best, best_size = false, nil
+    for index = 1, #units do
+        local entry = catalog.types[index]
+        local class = entry ~= nil and entry.record.movementclass
+        if entry ~= nil and entry.mobile and not entry.air and type(class) == "string"
+            and string.sub(string.upper(class), 1, 4) == "KBOT" then
+            local size = math.max(1, util.whole(entry.record.footprintx), util.whole(entry.record.footprintz))
+            if best_size == nil or size < best_size then
+                best, best_size = class, size
+            end
+        end
+    end
+    probe_class, probe_size = best, best_size or 2
+    return probe_class, probe_size
+end
+
+-- Own building rectangles (cells), for the feature test.
+local function building_rects()
+    local rects = {}
+    for _, other in ipairs(world.select(function(_, e) return e.structure end)) do
+        local at = util.pos(other)
+        local kind = catalog.of(other)
+        if at ~= nil then
+            local w, d = util.whole(kind.record.footprintx), util.whole(kind.record.footprintz)
+            local cx, cz = at.x // 16, at.z // 16
+            rects[#rects + 1] = {x0 = cx - w // 2 - 1, z0 = cz - d // 2 - 1, x1 = cx + w // 2 + 1, z1 = cz + d // 2 + 1}
+        end
+    end
+    return rects
+end
+
+local function in_rects(cx, cz, rects)
+    for _, r in ipairs(rects) do
+        if cx >= r.x0 and cx <= r.x1 and cz >= r.z0 and cz <= r.z1 then
+            return true
+        end
+    end
+    return false
+end
+
+-- The cells of the rectangle (cells x0..x1, z0..z1) that likely hold a
+-- feature, and whether some cell is blocked by something no reclaim
+-- clears (sea, an own building). Probe tiles of the class's footprint.
+local function feature_cells(x0, z0, x1, z1, rects)
+    local class, size = probe()
+    local cells, hard = {}, false
+    if not class then
+        return cells, true
+    end
+    local map = game.map
+    local sea = util.num(map.sea_level)
+    rects = rects or building_rects()
+    for tz = z0, z1, size do
+        for tx = x0, x1, size do
+            local ok, value = pcall(function() return map:passable(class, tx, tz) end)
+            if ok and value == 0 then
+                local okg, ground = pcall(function() return map:ground(tx * 16 + 8, tz * 16 + 8) end)
+                if not okg or ground == nil or util.num(ground) < sea then
+                    hard = true
+                elseif in_rects(tx, tz, rects) or (builders.tried[tx * 65536 + tz] or 0) >= 2 then
+                    -- An own building, or blocked after two clearings: a
+                    -- slope or a feature no one can reclaim.
+                    hard = true
+                else
+                    for dz = 0, size - 1 do
+                        for dx = 0, size - 1 do
+                            cells[#cells + 1] = {x = (tx + dx) * 16 + 8, z = (tz + dz) * 16 + 8, key = tx * 65536 + tz}
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return cells, hard
+end
+
+-- Queues reclaims on `cells` (at most `limit`), nearest first, and then,
+-- when given, the build. Returns whether anything was ordered.
+local clear_limit = 120
+
+local function clear_cells(unit, cells, build)
+    if #cells == 0 then
+        return false
+    end
+    local at = util.pos(unit) or cells[1]
+    table.sort(cells, function(a, b) return util.dist2(a, at) < util.dist2(b, at) end)
+    local queued = false
+    local counted = {}
+    for index = 1, math.min(clear_limit, #cells) do
+        local cell = cells[index]
+        if unit:reclaim({x = cell.x, z = cell.z}, queued) then
+            queued = true
+        end
+        if cell.key ~= nil and not counted[cell.key] then
+            counted[cell.key] = true
+            builders.tried[cell.key] = (builders.tried[cell.key] or 0) + 1
+        end
+    end
+    if queued and build ~= nil then
+        unit:build(build.entry.record, {x = build.x, z = build.z}, build.facing or 0, true)
+    end
+    if queued then
+        builders.sweeping[unit.id] = me.tick
+    end
+    return queued
+end
+
+builders.clearing = {} -- factory index -> tick its ground was last cleared
+builders.sweeping = {} -- builder id -> tick it was sent to clear ground
+builders.tried = {}    -- cell key -> clearing attempts that left it blocked
+
+-- Ground for `entry` (a lab that fits nowhere) cleared of features: spots
+-- in rings round the base, the footprint and a margin (and a factory's
+-- exit lanes) with nothing but features in the way, the fewest first.
+local function clear_for(unit, entry, centre)
+    local last = builders.clearing[entry.index]
+    if last ~= nil and me.tick - last < 30 * 45 then
+        return false
+    end
+    builders.clearing[entry.index] = me.tick
+    local rects = building_rects()
+    local w, d = util.whole(entry.record.footprintx), util.whole(entry.record.footprintz)
+    local lane = entry.factory and 4 or 1
+    local best, best_cells
+    for _, ring in ipairs({{240, 6}, {480, 8}, {720, 10}}) do
+        for step = 0, ring[2] - 1 do
+            local near = util.clamp(util.around(centre, (step + 0.5 * (ring[1] // 240)) / ring[2], ring[1]), 160)
+            if util.explored(near) and not city.on_street(entry, near.x, near.z) then
+                local cx, cz = near.x // 16, near.z // 16
+                local x0, x1 = cx - w // 2 - 1, cx + (w + 1) // 2
+                local z0, z1 = cz - d // 2 - lane, cz + (d + 1) // 2 + lane - 1
+                local cells, hard = feature_cells(x0, z0, x1, z1, rects)
+                if not hard and #cells > 0 and (best_cells == nil or #cells < #best_cells)
+                    and util.reachable(unit, near) then
+                    best, best_cells = {x = cx * 16 + (w % 2) * 8, z = cz * 16 + (d % 2) * 8}, cells
+                end
+            end
+        end
+        if best ~= nil then
+            break
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if clear_cells(unit, best_cells, {entry = entry, x = best.x, z = best.z, facing = 0}) then
+        print(string.format("clearing ground for %s at %d,%d (%d cells)", entry.name, best.x, best.z, #best_cells))
+        return true
+    end
+    return false
+end
+
+-- A deposit under features: the cells round it are reclaimed and the
+-- extractor queued after.
+local function clear_deposit(unit, extractor, spot)
+    local w = util.whole(extractor.record.footprintx)
+    local cx, cz = spot.x // 16, spot.z // 16
+    local cells, hard = feature_cells(cx - w, cz - w, cx + w, cz + w)
+    if hard or #cells == 0 then
+        return false
+    end
+    local site = {x = (cx - w // 2) * 16 + w * 8, z = (cz - w // 2) * 16 + w * 8}
+    if clear_cells(unit, cells, {entry = extractor, x = site.x, z = site.z}) then
+        print(string.format("clearing deposit at %d,%d (%d cells)", spot.x, spot.z, #cells))
+        return true
+    end
+    return false
+end
+
 -- Puts `entry` down near `near`, searching `radius` world units. When
 -- `walk` is set and the ground is unexplored, the builder walks there.
 local function place(unit, entry, near, radius, walk)
@@ -514,6 +697,13 @@ local function try_goal(unit, entry)
         return true
     end
     tech.no_room = tech.no_room + 1
+    -- No room on explored ground: features in the way are cleared first.
+    if tech.no_room >= 1 and not goal.water_only and clear_for(unit, goal, base()) then
+        mark("goal")
+        tech.started = me.tick
+        tech.orders = (tech.orders or 0) + 1
+        return true
+    end
     if nowhere then
         tech.no_site(goal)
     end
@@ -603,6 +793,13 @@ local function try_extractor(unit, entry, reach)
                     site = false
                 end
                 if site and unit:build(extractor.record, site, 0) then
+                    economy.claim(spot)
+                    return true
+                end
+                -- Trees or rocks on the deposit: cleared, then built.
+                -- (No reach test: the deposit cell itself is blocked by them,
+                -- and a reclaim works from a distance.)
+                if site == nil and clear_deposit(unit, extractor, spot) then
                     economy.claim(spot)
                     return true
                 end
@@ -1352,6 +1549,56 @@ local function try_artillery(unit, entry)
     return false
 end
 
+-- Shield generators (Aegis, Corona) and charge fields (Obelisk, Monolith)
+-- beside what matters most: the heavy reactors (tier 3 and up, Heavy
+-- Fusion, Anti-Matter) and the long-range guns. Each such building wants
+-- one of each kind within 350 units. A shield burns 8 000 energy a second:
+-- it goes up only with that much spare income and more. Put down where
+-- brain.place first finds room from the building outward: beside it.
+local booster_reach = 350
+
+local function important(e)
+    return e.artillery or (e.power and e.tier >= 3)
+end
+
+local function try_booster(unit, entry)
+    if world.tier < 3 or recently("booster", 40) then
+        return false
+    end
+    local options = catalog.buildable(entry, function(o) return o.booster end)
+    if #options == 0 then
+        return false
+    end
+    local e = economy.now or economy.read()
+    local spare = e.energy_income - e.energy_demand
+    local boosters = world.select(function(_, k) return k.booster end)
+    for _, guarded in ipairs(world.select(function(u, k) return important(k) and world.finished(u) end)) do
+        local at = util.pos(guarded)
+        if at ~= nil then
+            for _, option in ipairs(options) do
+                local covered = false
+                for _, other in ipairs(boosters) do
+                    local there = util.pos(other)
+                    local kind = catalog.of(other)
+                    if there ~= nil and kind.shield == option.shield and util.dist(there, at) <= booster_reach then
+                        covered = true
+                        break
+                    end
+                end
+                local use = util.num(option.record.energyuse)
+                if not covered and spare >= use * 1.5 and economy.affords(option, 180) then
+                    if place(unit, option, at, 240, false) then
+                        mark("booster")
+                        print(string.format("booster: %s beside %s", option.name, catalog.of(guarded).name))
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Repair pads once the seat flies enough aircraft: one for every four
 -- attacking aircraft, up to ten, carriers counted (a pad mends one
 -- aircraft at a time). The army sends aircraft below half health to them.
@@ -1441,12 +1688,9 @@ local function try_salvage(unit, entry)
     if at == nil or home == nil then
         return false
     end
-    local enemies = world.visible_enemies()
     local function safe(spot)
-        for _, enemy in ipairs(enemies) do
-            local where = util.pos(enemy)
-            local kind = catalog.of(enemy)
-            if where ~= nil and kind ~= nil and kind.combat and util.dist2(where, spot) < 700 * 700 then
+        for _, row in ipairs(world.enemies_near(spot, 700)) do
+            if row.entry ~= nil and row.entry.combat then
                 return false
             end
         end
@@ -1664,10 +1908,10 @@ local function danger(unit, entry, ignore_air)
     end
     local t1, t2, heavy, air = 0, 0, 0, 0
     local sum_x, sum_z, count = 0, 0, 0
-    for _, enemy in ipairs(world.visible_enemies()) do
-        local where = util.pos(enemy)
-        local kind = catalog.of(enemy)
-        if where ~= nil and kind ~= nil and (kind.combat or kind.commander or kind.decoy) then
+    for _, row in ipairs(world.enemies_near(at, commander_radius)) do
+        local where = row
+        local kind = row.entry
+        if kind ~= nil and (kind.combat or kind.commander or kind.decoy) then
             local d = util.dist(at, where)
             local counted = false
             -- Aircraft it cannot shoot count only once they hit it; decoys
@@ -1898,13 +2142,12 @@ local function builder_threat(unit, entry)
         end
         -- Hit by something unseen: the nearest armed enemy in sight.
         local best, best_d
-        for _, enemy in ipairs(world.visible_enemies()) do
-            local kind = catalog.of(enemy)
-            local where = util.pos(enemy)
-            if at ~= nil and kind ~= nil and where ~= nil and kind.combat then
-                local d = util.dist(at, where)
-                if d < 1000 and (best_d == nil or d < best_d) then
-                    best, best_d = where, d
+        for _, row in ipairs(at ~= nil and world.enemies_near(at, 1000) or {}) do
+            local kind = row.entry
+            if kind ~= nil and kind.combat then
+                local d = util.dist(at, row)
+                if best_d == nil or d < best_d then
+                    best, best_d = {x = row.x, z = row.z}, d
                 end
             end
         end
@@ -2082,7 +2325,11 @@ local function commander_turn(unit, entry)
     -- so the commander lends its own before anything else.
     local e = economy.now
     if world.tier >= 1 and e.metal_share > 0.7 and e.energy_share > 0.3 then
-        if leashed("goal", unit, try_goal, entry) or leashed("help frame", unit, try_help_frame) or leashed("assist", unit, try_assist, 800) or leashed("help", unit, try_help, 900) then
+        -- Another factory before guarding one: the commander used to stand
+        -- guard at the tier-1 lab with metal piling up (user's game).
+        if leashed("goal", unit, try_goal, entry) or leashed("help frame", unit, try_help_frame)
+            or leashed("factory", unit, try_more_factories, entry)
+            or leashed("assist", unit, try_assist, 800) or leashed("help", unit, try_help, 900) then
             return true
         end
     end
@@ -2102,6 +2349,9 @@ local function commander_turn(unit, entry)
         return true
     end
     if leashed("storage", unit, try_storage, entry) then
+        return true
+    end
+    if leashed("factory", unit, try_more_factories, entry) then
         return true
     end
     -- Nothing of its own to build: help what goes up at the base, then
@@ -2168,6 +2418,26 @@ local function builder_turn(unit, entry)
         table.insert(order, at, "anti-air")
         table.insert(order, 2, "shot-storage")
     end
+    -- From tier 3, shields and charge fields beside the reactors and guns.
+    if not starving and world.tier >= 3 then
+        for index, name in ipairs(order) do
+            if name == "artillery" then
+                table.insert(order, index + 1, "booster")
+                break
+            end
+        end
+    end
+    -- Repair pads were a spare-time task and came late or never with a
+    -- big air force (user's game): with fewer pads than the fleet wants,
+    -- they come right after the anti-air.
+    if not starving and count_of(function(_, e) return e.air_base end) < builders.air_bases_wanted() then
+        for index, name in ipairs(order) do
+            if name == "anti-air" then
+                table.insert(order, index + 1, "air-base")
+                break
+            end
+        end
+    end
     -- From tier 3 the commander upgrade building comes right after the lab.
     if not starving then
         for index, name in ipairs(order) do
@@ -2188,6 +2458,8 @@ local function builder_turn(unit, entry)
         goal = try_goal,
         resume = function(u) return try_resume(u) end,
         door = try_clear_door,
+        ["air-base"] = try_air_base,
+        booster = try_booster,
         defence = try_defence,
         economy = function(u, e) return try_economy(u, e, false) end,
     }
@@ -2250,6 +2522,17 @@ local function ready(unit)
         else
             return false
         end
+    end
+    -- Clearing ground (a queue of reclaims, then the build): left to it
+    -- for up to three minutes while it works. Parked builders were given
+    -- new work after fifteen seconds and the lab site was never cleared.
+    local sweep = builders.sweeping[unit.id]
+    if sweep ~= nil then
+        if me.tick - sweep < 30 * 180 and not util.free(unit) then
+            return false
+        end
+        builders.sweeping[unit.id] = nil
+        return true
     end
     local parked = builders.parked[unit.id]
     if parked ~= nil then

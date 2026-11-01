@@ -172,6 +172,22 @@ local function classify(index, record, inferred_tier)
     -- anti-air weapons cannot, units without them cannot hit aircraft.
     entry.hits_ground = ground
     entry.bomber = entry.air and bomb
+    -- Paralyzers (Spider, Medusa, Warden, Mirage, Scorpion: the first
+    -- weapon stuns) waste their shots on units immune to them and cannot
+    -- touch aircraft. Units immune to paralyzers (`immunetoparalyzer`).
+    entry.immune = record.immunetoparalyzer == true or num(record.immunetoparalyzer) > 0
+    local first = record.weapon1
+    local first_weapon = type(first) == "string" and first ~= "" and weapons[first] or nil
+    entry.paralyzer = first_weapon ~= nil and flag(first_weapon.paralyzer)
+    -- Bastion (Core's hardened battery): its shells hit everything within
+    -- their blast, so it fires only where no own or allied unit stands
+    -- that close, and never at aircraft. It and the paralyzers hold fire
+    -- and are given their targets (`careful`).
+    entry.blast = 0
+    if unit_name == "CORSPUN" and first_weapon ~= nil then
+        entry.blast = math.max(1, num(first_weapon.areaofeffect))
+    end
+    entry.careful = entry.paralyzer or entry.blast > 0
     -- Repair pads, carriers: aircraft land on them to be repaired.
     entry.air_base = record.isairbase == true or num(record.isairbase) > 0
     -- The building that makes the commander tougher (Arm's Research
@@ -228,6 +244,21 @@ local function classify(index, record, inferred_tier)
     -- Not the stockpile weapons (nuke and tactical silos, anti-nukes):
     -- they shoot what they have built up, not plasma shells.
     entry.artillery = entry.defense and entry.range >= 3000 and not entry.stockpile
+    -- Tier-3 support buildings that guard others: shield generators (Arm
+    -- Aegis, Core Corona: less damage to buildings near them) and charge
+    -- field emitters (Obelisk, Monolith: boost energy defences and
+    -- resources near them). They go beside the reactors and the
+    -- long-range guns. A shield does not switch itself on when built.
+    entry.shield = entry.structure and not entry.armed and string.sub(unit_name, -5) == "SHGEN"
+    entry.field = entry.structure and not entry.armed and string.sub(unit_name, -5) == "FIELD"
+    entry.booster = entry.shield or entry.field
+    if entry.booster then
+        entry.power, entry.energy_storage, entry.metal_storage, entry.metal_maker = false, false, false, false
+    end
+    -- Mobile anti-air: armed for aircraft and not one itself.
+    entry.mobile_anti_air = entry.mobile and not entry.air and entry.anti_air and entry.armed
+    -- Fighters: aircraft armed for other aircraft, not bombers.
+    entry.fighter = entry.air and entry.anti_air and not entry.bomber and entry.armed
     if entry.upgrade then
         for _, role in ipairs({"factory", "mobile_builder", "scout", "combat", "defense", "radar_tower",
             "sonar_tower", "jammer",

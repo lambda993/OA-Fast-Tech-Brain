@@ -233,6 +233,25 @@ function economy.toggle_makers()
     end
 end
 
+-- Shield generators and charge fields do not switch themselves on when
+-- built. They are on while the energy store holds a fifth, off below a
+-- twentieth (a shield burns 8 000 energy a second).
+function economy.toggle_boosters()
+    local e = economy.now or economy.read()
+    local on = nil
+    if e.energy_share < 0.05 then
+        on = false
+    elseif e.energy_share > 0.2 then
+        on = true
+    end
+    if on == nil then
+        return
+    end
+    for _, unit in ipairs(world.select(function(u, entry) return entry.booster and world.finished(u) end)) do
+        unit:on(on)
+    end
+end
+
 economy.best_power = best_power
 
 function economy.best_geo(builder)
