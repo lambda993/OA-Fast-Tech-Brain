@@ -288,8 +288,44 @@ error is logged once and the seat keeps playing).
     anti-air in air raids, 3+ mobile anti-air per group; mobile anti-air
     a bomber target (already was); fighters intercept raiders on own and
     allied units.
+23. User's second Steel Jungle game (2v2, rich, 39 min): keep vents for
+    geothermal plants; armies idle at home 15 minutes; slowdowns in
+    fights; many more scouts, aimed at enemy starts; one seat stopped
+    making army; commander leash too tight, underwater deposits left
+    (decoys take them); radar/sonar spread apart; jammers never seen.
 
 ## State and open points
+
+- User's second Steel Jungle game (2026-11-01, 2v2 all Fast Tech, rich,
+  39 min). Findings and fixes:
+  - No wave before ~24 minutes: tier-2 mark 7 200 (9 000 × 0.8); only
+    rescues left home. Marks lowered (3 000/5 000/20 000/60 000/120 000)
+    and halved after 5 idle minutes with 8+ units. Tests: first waves
+    at 5-11 minutes.
+  - Seat 1 army flat 16-25 for 25 minutes: it reached tier 2 with one
+    Advanced Kbot Lab, and the previous round's rule (lower tiers make
+    nothing) idled its two Vehicle Plants; extra factories could also be
+    one tier down and then made nothing. Now lower tiers stop only with
+    2 top-tier combat factories; extra factories top tier only.
+  - Slowdowns: `air cover` re-moved up to 82 units every 3 s (one path
+    search each). Now a sheltering unit is not moved again for 15 s;
+    patrols (`army.patrolled`), fighter patrols and keep_range step-backs
+    are deduplicated like attacks.
+  - AI lists (probe of game.build_list): static jammers ARMJAMMER/
+    CORJAMMER only from ARMACH/CORACH (adv. construction hovercraft),
+    ARMSONJAM/CORSONJAM from ARMACSUB/CORACSUB; underwater extractors
+    ARMUWMEX/CORUWMEX from commanders, decoys (ARMDECOM/CORDECOM), CH,
+    CS, CSA; shields/charge fields only from ARMECV/CORECV (Exp.
+    Construction Vehicle, tier 4).
+  - Leash 1 400 (`builders.leash`), commander reach 1 400, walk 1 200;
+    decoys' first task is underwater deposits (`try_underwater`).
+  - `economy.on_vent` keeps everything but geothermal plants off vents
+    (crowds_factory and city.fits).
+  - Scouts: 3/6/10 by tier from any factory, scout lab 12; two in three
+    watch enemy starts (`terrain.targets`, `scouts.seen_start`).
+  - Radar/sonar placed at the explored point farthest from towers of
+    the same kind, never within half the range.
+  - Tests (10 matches): 9 of 9 wins vs built-in, no errors.
 
 - User's Steel Jungle game (2026-11-01, 4 seats all Fast Tech, rich,
   52 minutes, stopped): all seats stuck at tier 2, labs `no site` all

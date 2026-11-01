@@ -9,6 +9,7 @@
 local util = require("util")
 local world = require("world")
 local catalog = require("catalog")
+local terrain = require("terrain")
 
 local scouts = {
     heading = {}, -- scout id -> {x, z, tick}
@@ -27,13 +28,38 @@ local function cell_centre(index)
     }
 end
 
-local function taken(point)
+local function taken(point, most)
+    local count = 0
     for _, heading in pairs(scouts.heading) do
         if util.dist2(heading, point) < 400 * 400 then
-            return true
+            count = count + 1
         end
     end
-    return false
+    return count >= (most or 1)
+end
+
+-- The enemy starts (their own when the match tells them, else every
+-- start that is not the seat's), each watched again and again: up to two
+-- scouts head for each, the one seen longest ago first.
+scouts.seen_start = {} -- "x,z" -> tick a scout last had it in sight
+
+local function start_key(start)
+    return start.x .. "," .. start.z
+end
+
+local function enemy_start()
+    local best, best_tick
+    for _, start in ipairs(terrain.targets or {}) do
+        local key = start_key(start)
+        if me:sees(start.x, start.z) then
+            scouts.seen_start[key] = me.tick
+        end
+        local last = scouts.seen_start[key] or -1000000
+        if not taken(start, 2) and me.tick - last > 30 * 60 and (best_tick == nil or last < best_tick) then
+            best, best_tick = start, last
+        end
+    end
+    return best
 end
 
 local function reachable(unit, entry, point)
@@ -53,6 +79,13 @@ local function choose(unit, entry)
     local at = util.pos(unit)
     if at == nil then
         return nil
+    end
+    -- Two scouts in three watch the enemy starts; the rest explore.
+    if util.chance(0.67) or #world.unexplored_starts() > 0 then
+        local start = enemy_start()
+        if start ~= nil then
+            return start
+        end
     end
     for _, start in ipairs(world.unexplored_starts()) do
         if not taken(start) then

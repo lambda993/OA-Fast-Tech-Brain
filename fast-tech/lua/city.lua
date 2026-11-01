@@ -13,6 +13,7 @@
 -- Only extractors may stand on metal.
 
 local catalog = require("catalog")
+local economy = require("economy")
 local util = require("util")
 local world = require("world")
 
@@ -192,6 +193,10 @@ local function fits(entry, x, z, w, d, block, rects, budget, facing)
     end
     local centre = {x = x * cell + w * 8, z = z * cell + d * 8}
     if not util.explored(centre) then
+        return false
+    end
+    -- Geothermal vents are for geothermal plants.
+    if economy.on_vent(entry, centre.x, centre.z) then
         return false
     end
     if budget.left <= 0 then

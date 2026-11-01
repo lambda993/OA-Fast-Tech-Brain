@@ -115,7 +115,9 @@ factory, a minute apart (`clear door of ...`). Fusion reactors, energy storage, 
 forges or vaults gain from a neighbour of their kind, so they are put edge
 to edge with one, never only corner to corner; the families are a table in
 `lua/city.lua`, matched by name, because Escalation gives the bonus in unit
-scripts. No building but an extractor stands on metal. Radar and defences
+scripts. No building but an extractor stands on metal, and none but a
+geothermal plant on or within two cells of a geothermal vent (a lab on
+a vent once took a seat's geothermal plant away). Radar and defences
 take the blocks nearest the front. When the ground is too rough for the
 grid, a building goes anywhere near the base instead.
 
@@ -215,8 +217,10 @@ with nothing that cheap it builds the cheapest units it offers. The tier
 weights below then choose among them.
 
 **Lower tiers stop.** A factory at the top tier builds freely; factories
-below the top tier make no more combat units (builders still, when an
-ability is missing). Inside a factory's list, tier 2 units
+below it stop making combat units once the seat has two finished combat
+factories of the top tier (until then one tier below builds 60 % of its
+turns, two or more 30 %); builders still, when an ability is missing.
+Extra factories are of the top tier only. Inside a factory's list, tier 2 units
 weigh eight times as much as tier 1, tier 3 fourteen times, tier 4
 twenty-two and tier 5 thirty-four.
 
@@ -249,14 +253,32 @@ it up to three minutes. A tile still blocked after two clearings is
 taken for a slope or an unreclaimable feature and avoided.
 
 **Scouting.** With no full awareness the brain builds the best radar its
-builders offer (in Escalation's AI table that starts at tier 2–3), sends one early
-scout, and from tier 3 keeps a cheap tier-1 aircraft or vehicle factory as a
-scout lab that keeps up to eight scouts out. Each scout heads for an
-unexplored start position first, then for a grid cell the seat cannot see,
-unexplored ground first, and never where another scout is going.
+builders offer (in Escalation's AI table that starts at tier 2–3). Any
+factory that makes scouts adds them up to 3 at tier 1, 6 at tier 2 and 10
+from tier 3, and from tier 3 a cheap tier-1 aircraft or vehicle factory is
+kept as a scout lab with up to twelve out. Two scouts in three watch the
+enemy starts (their own when the match tells them, else every start not
+the seat's, read from the map): up to two head for each, the one seen
+longest ago first, each seen again at most once a minute. The rest go to
+unexplored starts, then to grid cells the seat cannot see, unexplored
+ground first, never where another scout is going.
+
+**Radar and sonar spread out.** The first tower faces the enemy (a sonar
+by the shore); each later one of the same kind goes to the explored
+point round the base (400 to 1 400 units out, on land for radar, on
+water for sonar) farthest from the towers of its kind, and never within
+half its range of one (`radar: <name> at x,z`). Static jammers (Veil,
+Shroud and their floating kin) are in the AI lists only of the advanced
+construction hovercraft and submarine: a seat that never makes those
+builders never builds a jammer.
 
 **Army.** Units gather in front of the base and leave in waves once their
-worth passes the tier's mark. Waves go for the nearest remembered enemy
+worth passes the tier's mark (3 000 metal to tier 1, 5 000 at tier 2,
+20 000 at tier 3, 60 000 at tier 4, 120 000 above; a fifth less below the
+hard difficulty), or half of it when no wave left for five minutes and
+eight units wait (armies of 20-30 units stood at home for the first
+fifteen minutes). Patrols, attacks and step-backs are not ordered again
+while the unit is still on the same one. Waves go for the nearest remembered enemy
 building, a recent contact, or a start position nobody has looked at. A
 small guard stays home, and when the base is hit, every factory builds and
 the home army answers. Torpedo-only units (torpedo bombers too) are built
@@ -336,8 +358,8 @@ from home never triggers).
 
 **Commander.** The commander opens with an extractor, the first lab, then
 more extractors and power, and keeps to the base; it walks out only to see
-deposits within 800 units. Nothing it is told to build, help or guard may
-lie more than 900 units from the base: such an order is dropped and that
+deposits within 1 200 units. Nothing it is told to build, help or guard may
+lie more than 1 400 units from the base (900 was too tight): such an order is dropped and that
 task rests for twenty seconds (`leash: commander <task> at x,z dropped`).
 With metal piling up it adds a factory before guarding one (it used to
 stand guard at the tier-1 lab).
@@ -386,7 +408,11 @@ they run from the same dangers (more than eight tier-1 or five tier-2
 enemies, any tier 3 or heavier) and from any enemy commander or decoy
 within 1 100 units, but aircraft never move them. A decoy on an emergency
 repair (the commander or a large building) never runs, and decoys are
-picked first for those repairs (`decoy flees from x,z`).
+picked first for those repairs (`decoy flees from x,z`). Decoys take the
+underwater deposits first (out to 4 000 units): land builders cannot
+build underwater extractors; the water builders (hovercraft, ships,
+seaplanes) take them right after their frames (`underwater extractor at
+x,z by <builder>`).
 
 **Builders in danger.** Builders run from the same dangers, and from
 anything that hits them (inside the base, within 800 units of its middle

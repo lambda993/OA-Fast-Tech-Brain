@@ -265,6 +265,38 @@ function economy.best_geo(builder)
     return best
 end
 
+local function load_geo()
+    if economy.geo == nil then
+        economy.geo = {}
+        local list = game.map:geo_spots()
+        if type(list) == "table" then
+            for _, spot in ipairs(list) do
+                economy.geo[#economy.geo + 1] = {x = util.whole(spot.cx) * 16 + 8, z = util.whole(spot.cz) * 16 + 8}
+            end
+        end
+    end
+    return economy.geo
+end
+
+-- Whether `entry` put down with its centre at x, z (world units) would
+-- cover a geothermal vent, or come within two cells of one. Vents are
+-- kept for geothermal plants, as deposits are for extractors (a lab on a
+-- vent took a seat's geothermal plant away; user's game).
+function economy.on_vent(entry, x, z)
+    if entry.geo then
+        return false
+    end
+    local hx = util.num(entry.record.footprintx) * 8 + 32
+    local hz = util.num(entry.record.footprintz) * 8 + 32
+    local h = math.max(hx, hz)
+    for _, spot in ipairs(load_geo()) do
+        if math.abs(spot.x - x) < h and math.abs(spot.z - z) < h then
+            return true
+        end
+    end
+    return false
+end
+
 -- Geothermal vents nobody of the seat covers yet, nearest the base first.
 function economy.free_geo(reach)
     if economy.geo == nil then

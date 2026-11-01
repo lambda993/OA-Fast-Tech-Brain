@@ -21,6 +21,7 @@ local builders = {
     parked = {},   -- builder id -> tick it was sent to patrol or assist
     wide_search = {},  -- factory index -> tick of the last search around the base
     wide_search_commander = {}, -- the same for the commander's own searches
+    leash = 1400,      -- how far from the base the commander may work
     wide_failed = {},  -- factory index -> searches in a row that found nothing
     released = {},     -- builder id -> tick it was last called back from helping
     upgrade_tried = {}, -- deposit and extractor type -> tick an upgrade was tried there
@@ -31,9 +32,9 @@ local builders = {
     salvaging = {}, -- builder id -> tick it was sent to reclaim a wreck
 }
 
-local commander_reach = 1000
+local commander_reach = 1400
 -- How far from the base the commander walks to see a deposit.
-local commander_walk = 800
+local commander_walk = 1200
 local radar_wanted = {[0] = 0, 1, 2, 3, 3, 3}
 local defence_wanted = {[0] = 0, 1, 2, 3, 4, 4}
 
@@ -124,7 +125,7 @@ local function scout_site(unit, spot)
     -- The commander keeps to the base: it walks out only a little way.
     if unit.type ~= nil and unit.type.commander == true then
         local home = world.base or world.start
-        if home == nil or util.dist(home, spot) > 900 then
+        if home == nil or util.dist(home, spot) > builders.leash then
             return false
         end
     end
@@ -257,6 +258,9 @@ local function exit_blocked(entry, x, z, facing)
 end
 
 local function crowds_factory(entry, x, z, facing)
+    if economy.on_vent(entry, x, z) then
+        return true
+    end
     local half = half_size(entry)
     facing = facing or 0
     local axis = facing % 2 == 0 and "z" or "x"
@@ -511,7 +515,7 @@ end
 local wide_rings = {{0, 1}, {480, 8}, {960, 12}, {1440, 16}}
 
 local function place_wide(unit, entry, centre)
-    -- The commander keeps to its leash: it takes only sites within 900 of
+    -- The commander keeps to its leash: it takes only sites within the leash of
     -- the base and keeps its own clock, so a search of its that found
     -- only far sites does not hold the other builders off for a minute
     -- (Ring Atoll: a Shipyard ordered 13 times, dropped by the leash
@@ -529,7 +533,7 @@ local function place_wide(unit, entry, centre)
     clock[entry.index] = me.tick
     local home = base()
     local function near_home(x, z)
-        return not commander or home == nil or util.dist(home, {x = x, z = z}) <= 900
+        return not commander or home == nil or util.dist(home, {x = x, z = z}) <= builders.leash
     end
     local unseen = nil
     for _, ring in ipairs(wide_rings) do
@@ -823,6 +827,34 @@ local function try_extractor(unit, entry, reach)
     return false
 end
 
+-- Underwater deposits: only the commander, the decoys and the water
+-- builders (hover, ships, seaplanes) can put extractors there, and the
+-- land builders cannot. Many were left free on Steel Jungle (user's
+-- game): the decoys take them first, out to 4 000 units, the water
+-- builders after their frames.
+local function try_underwater(unit, entry)
+    if terrain.water_share <= 0 or recently("underwater " .. unit.id, 20) then
+        return false
+    end
+    local wet = economy.best_extractor(entry, true)
+    if wet == nil or not wet.water_only then
+        return false
+    end
+    for _, spot in ipairs(economy.free_spots(4000, unit.id)) do
+        if terrain.under_water(spot) and util.explored(spot) then
+            local site = extractor_site(wet, spot)
+            if site ~= nil and util.reachable(unit, site) and unit:build(wet.record, site, 0) then
+                economy.claim(spot)
+                mark("underwater " .. unit.id)
+                print(string.format("underwater extractor at %d,%d by %s", spot.x, spot.z, entry.name))
+                return true
+            end
+            economy.claim(spot)
+        end
+    end
+    return false
+end
+
 -- Replaces a lower-tier extractor with the best one this builder can make:
 -- reclaim the old one, then build the new one on the same spot. The
 -- nearest to the base go first, one builder per extractor.
@@ -1003,15 +1035,52 @@ local function try_radar(unit, entry)
     if best == nil then
         return false
     end
-    -- The first radar faces the enemy, later ones spread round the base.
-    local near
-    if have == 0 then
-        near = world.front(450)
-    else
-        near = util.clamp(util.around(base(), brain.random(1000) / 1000, 550), 96)
+    -- Towers of a kind stand far apart, or their circles overlap and the
+    -- second adds little (user's game: radar and sonar side by side).
+    -- The first faces the enemy; each later one goes to the explored
+    -- point round the base, 400 to 1 400 units out, farthest from the
+    -- towers of its kind, and never within half its range of one.
+    local reach = best.radar_tower and best.radar or util.num(best.record.sonardistance)
+    local towers = {}
+    for _, tower in ipairs(world.select(function(_, e)
+        return (best.radar_tower and e.radar_tower) or (not best.radar_tower and e.sonar_tower)
+    end)) do
+        towers[#towers + 1] = util.pos(tower)
     end
-    if build_in_city(unit, best, near) then
+    local near
+    if #towers == 0 then
+        near = best.water_only and (terrain.shore or terrain.water_point) or world.front(450)
+    else
+        local best_gap
+        for _, distance in ipairs({400, 800, 1100, 1400}) do
+            for step = 0, 11 do
+                local point = util.clamp(util.around(base(), step / 12, distance), 96)
+                if util.explored(point) and (not best.water_only or terrain.under_water(point))
+                    and (best.water_only or not terrain.under_water(point)) then
+                    local gap = nil
+                    for _, at in ipairs(towers) do
+                        local d = util.dist(at, point)
+                        gap = gap == nil and d or math.min(gap, d)
+                    end
+                    if gap ~= nil and gap >= reach * 0.5 and (best_gap == nil or gap > best_gap) then
+                        near, best_gap = point, gap
+                    end
+                end
+            end
+        end
+    end
+    if near == nil then
+        return false
+    end
+    local placed
+    if #towers == 0 then
+        placed = build_in_city(unit, best, near)
+    else
+        placed = place(unit, best, near, 240, false)
+    end
+    if placed then
         mark("radar")
+        print(string.format("%s: %s at %d,%d", best.radar_tower and "radar" or "sonar", best.name, util.whole(near.x), util.whole(near.z)))
         return true
     end
     return false
@@ -1124,7 +1193,8 @@ local function try_more_factories(unit, entry)
     for _, option in ipairs(catalog.buildable(entry, function(f) return f.factory end, terrain.ship_ok)) do
         local level = catalog.factory_tier(option)
         local rank = terrain.rank(option.line)
-        if rank ~= nil and terrain.line_ok(option.line) and (level == tier or level == tier - 1)
+        -- Only the top tier: lower factories stop making units.
+        if rank ~= nil and terrain.line_ok(option.line) and level == tier
             and (count[level] or 0) < limit and option ~= tech.goal then
             local fights = 0
             for _, built in ipairs(option.builds) do
@@ -2251,7 +2321,9 @@ builders.send_home = send_home
 -- lie more than this far from the base. Placements that fall back to
 -- open ground, wide searches for a lab and help for far frames and
 -- factories took it 1 300 to 2 100 units out (test matches).
-local commander_leash = 900
+-- 1 400 since the user found 900 too tight (deposits round the base,
+-- underwater ones too, left free).
+local commander_leash = builders.leash
 builders.leashed = {} -- task name -> tick a far order of it was dropped
 
 -- Where the head order of `unit` leads: the build site or the unit it
@@ -2329,7 +2401,7 @@ local function commander_turn(unit, entry)
         -- guard at the tier-1 lab with metal piling up (user's game).
         if leashed("goal", unit, try_goal, entry) or leashed("help frame", unit, try_help_frame)
             or leashed("factory", unit, try_more_factories, entry)
-            or leashed("assist", unit, try_assist, 800) or leashed("help", unit, try_help, 900) then
+            or leashed("assist", unit, try_assist, 800) or leashed("help", unit, try_help, commander_leash) then
             return true
         end
     end
@@ -2356,7 +2428,7 @@ local function commander_turn(unit, entry)
     end
     -- Nothing of its own to build: help what goes up at the base, then
     -- the factories.
-    if leashed("help", unit, try_help, 900) then
+    if leashed("help", unit, try_help, commander_leash) then
         return true
     end
     return leashed("assist", unit, try_assist, 800)
@@ -2399,6 +2471,9 @@ local function builder_turn(unit, entry)
     for index, name in ipairs(order) do
         if name == "resume" then
             table.insert(order, index + 1, "door")
+            -- Underwater deposits: first thing for a decoy, right after
+            -- its frames for the other builders that can take them.
+            table.insert(order, entry.decoy and 1 or index + 1, "underwater")
             break
         end
     end
@@ -2457,6 +2532,7 @@ local function builder_turn(unit, entry)
         radar = try_radar,
         goal = try_goal,
         resume = function(u) return try_resume(u) end,
+        underwater = try_underwater,
         door = try_clear_door,
         ["air-base"] = try_air_base,
         booster = try_booster,

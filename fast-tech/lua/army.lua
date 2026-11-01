@@ -26,7 +26,9 @@ local army = {
 
 -- Metal worth a wave needs before it leaves, by the seat's tier.
 -- Tier-1 units mostly stay home: the bot spends on tech, not on trades.
-local wave_worth = {[0] = 4000, 4000, 9000, 30000, 80000, 150000}
+-- Lowered after the user's Steel Jungle game, where armies of 20-30 units
+-- sat at home for the first fifteen minutes (tier 2 asked for 7 200).
+local wave_worth = {[0] = 3000, 3000, 5000, 20000, 60000, 120000}
 
 local function soldiers()
     return world.select(function(u, e) return e.combat and world.finished(u) end)
@@ -52,6 +54,7 @@ end
 -- away from it, a good part of their range, and leave the close fight to
 -- the units with shorter weapons. Returns whether it stepped back.
 local long_range = 700
+army.backed = {} -- unit id -> tick it last stepped back
 
 local function keep_range(unit)
     local entry = catalog.of(unit)
@@ -75,6 +78,12 @@ local function keep_range(unit)
     if near == nil then
         return false
     end
+    -- Stepped back a moment ago: still on its way.
+    local backed = army.backed[unit.id]
+    if backed ~= nil and me.tick - backed < 30 * 5 and not util.free(unit) then
+        return true
+    end
+    army.backed[unit.id] = me.tick
     local step = entry.range * 0.4
     local dx, dz = at.x - near.x, at.z - near.z
     local length = math.max(1, math.sqrt(dx * dx + dz * dz))
@@ -98,6 +107,22 @@ local function attack(unit, target)
 end
 
 army.attack = attack
+
+-- A patrol, given again only to a new point (300 units off) or after
+-- fifteen seconds, or when the unit stopped.
+army.patrolled = {} -- unit id -> {x, z, tick}
+
+local function patrol(unit, point)
+    point = util.clamp(point, 64)
+    local last = army.patrolled[unit.id]
+    if last ~= nil and me.tick - last.tick < 30 * 15 and util.dist2(last, point) < 300 * 300
+        and not util.free(unit) then
+        return true
+    end
+    army.patrolled[unit.id] = {x = point.x, z = point.z, tick = me.tick}
+    army.aimed[unit.id] = nil
+    return unit:patrol(point)
+end
 
 -- Each unit at `from` turns on the best target it can hit near `centre`;
 -- returns whether any had one.
@@ -131,7 +156,7 @@ local function defend(home)
         elseif target ~= nil then
             attack(unit, target)
         else
-            unit:patrol(util.clamp(alarm, 64))
+            patrol(unit, alarm)
         end
     end
     return true
@@ -181,7 +206,7 @@ local function push(attackers)
             attack(unit, enemy)
         elseif contact then
             -- Seen only on radar or sonar: close in, fighting on the way.
-            unit:patrol(util.clamp(contact, 64))
+            patrol(unit, contact)
         elseif target ~= nil and util.free(unit) then
             unit:patrol(util.clamp(target, 64))
         end
@@ -624,7 +649,9 @@ local function air_cover(units)
     for _, unit in ipairs(units) do
         local entry = catalog.of(unit)
         local at = util.pos(unit)
-        if at ~= nil and not entry.air and not entry.anti_air and not entry.structure then
+        local last = army.sheltering[unit.id]
+        local moving = last ~= nil and me.tick - last < 30 * 15
+        if at ~= nil and not moving and not entry.air and not entry.anti_air and not entry.structure then
             for _, swarm in ipairs(found) do
                 if util.dist(at, swarm) <= 700 then
                     local shelter = nearest_anti_air(at, 2000)
@@ -649,9 +676,10 @@ local function air_cover(units)
                 end
             end
             local target = world.best_target(best, 900, catalog.of(fighter))
+            local chased = army.intercepting[fighter.id]
             if target ~= nil then
                 attack(fighter, target)
-            else
+            elseif chased == nil or me.tick - chased > 30 * 8 then
                 fighter:patrol(util.clamp(best, 64))
             end
             army.intercepting[fighter.id] = me.tick
@@ -724,6 +752,10 @@ function army.step()
     if me.difficulty ~= "hard" then
         mark = mark * 0.8
     end
+    -- An army idle at home for five minutes leaves with half the mark.
+    if me.tick - army.sent_at > 30 * 300 and #ready >= 8 then
+        mark = mark * 0.5
+    end
     if worth(ready) >= mark and #ready >= 3 then
         if send_wave(ready) then
             return
@@ -738,7 +770,7 @@ function army.step()
     local contact = world.nearest_contact(rally, 900)
     if contact ~= nil then
         for _, unit in ipairs(home) do
-            unit:patrol(util.clamp(contact, 64))
+            patrol(unit, contact)
         end
         return
     end

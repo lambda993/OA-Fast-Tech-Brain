@@ -23,7 +23,7 @@ local tier_weight = {[0] = 0, 1, 8, 14, 22, 34}
 -- Builders the seat keeps for each factory tier.
 local builders_wanted = {[0] = 0, 7, 6, 5, 4, 4}
 
-local scout_cap = 8
+local scout_cap = 12
 local decoys_wanted = 15
 
 -- Worth of the army the seat keeps at home, by tier, before racing on.
@@ -46,6 +46,23 @@ function factories.guard_short()
     return army_worth() < wanted
 end
 
+-- Finished factories of the seat's top tier that make combat units.
+local function top_factories()
+    local count = 0
+    for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
+        local entry = catalog.of(unit)
+        if catalog.factory_tier(entry) >= world.tier then
+            for _, built in ipairs(entry.builds) do
+                if built.combat then
+                    count = count + 1
+                    break
+                end
+            end
+        end
+    end
+    return count
+end
+
 -- Share of idle turns a factory `behind` tiers under the top spends
 -- making combat units.
 local function production_share(tier, top)
@@ -57,9 +74,15 @@ local function production_share(tier, top)
         end
         return 1
     end
-    -- Factories below the top tier make no more combat units (the user's
-    -- rule: they stop, and are reclaimed only when their room is needed).
-    return 0
+    -- Factories below the top tier stop making combat units once the
+    -- production has moved up (the user's rule): two working combat
+    -- factories of the top tier. Before that they go on, or a seat that
+    -- reached tier 2 with a single lab (busy with its unit upgrade and
+    -- the race) made almost no army for 25 minutes (user's game).
+    if top_factories() >= 2 then
+        return 0
+    end
+    return behind == 1 and 0.6 or 0.3
 end
 
 local function level_share()
@@ -77,6 +100,14 @@ end
 
 local function scouts()
     return world.select(function(_, e) return e.scout end)
+end
+
+local function scouts_wanted()
+    local tier = world.tier
+    if tier <= 0 then
+        return 1
+    end
+    return ({3, 6, 10, 10, 10})[math.min(5, tier)]
 end
 
 local function pick_scout(entry)
@@ -287,10 +318,12 @@ local function one_factory(unit)
             end
         end
     end
-    -- One early scout from the first factory that can make one.
-    if top <= 2 and #scouts() < 1 then
+    -- Scouts from any factory that makes them, up to the tier's number
+    -- (the user wants many, watching the enemy starts): 3 at tier 1, 6 at
+    -- tier 2, 10 from tier 3. Lower-tier factories make them too.
+    if #scouts() < scouts_wanted() then
         local scout = pick_scout(entry)
-        if scout ~= nil then
+        if scout ~= nil and util.chance(0.5) then
             unit:queue(scout.record, 1)
             return
         end
