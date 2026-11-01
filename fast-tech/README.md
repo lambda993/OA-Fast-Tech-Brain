@@ -40,8 +40,10 @@ and carriers that also carry other weapons are built for those. Escalation's
 Big Bertha, Intimidator, Guardian and Punisher are builders (each makes
 its own armour upgrade), and count as defences all the same. Everything
 below plays inside that list; the brain reads it, never unit names.
-Core's builders cannot put down a Vehicle Plant at all, so Core has no
-vehicle line.
+The engine gives an empty category list for the last unit types (see
+Engine limitations); their tier is taken from who builds them: a unit a
+factory makes has the factory's tier, a building a mobile builder puts
+down the builder's (at least 1), the lowest such.
 
 **Which line first.** Each factory belongs to a line, read from its units'
 selection groups: kbots (`CTRL_K`), vehicles (`CTRL_V`), hovercraft
@@ -122,7 +124,10 @@ not order. A frame worth 5 000 metal or more that nobody works on any
 more (its builders ran, went to an emergency or on to other work) is
 taken up again by a builder within 1 500 units before it starts anything
 new (`resume <building>`); helpers are not held on a frame, which left
-the economy short of builders in the test matches. No builder is sent to a site it cannot get to: every site is
+the economy short of builders in the test matches. A builder alone on a frame is never sent to other work (no new task,
+no emergency repair, no call back for the economy) until the frame is
+up; it runs only when it is under fire (hit in the last ten seconds) and
+down to 75 % health. The commander keeps its own rules. No builder is sent to a site it cannot get to: every site is
 checked with `map:reachable` from the builder (from the nearest open cell
 when it stands beside a building or in its factory), and a lab's site
 also with `map:route` (one a turn), as `map:reachable` takes ground never
@@ -302,6 +307,68 @@ spent rather than stored.
 going up, builders add factories of the top tier or the one below, up to
 three (fair) or four of each, never while energy is short and never past
 three times that in all.
+
+## Engine limitations
+
+What the brain ran into in Open Annihilation 0.8.11 that looks like a
+limit or a fault of the engine or its brain API. Each item says what was
+seen and how; whether it is a fault is for the engine's author to judge.
+
+1. **`category` empty for the last unit types.** `units[i].category` is
+   an empty list for every type from index 512 on (Lua, 1-based; engine
+   type 511 on); every other field of those records reads fine. With
+   Escalation that is 38 types, among them CORVP (Vehicle Plant),
+   CORWIN, CORUWMEX, CORUWMS, CORUWMOHO, CORVROC, CORVIPE, CORVAMP,
+   CORVENG, CORVAULT, CORZIG. `push_categories` (`src/sim/brains/src/
+   lua_defs.cpp`) reads the categories from `Match::unit_definition(type)`
+   (`tick_ai_builders.cpp`), which is null when `type >= input_.fields.
+   size()`: the fields seem to hold only 511 types. Seen with a probe
+   brain printing `#units[i].category` for every type (549 types, first
+   empty 512, last 549). A brain that reads tiers from `LEVn` loses
+   those types (Core lost its Vehicle Plant); this brain works round it.
+2. **What a brain may build is the AI table, not the players' menus.**
+   `game.build_list` is `[CANBUILD]` of `gamedatE/SIDEDATA.tdf` plus the
+   `downloadsE` menus, cut at `limits.build-list-entries` (36); the
+   `guiE` menu pages are not read, and other orders are refused
+   (`not_buildable`). With Escalation no brain can build nuke silos,
+   anti-nukes, tier-1 radar, and the advanced kbot builders list no
+   factory. Escalation also blanks its `downloadsE` entries for the AI
+   (`UNITMENU=BLANK`). Possibly by design (the built-in AI has the same
+   list); a brain option to use the full menus would lift it.
+3. **Stockpile rounds cannot be ordered.** A stockpile weapon fires rounds
+   the unit builds from a build-list entry whose name holds `MAKENUKE` or
+   `MAKEANTI` (`stockpile_round`, `tick_orders.cpp`). No AI list holds
+   them, and the mobile anti-nukes (Scarab, Hedgehog) are not builders
+   at all, so a brain's stockpile units never get a round.
+4. **`game.build_list` holds fewer entries than the table.** The lists
+   came back with 31 entries (`build_list_cap` 37) where `[CANBUILD]`
+   plus `downloadsE` hold 36 or more; the entries missing are the
+   `*_C`, `*CHEAT` and `*_L_70/50/30` names of the table. Maybe types
+   the mod does not define; worth a look.
+5. **`map:reachable` is optimistic and answers no from a blocked cell.**
+   Without full awareness cells never seen count as open (`sight_pass`,
+   `lua_map.cpp`), so only its no can be trusted; and from a position on
+   a blocked cell (a builder beside a building or in its factory) it
+   answers no even when the way is open. `map:route` reads the real
+   movement map but costs tens of milliseconds on a large map, and a
+   turn over 250 ms stops the seat; `os.clock` is not available to time
+   it.
+6. **Help on a finished factory never ends.** `unit:help` on a factory
+   turns into `Follow_Ground` once the factory's frame is up, a guard
+   with no end; on a factory turning out units `HelpBuild` lasts as long
+   as the factory works.
+7. **No direct landing order.** A brain cannot send an aircraft to land
+   on a repair pad: `guard` gives `VTOL_Follow`, `load` `VTOL_Pickup`;
+   only the engine's own repair retreat (below 75 %, on a patrol or an
+   attack pass, pad within 3 840) lands it.
+8. **No feature positions without full awareness.** Rocks and trees are
+   not in the API, so a brain cannot reclaim them except by patrolling
+   ground and letting the engine's patrol reclaim what it passes.
+   `onUnitDestroyed` gives a `wreck` for only part of the deaths.
+9. **`brain.place` stops after 4 096 cells,** a radius of about 500
+   world units, whatever radius is asked.
+10. **A failed path leaves its move at the head of the queue.** The unit
+    is not free again until the brain stops it (`onPathFailed`).
 
 ## Files
 

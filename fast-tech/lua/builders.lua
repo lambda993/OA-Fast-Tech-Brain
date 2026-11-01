@@ -49,6 +49,69 @@ local function mark(key)
     builders.pending[key] = me.tick
 end
 
+-- Who works on which frame, counted once a turn (builders.step): a
+-- builder alone on a frame is never sent to other work until it is up.
+-- Only running is left to it, and only once it is under fire and down to
+-- three quarters of its health. (The commander keeps its own safety
+-- rules: losing it loses the game.)
+builders.on_frame = {} -- builder id -> id of the frame it builds or helps
+builders.crew = {}     -- frame id -> builders on it
+
+local function count_crews()
+    builders.on_frame, builders.crew = {}, {}
+    local frames = world.select(function(u, e) return e.structure and u.finished ~= true end)
+    if #frames == 0 then
+        return
+    end
+    for _, worker in ipairs(world.select(function(u, e) return e.mobile_builder and world.finished(u) end)) do
+        local orders = worker:orders()
+        local head = type(orders) == "table" and orders[1] or nil
+        if head ~= nil and (head.kind == "HelpBuild" or head.kind == "MobileBuild") then
+            local target = head.target
+            local found = nil
+            if (type(target) == "userdata" or type(target) == "table") and target.id ~= nil then
+                for _, frame in ipairs(frames) do
+                    if frame.id == target.id then
+                        found = frame
+                    end
+                end
+            end
+            local x, z = util.num(head.x), util.num(head.z)
+            if found == nil and (x > 0 or z > 0) then
+                for _, frame in ipairs(frames) do
+                    local where = util.pos(frame)
+                    if where ~= nil and util.dist(where, {x = x, z = z}) < 48 then
+                        found = frame
+                    end
+                end
+            end
+            if found ~= nil then
+                builders.on_frame[worker.id] = found.id
+                builders.crew[found.id] = (builders.crew[found.id] or 0) + 1
+            end
+        end
+    end
+end
+
+-- The frame `unit` is the only builder on, or nil.
+local function alone_on_frame(unit)
+    local frame = builders.on_frame[unit.id]
+    if frame ~= nil and builders.crew[frame] == 1 then
+        return frame
+    end
+    return nil
+end
+
+-- Whether a builder alone on a frame may leave it to run: hit in the last
+-- ten seconds and down to 75 % health.
+local function may_leave_frame(unit)
+    if alone_on_frame(unit) == nil then
+        return true
+    end
+    local hit = builders.hit[unit.id]
+    return hit ~= nil and me.tick - hit.tick <= 30 * 10 and util.num(unit.health_percent) <= 75
+end
+
 -- Ground the seat has never seen takes no building, so a builder sent
 -- there walks over first and tries again once it is idle.
 local function scout_site(unit, spot)
@@ -1335,7 +1398,7 @@ local function send_repairs()
     end
     local free = world.select(function(u, e)
         return e.mobile_builder and not e.commander and world.finished(u) and builders.repairing[u.id] == nil
-            and (e.decoy or builders.running[u.id] == nil)
+            and (e.decoy or builders.running[u.id] == nil) and alone_on_frame(u) == nil
     end)
     for _, target in ipairs(targets) do
         local where = util.pos(target)
@@ -1505,6 +1568,9 @@ local function guard_decoy(unit, entry)
         return false
     end
     local threat = danger(unit, entry, true)
+    if threat ~= nil and not may_leave_frame(unit) then
+        threat = nil
+    end
     local last = builders.running[unit.id]
     if threat ~= nil then
         if last == nil or me.tick - last > 30 * 4 then
@@ -1570,6 +1636,9 @@ end
 
 local function guard_builder(unit, entry)
     local threat = builder_threat(unit, entry)
+    if threat ~= nil and not may_leave_frame(unit) then
+        threat = nil
+    end
     local last = builders.running[unit.id]
     if threat ~= nil then
         if last == nil or me.tick - last > 30 * 4 then
@@ -1885,6 +1954,11 @@ local function ready(unit)
     end
     local parked = builders.parked[unit.id]
     if parked ~= nil then
+        -- Alone on a frame (helping it, after the builder that started it
+        -- left): it stays until the frame is up.
+        if alone_on_frame(unit) ~= nil then
+            return false
+        end
         if me.tick - parked >= 30 * 15 then
             builders.parked[unit.id] = nil
             return true
@@ -1908,7 +1982,7 @@ end
 -- back, at most every 30 seconds, to see to the economy: otherwise it
 -- helps a lab that cannot rise for want of metal for minutes on end.
 local function released(unit, entry)
-    if entry.commander or builders.role[unit.id] ~= "economy" then
+    if entry.commander or builders.role[unit.id] ~= "economy" or alone_on_frame(unit) ~= nil then
         return false
     end
     local need, urgency = economy.need()
@@ -1925,6 +1999,7 @@ end
 
 function builders.step()
     economy.read()
+    count_crews()
     send_repairs()
     builders.new_runners = 0
     local list = world.select(function(u, e) return e.mobile_builder and world.finished(u) end)

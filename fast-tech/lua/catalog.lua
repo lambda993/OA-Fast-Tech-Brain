@@ -120,9 +120,9 @@ local function yields(record)
     return energy, metal
 end
 
-local function classify(index, record)
+local function classify(index, record, inferred_tier)
     local words = categories(record)
-    local tier = tier_of(words)
+    local tier = tier_of(words) or inferred_tier
     local name = text(record.name)
     local unit_name = string.upper(text(record.unitname))
     local entry = {
@@ -237,9 +237,56 @@ function catalog.load()
     catalog.refresh_builds()
 end
 
+-- The engine hands brains an empty `category` for the last unit types
+-- (index 512 on: Escalation's last 38, CORVP, CORWIN, CORZIG and more),
+-- so their tier is unknown and they were left out: Core seemed to have
+-- no Vehicle Plant. Their tier is read from who builds them instead: a
+-- unit made by a factory has the factory's tier, a building put down by
+-- a mobile builder the builder's (at least 1), the lowest such.
+local function infer_missing_tiers()
+    local missing = {}
+    for index, entry in pairs(catalog.types) do
+        local record = entry.record
+        if type(record.category) ~= "table" or #record.category == 0 then
+            missing[index] = true
+        end
+    end
+    for _ = 1, 3 do
+        local found = {}
+        for _, maker in pairs(catalog.types) do
+            if maker.builder and not missing[maker.index] then
+                local list = game.build_list(maker.record)
+                if type(list) == "table" then
+                    for slot = 1, #list do
+                        local built = list[slot]
+                        local built_index = built and built:index()
+                        if built_index ~= nil and missing[built_index] then
+                            local made = catalog.types[built_index]
+                            local level = math.max(1, maker.tier)
+                            if made ~= nil and (found[built_index] == nil or level < found[built_index]) then
+                                found[built_index] = level
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        local any = false
+        for index, level in pairs(found) do
+            catalog.types[index] = classify(index, catalog.types[index].record, level)
+            missing[index] = nil
+            any = true
+        end
+        if not any then
+            break
+        end
+    end
+end
+
 -- Build lists are complete once the match has set its players up, so the
 -- first tick reads them again.
 function catalog.refresh_builds()
+    infer_missing_tiers()
     for index, entry in pairs(catalog.types) do
         entry.builds = {}
         entry.unit_upgrades = {}

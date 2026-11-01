@@ -114,6 +114,9 @@ error is logged once and the seat keeps playing).
   stops at tier 2, vehicles and aircraft at tier 3, only hovercraft reach the
   tier-4 Exp. Unit Fabricator. A fix would need the engine to validate brain
   orders against the full menus (an issue was proposed, not filed).
+- **`category` is empty for unit types at Lua index ≥ 512** (engine
+  type ≥ 511): `Match::unit_definition` is null past `input_.fields`.
+  All other record fields are fine. See README "Engine limitations".
 - Escalation buildings with `builder=true` besides fusion: Big Bertha,
   Intimidator, Guardian, Punisher (their armour upgrade). `defense` used
   to need `not builder`, so they were no defences/artillery; now only a
@@ -259,6 +262,11 @@ error is logged once and the seat keeps playing).
     attached to the factory (`BeCarried`) and the factory goes on.
 16. Commander stays near the base (see state below).
 17. Big frames left half built get taken up again (see state below).
+18. A builder alone on a frame is never redirected until it is up (no
+    new task, emergency repair or economy call-back); it may run only
+    when hit in the last 10 s and at ≤ 75 % health. Commander exempt
+    (its own safety rules). `count_crews` in builders.step counts the
+    builders per frame from their head orders.
 
 ## State and open points
 
@@ -300,13 +308,20 @@ error is logged once and the seat keeps playing).
   Painted Desert, Crater Islands, Ashap): 5 wins, 2 draws; tier-1 timing
   equal to before; Crater Islands now reaches tier 3. Applied to the
   economy rules only from tier 2: on tier 1 they cost a minute.
-- Arm vs Core (user: Arm wins far more often): Core's builders have no
-  Vehicle Plant in their AI lists (Arm's commander and Construction KBot
-  do), so Core goes kbot (ends tier 2) -> air -> hover, Arm kbot ->
-  vehicle. Mirror matches Fast Tech vs Fast Tech (6 maps, rich, 30 min):
-  all draws, Core's economy even larger in 5. In the user's 4-seat game
-  the Core seats were the ones hit by the unreachable-site bug. Proposed,
-  not done: let Core rank hover with air on land maps.
+- Arm vs Core (user: Arm wins far more often). I first reported that
+  Core has no Vehicle Plant in its AI lists: **wrong**, the user
+  corrected it (Arm and Core have equivalent units and each builder
+  builds its side's next factory; only tier 4 is shared). Real cause: the
+  engine gives an empty `category` for unit types from Lua index 512 on
+  (38 Escalation types incl. CORVP, CORWIN, CORUWMEX, CORVROC, CORZIG),
+  so the catalog found no `LEVn` and skipped them. Fixed by
+  `infer_missing_tiers` in catalog.lua (tier from who builds the type).
+  Now Core races kbot -> vehicle -> hover like Arm. Lesson: the mod
+  tables can be read directly (`oa-tool list/extract` on `TAESC.gp3`
+  etc.: `gamedatE/SIDEDATA.tdf`, `downloadsE/`, `guiE/`); cross-check
+  probe results with them before telling the user about the mod.
+- Engine limitations for the engine's author are listed in the README
+  ("Engine limitations"); the user reports them. Add new ones there.
 - Commander far from base (user): it went 1 300-2 100 units out (far
   build sites from the anywhere/wide fallbacks, help on far frames and
   factories) and `world.base` (middle of all buildings) drifted 1 100
@@ -320,7 +335,11 @@ error is logged once and the seat keeps playing).
   ≥ 5 000 metal nobody works on (`resume <name>`, logged once per builder
   and frame).
 - Test after all of the above (8 matches vs built-in): 5 wins, 3 draws,
-  same as before the changes.
+  same as before the changes. After the category fix and the lone-builder
+  rule: 3 wins, 5 draws; the two lost wins are Core seats that now go
+  vehicles instead of air and stay far ahead (Core Prime seed 7: 377
+  units vs 181, metal 620k vs 82k) without finishing in 30 minutes.
+  Mirror matches: Arm and Core take the same lines, all draws.
 - User's 4-seat game on Coast To Coast (54 % water, hover line): weak
   economies (1-4 extractors, the map has few deposits near the starts),
   two seats dead by 7-10 minutes, one stuck at tier 1 for 16 minutes
