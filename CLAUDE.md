@@ -293,8 +293,41 @@ error is logged once and the seat keeps playing).
     fights; many more scouts, aimed at enemy starts; one seat stopped
     making army; commander leash too tight, underwater deposits left
     (decoys take them); radar/sonar spread apart; jammers never seen.
+24. User's Two Continents game (4 seats, rich, 19 min): units from armed
+    factories inherited hold fire (ships); slowdowns at start and in
+    fights; targets forgotten as soon as they enter the fog; scout ships
+    stuck going for land points (try timer).
 
 ## State and open points
+
+- User's Two Continents game (2026-11-01, 4 seats Fast Tech, rich, 19
+  min, no script errors). Fixes:
+  - Stance is inherited from the factory: armed factories hold fire, so
+    their ships did too. `hooks.onUnitFinished` sets fire at will on
+    armed mobile non-careful units.
+  - Speed: measured by repeating a module 5 times a turn in a scratch
+    copy (no clock in the sandbox): builders, factories, army, scouts
+    together explain ~2-3 s of a 15-minute two-seat Core Prime match.
+    Lua instructions there: ~250-280 M in all (~150 k a second a seat,
+    budget 2 M a tick), so most of the cost in big fights is the
+    engine (simulation, path searches, rendering). Start (900 ticks,
+    Two Continents): survey costs ~2 s of 8 (disabling it: same as
+    builtin). Survey now routes every 6 ticks on alternating seats
+    (spreads, not cuts, the cost), 3 ship points per enemy instead of 5;
+    damage events throttled to one per unit every 10 ticks.
+  - Target memory: `army.aimed` keeps target and priority, `pick`
+    keeps a visible target (reach × 1.5) unless higher priority shows
+    up, chases priority ≥ 3 targets to `world.sightings` positions for
+    40 s (`chase`, attack-move).
+  - Scouts: time limit 20 s + 2 × distance / speed; misses go to
+    `scouts.failed` (per movement class, 256-unit squares, 10 min);
+    water-only scouts take only water points.
+  - Seat 4 spent 4.5 minutes at tier 0 looking for a Shipyard site
+    (commander walking to unexplored ring points): first lab not begun
+    90 s after being chosen is set aside (`tech.goal_since`).
+  - Tests (10 matches, parallel): 7 of 7 wins vs built-in, no script
+    errors; one engine `runtime type has no FBI definition` in a mirror
+    match on Two Continents (known, README limitation).
 
 - User's second Steel Jungle game (2026-11-01, 2v2 all Fast Tech, rich,
   39 min). Findings and fixes:

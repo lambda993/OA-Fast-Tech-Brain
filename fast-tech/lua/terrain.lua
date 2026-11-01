@@ -333,7 +333,7 @@ local function plan_checks(waters)
         if from ~= nil then
             for number, target in ipairs(terrain.targets) do
                 -- The water points nearest the enemy first; only the first
-                -- five a ship of this class sails on are asked.
+                -- three a ship of this class sails on are asked.
                 local by_distance = {}
                 for _, water in ipairs(waters) do
                     local d = util.dist(water, target)
@@ -344,7 +344,7 @@ local function plan_checks(waters)
                 table.sort(by_distance, function(a, b) return a.d < b.d end)
                 local near = {}
                 for _, water in ipairs(by_distance) do
-                    if #near >= 5 then
+                    if #near >= 3 then
                         break
                     end
                     if sails(boat, water) then

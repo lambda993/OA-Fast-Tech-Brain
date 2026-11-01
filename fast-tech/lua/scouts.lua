@@ -28,6 +28,32 @@ local function cell_centre(index)
     }
 end
 
+-- Points a scout of a movement class did not reach in time (a ship sent
+-- toward land stuck at the shore: user's game): left alone ten minutes.
+scouts.failed = {} -- "class|x,z" -> tick
+
+local function class_of(entry)
+    local class = entry.record.movementclass
+    return (type(class) == "string" and class ~= "" and not entry.air) and class or "air"
+end
+
+local function failed_key(entry, point)
+    return class_of(entry) .. "|" .. (point.x // 256) .. "," .. (point.z // 256)
+end
+
+-- Whether a scout may be sent to `point`: not one it failed to reach,
+-- and on the water for a ship.
+local function fits(entry, point)
+    local failed = scouts.failed[failed_key(entry, point)]
+    if failed ~= nil and me.tick - failed < 30 * 600 then
+        return false
+    end
+    if entry.water_only and not terrain.under_water(point) then
+        return false
+    end
+    return true
+end
+
 local function taken(point, most)
     local count = 0
     for _, heading in pairs(scouts.heading) do
@@ -47,7 +73,7 @@ local function start_key(start)
     return start.x .. "," .. start.z
 end
 
-local function enemy_start()
+local function enemy_start(entry)
     local best, best_tick
     for _, start in ipairs(terrain.targets or {}) do
         local key = start_key(start)
@@ -55,7 +81,8 @@ local function enemy_start()
             scouts.seen_start[key] = me.tick
         end
         local last = scouts.seen_start[key] or -1000000
-        if not taken(start, 2) and me.tick - last > 30 * 60 and (best_tick == nil or last < best_tick) then
+        if not taken(start, 2) and me.tick - last > 30 * 60 and fits(entry, start)
+            and (best_tick == nil or last < best_tick) then
             best, best_tick = start, last
         end
     end
@@ -82,13 +109,13 @@ local function choose(unit, entry)
     end
     -- Two scouts in three watch the enemy starts; the rest explore.
     if util.chance(0.67) or #world.unexplored_starts() > 0 then
-        local start = enemy_start()
+        local start = enemy_start(entry)
         if start ~= nil then
             return start
         end
     end
     for _, start in ipairs(world.unexplored_starts()) do
-        if not taken(start) then
+        if not taken(start) and fits(entry, start) then
             return start
         end
     end
@@ -103,7 +130,7 @@ local function choose(unit, entry)
         if sight <= 0.05 then
             local explored = util.num(grid:get(cells + index + 1))
             local point = cell_centre(index)
-            if not taken(point) then
+            if not taken(point) and fits(entry, point) then
                 local d = util.dist(at, point)
                 -- Unexplored ground first, nearer cells a little before far ones.
                 local score = (1.5 - explored) * 1000 / (1 + d / 2000) * (0.5 + brain.random(100) / 100)
@@ -118,7 +145,8 @@ local function choose(unit, entry)
             return point
         end
     end
-    -- The reach test can say no from a blocked cell; go anyway.
+    -- The reach test can say no from a blocked cell; go anyway (the
+    -- time limit catches a point it cannot get to).
     if #candidates > 0 then
         return candidates[1].point
     end
@@ -136,7 +164,13 @@ local function send(unit)
     end
     point = util.clamp(point, 64)
     if unit:move(point) then
-        scouts.heading[unit.id] = {x = point.x, z = point.z, tick = me.tick}
+        -- Time to get there: the straight way at its speed, twice over,
+        -- and twenty seconds more.
+        local at = util.pos(unit)
+        local d = at and util.dist(at, point) or 0
+        local speed = math.max(0.5, entry.speed)
+        local limit = 30 * 20 + math.floor(2 * d / speed)
+        scouts.heading[unit.id] = {x = point.x, z = point.z, tick = me.tick, limit = limit}
     end
 end
 
@@ -148,8 +182,12 @@ function scouts.step()
     end
     for _, unit in ipairs(world.select(function(u, e) return e.scout and world.finished(u) end)) do
         local heading = scouts.heading[unit.id]
-        local stale = heading == nil or me.tick - heading.tick > 30 * 60
-            or me:sees(heading.x, heading.z) or util.free(unit)
+        local late = heading ~= nil and me.tick - heading.tick > (heading.limit or 30 * 60)
+        if late and not me:sees(heading.x, heading.z) then
+            -- Not there in time: stuck or no way through.
+            scouts.failed[failed_key(catalog.of(unit), heading)] = me.tick
+        end
+        local stale = heading == nil or late or me:sees(heading.x, heading.z) or util.free(unit)
         if stale then
             send(unit)
         end
@@ -157,6 +195,14 @@ function scouts.step()
 end
 
 function scouts.on_idle(unit)
+    local heading = scouts.heading[unit.id]
+    -- Stopped short of its point (a path that failed): that point is out.
+    if heading ~= nil and not me:sees(heading.x, heading.z) then
+        local at = util.pos(unit)
+        if at == nil or util.dist(at, heading) > 400 then
+            scouts.failed[failed_key(catalog.of(unit), heading)] = me.tick
+        end
+    end
     scouts.heading[unit.id] = nil
     send(unit)
 end

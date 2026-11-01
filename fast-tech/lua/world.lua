@@ -175,6 +175,7 @@ end
 
 function world.forget(unit)
     world.enemy_buildings[unit.id] = nil
+    world.sightings[unit.id] = nil
 end
 
 -- Remembers a large wreck left near the base, to clear it later.
@@ -205,6 +206,11 @@ end
 
 -- Drops remembered buildings whose place the seat sees again empty.
 function world.prune()
+    for id, seen in pairs(world.sightings) do
+        if me.tick - seen.tick > 30 * 120 then
+            world.sightings[id] = nil
+        end
+    end
     for id, building in pairs(world.enemy_buildings) do
         local gone = building.unit ~= nil and building.unit.alive == false
         if not gone and me:sees(building.x, building.z) then
@@ -324,18 +330,34 @@ local function add_row(cells, row)
     list[#list + 1] = row
 end
 
+-- Enemies seen of priority 3 and up (anti-air, tier 3+, commanders):
+-- where and when last seen, so units keep after them a while once they
+-- slip into the fog (they used to switch targets at once).
+world.sightings = {} -- enemy id -> {x, z, tick, priority}
+local enemy_ids = {}
+
+function world.enemy_row(id)
+    world.enemy_rows()
+    return enemy_ids[id]
+end
+
 function world.enemy_rows()
     if index_tick == me.tick then
         return enemy_rows
     end
-    enemy_rows, enemy_cells = {}, {}
+    enemy_rows, enemy_cells, enemy_ids = {}, {}, {}
     for _, enemy in ipairs(world.visible_enemies()) do
         local at = util.pos(enemy)
         local entry = catalog.of(enemy)
         if at ~= nil then
             local row = {unit = enemy, x = at.x, z = at.z, entry = entry}
             enemy_rows[#enemy_rows + 1] = row
+            enemy_ids[enemy.id] = row
             add_row(enemy_cells, row)
+            local priority = world.priority(entry)
+            if priority >= 3 and entry ~= nil and not entry.structure then
+                world.sightings[enemy.id] = {x = at.x, z = at.z, tick = me.tick, priority = priority}
+            end
         end
     end
     index_tick = me.tick

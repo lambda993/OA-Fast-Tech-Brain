@@ -679,6 +679,16 @@ local function try_goal(unit, entry)
     if recently("goal", 45) or not tech.affordable() then
         return false
     end
+    -- The first lab not begun within ninety seconds of being chosen: set
+    -- aside, another line instead (a commander spent four and a half
+    -- minutes looking for a Shipyard site on Two Continents).
+    if world.tier == 0 and not tech.frame_alive() and tech.goal_since ~= nil
+        and me.tick - tech.goal_since > 30 * 90
+        and (tech.started == nil or me.tick - tech.started > 30 * 45) then
+        print(string.format("%s not begun in 90 s at tier 0", goal.name))
+        tech.no_site(goal, true)
+        return false
+    end
     -- Ordered again and again and never begun (a site no builder gets
     -- to): the goal is set aside like one that fits nowhere.
     if (tech.orders or 0) >= goal_orders then

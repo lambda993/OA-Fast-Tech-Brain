@@ -54,12 +54,16 @@ units is judged on its own: a unit is built only when its class reaches
 the enemy (a kbot for shallows may not, where a deep-water tank does). A
 seat without full awareness is told by `map:reachable` that ground it has
 never seen is open, so a yes is checked with `map:route`, one route every
-tenth of a second, and a class stops being asked once its answer is
-settled; the `map:` line comes about fifteen seconds into the match and
-names the classes that get through. The first lab waits for it (at most
-90 seconds). Ships are judged by their guns, not their hulls: for each
+fifth of a second, on ticks seats of odd and even number do not share (four
+seats asking on the same ticks made the start of a game stutter), and a
+class stops being asked once its answer is settled; the `map:` line comes
+some fifteen to sixty seconds into the match and names the classes that
+get through. The first lab waits for it (at most 90 seconds), and a first
+lab not begun within 90 seconds of being chosen is set aside for another
+line (`<lab> not begun in 90 s at tier 0`; a commander once spent four
+and a half minutes looking for a Shipyard site). Ships are judged by their guns, not their hulls: for each
 boat class the survey routes from water near the base deep enough for it
-to the five such points nearest each enemy start (as far out as the
+to the three such points nearest each enemy start (as far out as the
 longest-ranged ship shoots), and keeps the nearest one reached. A ship is
 built when its weapons reach every enemy start (most of them, when the
 starts are guessed) from there, with 300 units for the buildings round
@@ -259,8 +263,12 @@ from tier 3, and from tier 3 a cheap tier-1 aircraft or vehicle factory is
 kept as a scout lab with up to twelve out. Two scouts in three watch the
 enemy starts (their own when the match tells them, else every start not
 the seat's, read from the map): up to two head for each, the one seen
-longest ago first, each seen again at most once a minute. The rest go to
-unexplored starts, then to grid cells the seat cannot see, unexplored
+longest ago first, each seen again at most once a minute. A scout has
+the straight way at its speed twice over plus twenty seconds to reach its
+point; a point it did not reach in time, or stopped short of, is left to
+scouts of its movement class for ten minutes, and ships take only points
+on the water (scout ships stuck at the shore trying to reach land). The
+rest go to unexplored starts, then to grid cells the seat cannot see, unexplored
 ground first, never where another scout is going.
 
 **Radar and sonar spread out.** The first tower faces the enemy (a sonar
@@ -317,7 +325,8 @@ seconds, and every fighter of the seat goes for the raiders (`air raid
 least three mobile anti-air units in the army, one more for every ten
 other ground units, so every group that leaves has some.
 
-**Orders and speed.** An attack order is given again only for a new
+**Orders and speed.** A unit's damage events are read at most every ten
+ticks (a unit under fire is hit many times a second). An attack order is given again only for a new
 target, when the unit dropped the old one, or after twelve seconds (each
 order sends the unit to the path search). Targets are picked from a grid
 of the enemies in sight built once a tick, and the seat's own units are
@@ -385,6 +394,18 @@ finished buildings is gone (and it had 3 000 or more), the commander
 leaves for the start of the nearest live ally and stays there
 (`commander leaves for ally at x,z`). With no ally left it stays, stops
 running from danger and defends what remains (`base lost, no ally`).
+
+**Units fire at will.** Units take the stance of the factory that made
+them, and armed factories hold fire (below): every armed mobile unit
+but the careful ones (paralyzers, Bastion) is set to fire at will when
+finished (ships stood under fire without answering).
+
+**Targets are kept.** A unit keeps the target it shoots while it stays in
+sight within half again the reach, unless something of higher priority
+shows up. A target of priority 3 or more (anti-air, tier 3 and up,
+commanders) that slips into the fog is chased to where it was last seen,
+on an attack-move, for up to forty seconds, unless something of higher
+priority is in sight.
 
 **Factories hold fire.** Some of Escalation's factories carry a special
 weapon (weapon3) that does no damage and only turns the way their units

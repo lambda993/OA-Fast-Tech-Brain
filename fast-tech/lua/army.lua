@@ -102,11 +102,57 @@ local function attack(unit, target)
     if last ~= nil and last.id == target.id and me.tick - last.tick < 30 * 12 and not util.free(unit) then
         return true
     end
-    army.aimed[unit.id] = {id = target.id, tick = me.tick}
+    army.aimed[unit.id] = {id = target.id, tick = me.tick, priority = world.priority(catalog.of(target))}
     return unit:attack(target)
 end
 
 army.attack = attack
+
+-- Units keep their target: one still in sight (within half again the
+-- reach) is kept unless something of higher priority shows up; one of
+-- priority 3 or more (anti-air, tier 3+, commanders) that slipped into
+-- the fog is chased to where it was last seen for up to forty seconds,
+-- on an attack-move, unless something of higher priority is in sight.
+-- Returns the unit to shoot, or nil and the point to chase to.
+local chase_time = 30 * 40
+
+local function pick(unit, from, reach)
+    local entry = catalog.of(unit)
+    local best = world.best_target(from, reach, entry)
+    local best_priority = best and world.priority(catalog.of(best)) or 0
+    local last = army.aimed[unit.id]
+    if last == nil then
+        return best
+    end
+    local row = world.enemy_row(last.id)
+    if row ~= nil then
+        if (best == nil or best.id == last.id or best_priority <= (last.priority or 0))
+            and world.can_hit(entry, row.entry) and util.dist(from, row) <= reach * 1.5 then
+            return row.unit
+        end
+        return best
+    end
+    local seen = world.sightings[last.id]
+    if seen ~= nil and me.tick - seen.tick < chase_time and (last.priority or 0) >= 3
+        and best_priority <= (last.priority or 0) then
+        return nil, seen
+    end
+    army.aimed[unit.id] = nil
+    return best
+end
+
+-- An attack-move toward a target's last known place, keeping the target
+-- in mind (dedup like patrol).
+local function chase(unit, point)
+    point = util.clamp(point, 64)
+    local last = army.patrolled[unit.id]
+    if last ~= nil and me.tick - last.tick < 30 * 10 and util.dist2(last, point) < 200 * 200
+        and not util.free(unit) then
+        return true
+    end
+    army.patrolled[unit.id] = {x = point.x, z = point.z, tick = me.tick}
+    return unit:patrol(point)
+end
 
 -- A patrol, given again only to a new point (300 units off) or after
 -- fifteen seconds, or when the unit stopped.
@@ -129,11 +175,14 @@ end
 local function engage(units, centre, reach)
     local any = false
     for _, unit in ipairs(units) do
-        local target = nearest_enemy(centre, reach, unit)
+        local target, lost = pick(unit, centre, reach)
         if target ~= nil then
             if not keep_range(unit) then
                 attack(unit, target)
             end
+            any = true
+        elseif lost ~= nil then
+            chase(unit, lost)
             any = true
         end
     end
@@ -150,11 +199,13 @@ local function defend(home)
         return false
     end
     for _, unit in ipairs(home) do
-        local target = nearest_enemy(alarm, 700, unit)
+        local target, lost = pick(unit, alarm, 700)
         if keep_range(unit) then
             -- Stepped back from a close enemy.
         elseif target ~= nil then
             attack(unit, target)
+        elseif lost ~= nil then
+            chase(unit, lost)
         else
             patrol(unit, alarm)
         end
@@ -198,12 +249,17 @@ local function push(attackers)
         local at = util.pos(unit)
         local entry = catalog.of(unit)
         -- Bombers look further for anti-air to take out.
-        local enemy = at and nearest_enemy(at, entry.bomber and 1400 or 800, unit)
-        local contact = enemy == nil and at and world.nearest_contact(at, 1200)
+        local enemy, lost
+        if at ~= nil then
+            enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
+        end
+        local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200)
         if keep_range(unit) then
             -- Stepped back from a close enemy.
         elseif enemy ~= nil then
             attack(unit, enemy)
+        elseif lost ~= nil then
+            chase(unit, lost)
         elseif contact then
             -- Seen only on radar or sonar: close in, fighting on the way.
             patrol(unit, contact)

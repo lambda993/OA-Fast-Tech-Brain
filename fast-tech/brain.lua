@@ -110,8 +110,14 @@ end
 
 -- The map survey asks one route at a time, every tenth of a second, so
 -- its answer (which lines reach the enemy) comes before the first lab.
+-- One route every six ticks, and never on the tick another seat asks
+-- one: four seats asking on the same ticks every tenth of a second made
+-- the start of a game on a large map stutter (Two Continents).
 local function survey()
     if terrain.ready or not world.located() then
+        return
+    end
+    if (me.tick // 3) % 2 ~= (me.player or 0) % 2 then
         return
     end
     util.guard("survey", terrain.survey)
@@ -146,6 +152,13 @@ end
 function hooks.onUnitFinished(unit)
     world.own[unit.id] = unit
     local entry = catalog.of(unit)
+    -- Units take the stance of the factory that made them: armed
+    -- factories hold fire (their weapon3 only turns the exit), and their
+    -- ships stood under fire without answering (user's game). Every armed
+    -- mobile unit but the careful ones fires at will.
+    if entry ~= nil and entry.mobile and entry.armed and not entry.careful then
+        util.guard("stance", function() unit:stance({fire = "at_will"}) end)
+    end
     if entry ~= nil and entry.extractor then
         util.guard("extractor check", builders.check_extractor, unit, entry)
     end
@@ -166,10 +179,21 @@ function hooks.onUnitIdle(unit)
     end
 end
 
+-- A unit under fire is hit many times a second; once every ten ticks per
+-- unit is enough for the alarm, the repairs and fleeing builders (in big
+-- fights hundreds of hits a second each read positions and entries).
+local last_hit = {}
+
 function hooks.onUnitDamaged(unit, attacker, _, kind)
     if kind ~= "weapon" then
         return
     end
+    local id = unit.id
+    local last = last_hit[id]
+    if last ~= nil and me.tick - last < 10 then
+        return
+    end
+    last_hit[id] = me.tick
     local entry = catalog.of(unit)
     if entry == nil then
         return
@@ -181,6 +205,7 @@ function hooks.onUnitDamaged(unit, attacker, _, kind)
 end
 
 function hooks.onUnitDestroyed(unit, _, wreck)
+    last_hit[unit.id] = nil
     util.guard("wreck", world.note_wreck, catalog.of(unit), wreck)
     world.own[unit.id] = nil
     world.forget(unit)

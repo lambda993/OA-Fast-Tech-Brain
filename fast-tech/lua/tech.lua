@@ -214,6 +214,7 @@ function tech.choose_goal()
     end
     if best ~= tech.goal then
         tech.frame, tech.started, tech.no_room, tech.orders = nil, nil, 0, 0
+        tech.goal_since = me.tick
         if best then
             print(string.format("tech goal: %s (tier %d, %s line, reaches %d)",
                 best.name, best.tier, tostring(best.line), reach(best)))
