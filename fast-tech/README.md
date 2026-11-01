@@ -57,15 +57,23 @@ never seen is open, so a yes is checked with `map:route`, one route every
 tenth of a second, and a class stops being asked once its answer is
 settled; the `map:` line comes about fifteen seconds into the match and
 names the classes that get through. The first lab waits for it (at most
-90 seconds). Ships are judged the same way, from water near the base deep
-enough for that class to the three such points nearest each enemy start.
-The lines are then preferred in this order:
+90 seconds). Ships are judged by their guns, not their hulls: for each
+boat class the survey routes from water near the base deep enough for it
+to the five such points nearest each enemy start (as far out as the
+longest-ranged ship shoots), and keeps the nearest one reached. A ship is
+built when its weapons reach every enemy start (most of them, when the
+starts are guessed) from there, with 300 units for the buildings round
+the start; torpedo boats never count. Core's amphibious tier-3 ships
+(Monitor, Inferno, Rancor) also cross land and are judged like ground
+units, by a route from base to base. The lines are then preferred in
+this order:
 
 | Map | Order |
 | --- | --- |
 | Land, maybe some water | kbots, vehicles > aircraft > ships > hovercraft |
 | Mostly water | kbots, vehicles, ships > aircraft > hovercraft |
-| Enemy across water | hovercraft > aircraft > ships > kbots, vehicles |
+| Enemy across water, ships shell it | ships > hovercraft > aircraft > kbots, vehicles |
+| Enemy across water, no ship does | hovercraft > aircraft > ships > kbots, vehicles |
 | Enemy cut off (lava, cliffs) | aircraft > ships > hovercraft > kbots, vehicles |
 
 Ships count only with open water near the base, where the shipyard goes.
@@ -120,11 +128,16 @@ path. With metal piling up, builders help the next lab's frame first,
 then add factories, then help the factories, before smaller work. A
 builder parked by the engine (hovercraft "park", aircraft land)
 counts as free, and so does one left on a guard or a move the brain did
-not order. A frame worth 5 000 metal or more that nobody works on any
-more (its builders ran, went to an emergency or on to other work) is
-taken up again by a builder within 1 500 units before it starts anything
-new (`resume <building>`); helpers are not held on a frame, which left
-the economy short of builders in the test matches. A builder alone on a frame is never sent to other work (no new task,
+not order. Frames are finished before new ones are started: a builder
+back from running, a repair or a walk takes up its own frame again, and
+a free builder takes up the frame nobody works on that is nearest done,
+within 1 500 units, before any other task (`resume <building>`); helpers
+are not held on a frame, which left the economy short of builders in the
+test matches. A repairer that stands idle ten seconds after it was sent
+(it could not get there) drops the repair, and is not sent to that
+target again for a minute; repairers are only builders that can reach
+the target, and the commander waits at home for repair only when one
+can. A builder alone on a frame is never sent to other work (no new task,
 no emergency repair, no call back for the economy) until the frame is
 up; it runs only when it is under fire (hit in the last ten seconds) and
 down to 75 % health. The commander keeps its own rules. No builder is sent to a site it cannot get to: every site is
@@ -181,6 +194,12 @@ upgrade stays with the factory, which goes on building. Factories being
 wound down (two tiers below the top) skip it, and so does a seat whose
 metal store is under 30 %.
 
+**What the economy pays for.** A factory builds only units its share of
+the income (the income split among the factories at work) pays for in
+about two minutes, metal and energy both, plus a third of the stores;
+with nothing that cheap it builds the cheapest units it offers. The tier
+weights below then choose among them.
+
 **Lower tiers wind down.** A factory at the top tier builds freely, one tier
 below builds 40 % of its turns, two tiers below 10 %, and tier 1 builds 15 %
 once tier 2 is reached and nothing after that. While the next lab is going
@@ -226,8 +245,8 @@ range first, seen or remembered.
 **Long-range artillery.** From tier 2 the builders put up long-range
 guns toward the enemy: one at tier 2, three at tier 3, five at tier 4,
 six above. Each gun is the kind the seat has fewest of, the cheapest
-first, among those the income pays for within four minutes (ten from
-tier 4): so Big Bertha or Intimidator comes first, then Vulcan or
+first, among those the income pays for, metal and energy, within two
+minutes (five from tier 4) plus a third of the stores: so Big Bertha or Intimidator comes first, then Vulcan or
 Buzzsaw, then Armageddon or Dictator, and the B.F.G. at tier 5. The
 brain aims them, as they rarely see their targets.
 
@@ -326,6 +345,16 @@ seen and how; whether it is a fault is for the engine's author to judge.
    brain printing `#units[i].category` for every type (549 types, first
    empty 512, last 549). A brain that reads tiers from `LEVn` loses
    those types (Core lost its Vehicle Plant); this brain works round it.
+   Likely related: `src/data/defs/include/oa/data/defs/categories.hpp`
+   keeps category masks 512 type ids wide, as 3.1c does, and drops type
+   ids 512 and above, so those types belong to no category in the game
+   either (targeting categories such as `NOTAIR` may miss them).
+   In a 4-seat game on Flooded Glaciers the engine also reported
+   `simulation error: match tick 23743: runtime type has no FBI
+   definition` (`Match::fields`, `match.cpp`): a unit whose type has no
+   definition in the runtime table, probably one of these types (Core
+   builds CORUWMEX, CORUWMOHO, CORVP there). Units of these types are
+   built and finish (CORVP, CORVROC seen in test matches).
 2. **What a brain may build is the AI table, not the players' menus.**
    `game.build_list` is `[CANBUILD]` of `gamedatE/SIDEDATA.tdf` plus the
    `downloadsE` menus, cut at `limits.build-list-entries` (36); the

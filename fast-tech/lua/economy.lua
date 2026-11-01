@@ -53,6 +53,19 @@ function economy.read()
     return e
 end
 
+-- Whether the seat can pay for `entry` out of `seconds` of the given
+-- share of its income (1 = all of it) plus part of what the stores hold,
+-- metal and energy both. Units and buildings far beyond the economy
+-- (an Armageddon on a few hundred metal a second) tie the builders and
+-- factories up for many minutes.
+function economy.affords(entry, seconds, share)
+    local e = economy.now or economy.read()
+    share = share or 1
+    local metal = e.metal_income * share * seconds + e.metal * 0.3
+    local energy = e.energy_income * share * seconds + e.energy * 0.3
+    return entry.metal <= metal and entry.energy <= energy
+end
+
 function economy.goals(tier)
     tier = math.max(0, math.min(5, tier))
     return metal_goal[tier], energy_goal[tier]

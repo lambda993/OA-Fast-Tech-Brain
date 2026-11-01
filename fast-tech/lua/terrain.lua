@@ -78,9 +78,22 @@ end
 -- Whether a movement class gets from the base to the enemy: to every
 -- enemy start, or to most of them when the starts are only guesses.
 -- The survey fills this in, a class at a time.
+-- A class that keeps to the water. Core's amphibious tier-3 ships
+-- (Monitor, Inferno, Rancor: BOATA classes) also cross land, so they are
+-- judged like ground units, by a route from base to base.
+local function is_boat(class)
+    local upper = string.upper(class)
+    return string.find(upper, "BOAT", 1, true) ~= nil and string.find(upper, "BOATA", 1, true) == nil
+end
+
 local class_reach = {}
 local class_hits = {}  -- class -> {asked, reached}
-local ship_reach = {}  -- boat class -> whether it reaches the water by the enemy
+-- Boat class -> enemy number -> how close to that enemy's start the
+-- class gets on the water (the nearest water point a route reached).
+local ship_approach = {}
+-- A ship whose weapons reach this far past the water's edge still
+-- shells the base: buildings stand round the start.
+local base_margin = 300
 
 local function verdict(class)
     local hits = class_hits[class]
@@ -132,6 +145,36 @@ function terrain.class_reaches(class)
     return class_reach[class]
 end
 
+-- Whether a ship's weapons reach the enemy bases from the nearest water
+-- its class sails to: at every enemy start when the starts are known,
+-- at most of them when guessed. Not whether its hull gets there: a ship
+-- that shells a base from the sea is worth building (user's rule).
+function terrain.ship_hits_base(entry)
+    if not terrain.ship_ok then
+        return false
+    end
+    local class = entry.record.movementclass
+    if not terrain.ready or type(class) ~= "string" then
+        return true
+    end
+    local approach = ship_approach[class]
+    local targets = terrain.targets or {}
+    if approach == nil or #targets == 0 then
+        return false
+    end
+    local hit = 0
+    for number = 1, #targets do
+        local d = approach[number]
+        if d ~= nil and d <= entry.range + base_margin then
+            hit = hit + 1
+        end
+    end
+    if terrain.targets_known then
+        return hit == #targets
+    end
+    return hit * 2 > #targets
+end
+
 -- Whether a unit type can reach the enemy on this map. Aircraft always
 -- can; ships when the water near the base leads to water near the enemy.
 function terrain.useful(entry)
@@ -139,14 +182,8 @@ function terrain.useful(entry)
         return true
     end
     local class = entry.record.movementclass
-    if entry.water_only or (type(class) == "string" and string.find(string.upper(class), "BOAT", 1, true)) then
-        if terrain.ship_reaches ~= true then
-            return false
-        end
-        if type(class) == "string" and ship_reach[class] ~= nil then
-            return ship_reach[class]
-        end
-        return true
+    if entry.water_only or (type(class) == "string" and is_boat(class)) then
+        return terrain.ship_hits_base(entry)
     end
     if type(class) ~= "string" or class == "" then
         return true
@@ -154,9 +191,6 @@ function terrain.useful(entry)
     return terrain.class_reaches(class)
 end
 
-local function is_boat(class)
-    return string.find(string.upper(class), "BOAT", 1, true) ~= nil
-end
 
 -- The boat classes of the combat ships the seat's side can make, each
 -- once, in type order.
@@ -266,8 +300,19 @@ local function plan_checks(waters)
         local ok, pass = pcall(function() return game.map:passable(boat, point.x // 16, point.z // 16) end)
         return ok and util.num(pass) >= 3
     end
+    -- Water points are looked for as far from each enemy start as the
+    -- longest-ranged ship can shoot.
+    local longest = 0
+    for index = 1, #units do
+        local entry = catalog.types[index]
+        if entry ~= nil and entry.combat and entry.water_only and not entry.torpedo_only then
+            longest = math.max(longest, entry.range)
+        end
+    end
+    local radius = math.max(2500, math.min(6000, longest + base_margin))
     for _, boat in ipairs(boat_classes()) do
         ship_hits[boat] = {asked = #terrain.targets, reached = 0, failed = 0}
+        ship_approach[boat] = {}
         local from, from_d
         for _, water in ipairs(waters) do
             local d = util.dist(water, world.start)
@@ -280,15 +325,16 @@ local function plan_checks(waters)
                 local near = {}
                 for _, water in ipairs(waters) do
                     local d = util.dist(water, target)
-                    if d <= 2500 and sails(boat, water) then
+                    if d <= radius and sails(boat, water) then
                         near[#near + 1] = {x = water.x, z = water.z, d = d}
                     end
                 end
                 table.sort(near, function(a, b) return a.d < b.d end)
-                local last = math.min(3, #near)
+                local last = math.min(5, #near)
                 for index = 1, last do
                     checks[#checks + 1] = {class = boat, from = from,
-                        to = {x = near[index].x, z = near[index].z}, ship = number, last = index == last}
+                        to = {x = near[index].x, z = near[index].z}, ship = number, last = index == last,
+                        d = near[index].d}
                 end
                 if last == 0 then
                     ship_hits[boat].failed = ship_hits[boat].failed + 1
@@ -310,7 +356,6 @@ local function skip(check)
         local hits = ship_hits[check.class]
         local total = #terrain.targets
         return ship_done[check.class .. "#" .. check.ship]
-            or hits.reached * 2 >= total or hits.failed * 2 > total
     end
     return settled(class_hits[check.class], #terrain.targets)
 end
@@ -332,6 +377,7 @@ local function run_checks()
                 if ok then
                     ship_done[key] = true
                     ship_hits[check.class].reached = ship_hits[check.class].reached + 1
+                    ship_approach[check.class][check.ship] = check.d
                 elseif check.last then
                     ship_hits[check.class].failed = ship_hits[check.class].failed + 1
                 end
@@ -402,14 +448,20 @@ function terrain.survey()
     terrain.ready = true
     terrain.land_ok = line_reaches("kbot") or line_reaches("vehicle")
     terrain.hover_ok = line_reaches("hover")
-    local ships_through = {}
-    for _, boat in ipairs(boat_classes()) do
-        local hits = ship_hits[boat]
-        if hits ~= nil then
-            ship_reach[boat] = hits.asked > 0 and hits.reached * 2 >= hits.asked
-            if ship_reach[boat] then
-                ships_through[#ships_through + 1] = boat
-            end
+    -- Ships count when some ship of the side shells the enemy bases from
+    -- the water its class reaches (not torpedo boats: they hit nothing
+    -- on land).
+    local ships_through, seen_boat = {}, {}
+    local side = me.side_name
+    for index = 1, #units do
+        local entry = catalog.types[index]
+        local class = entry ~= nil and entry.record.movementclass
+        if entry ~= nil and entry.combat and entry.water_only and not entry.torpedo_only
+            and type(class) == "string" and is_boat(class)
+            and (side == nil or entry.side == "" or entry.side == side)
+            and terrain.ship_hits_base(entry) and not seen_boat[class] then
+            seen_boat[class] = true
+            ships_through[#ships_through + 1] = class
         end
     end
     terrain.ship_reaches = terrain.ship_ok and #ships_through > 0
@@ -486,7 +538,10 @@ function terrain.rank(line)
     end
     if not terrain.land_ok then
         -- Across water: hovercraft, and ships when they reach, then aircraft.
-        local order = {hover = 0, ship = terrain.ship_reaches and 0 or 2, air = 1, kbot = 3, vehicle = 3}
+        -- Ships that shell the enemy from the sea come first, then
+        -- hovercraft (on a sea map the hover line used to win the tie).
+        local order = {hover = terrain.ship_reaches and 1 or 0, ship = terrain.ship_reaches and 0 or 2,
+            air = terrain.ship_reaches and 2 or 1, kbot = 3, vehicle = 3}
         return order[line]
     end
     if terrain.water_share > water_map then

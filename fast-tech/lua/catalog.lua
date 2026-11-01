@@ -243,7 +243,7 @@ end
 -- no Vehicle Plant. Their tier is read from who builds them instead: a
 -- unit made by a factory has the factory's tier, a building put down by
 -- a mobile builder the builder's (at least 1), the lowest such.
-local function infer_missing_tiers()
+local function infer_missing_tiers(lists)
     local missing = {}
     for index, entry in pairs(catalog.types) do
         local record = entry.record
@@ -255,7 +255,7 @@ local function infer_missing_tiers()
         local found = {}
         for _, maker in pairs(catalog.types) do
             if maker.builder and not missing[maker.index] then
-                local list = game.build_list(maker.record)
+                local list = lists[maker.index]
                 if type(list) == "table" then
                     for slot = 1, #list do
                         local built = list[slot]
@@ -286,12 +286,20 @@ end
 -- Build lists are complete once the match has set its players up, so the
 -- first tick reads them again.
 function catalog.refresh_builds()
-    infer_missing_tiers()
+    -- Each builder's list is read once: the engine call is costly, and a
+    -- first turn over 250 ms stops the seat (seen on Flooded Glaciers).
+    local lists = {}
+    for index, entry in pairs(catalog.types) do
+        if entry.builder then
+            lists[index] = game.build_list(entry.record)
+        end
+    end
+    infer_missing_tiers(lists)
     for index, entry in pairs(catalog.types) do
         entry.builds = {}
         entry.unit_upgrades = {}
         if entry.builder then
-            local list = game.build_list(entry.record)
+            local list = lists[index]
             if type(list) == "table" then
                 local seen = {}
                 for slot = 1, #list do

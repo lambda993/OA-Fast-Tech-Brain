@@ -267,6 +267,9 @@ error is logged once and the seat keeps playing).
     when hit in the last 10 s and at ≤ 75 % health. Commander exempt
     (its own safety rules). `count_crews` in builders.step counts the
     builders per frame from their head orders.
+19. Ships by weapon reach, not hull reach; Core amphibious T3 ships
+    cross land. Frames finished before new ones; diverted builders
+    resume their frame. Units and buildings chosen within the economy.
 
 ## State and open points
 
@@ -340,6 +343,32 @@ error is logged once and the seat keeps playing).
   vehicles instead of air and stay far ahead (Core Prime seed 7: 377
   units vs 181, metal 620k vs 82k) without finishing in 30 minutes.
   Mirror matches: Arm and Core take the same lines, all draws.
+- User's games on Core Prime, Dark Side, Flooded Glaciers (only the
+  last one's seat logs survive: they are overwritten each game; the
+  engine log in `~/.local/share/open-annihilation/logs/` lists the
+  matches). Fixed after them:
+  - Ships judged by weapon reach (user's rule): per boat class the
+    nearest water point reached near each enemy start
+    (`ship_approach`), ship useful when range + 300 covers it
+    (`terrain.ship_hits_base`); BOATA classes (Core Monitor, Inferno,
+    Rancor) are ground classes. Across water ships rank before hover
+    when they shell the enemy. Flooded Glaciers: Shipyard first now.
+  - Builders idle in Standby: a repairer that never got to its target
+    (sub sent to a land building) kept `builders.repairing` forever and
+    took no work; now dropped after 10 s idle and the pair skipped for
+    a minute, repairers must reach the target, `can_mend` too. The
+    commander assisted a random far factory (dropped by the leash):
+    now the nearest busy one within 800.
+  - Resume: own last frame first, then any frame nobody works on
+    (any cost) within 1 500, before any other task (`resume <name>`).
+  - Cost: factories build what their share of income pays in ~2 min
+    (`economy.affords`), artillery budget 2 min (5 from tier 4), metal
+    and energy.
+  - A first turn over 250 ms stopped a seat on Flooded Glaciers during
+    a test with 10 matches in parallel: catalog.refresh_builds now
+    reads each build list once (the tier inference read them 3 times).
+  - Engine fault in the user's log: `runtime type has no FBI
+    definition` (Flooded Glaciers); added to README limitations.
 - User's 4-seat game on Coast To Coast (54 % water, hover line): weak
   economies (1-4 extractors, the map has few deposits near the starts),
   two seats dead by 7-10 minutes, one stuck at tier 1 for 16 minutes

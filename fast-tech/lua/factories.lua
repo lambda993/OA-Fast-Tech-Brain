@@ -108,6 +108,31 @@ local function pick_combat(entry)
     local options = catalog.buildable(entry, function(e)
         return e.combat and (wet or not e.torpedo_only) and terrain.useful(e)
     end, true)
+    -- Only what this factory's share of the income (shared among the
+    -- factories at work) pays for in about two minutes; with nothing that
+    -- cheap, the cheapest units it offers.
+    local working = #world.select(function(u, e) return e.factory and world.finished(u) and not util.free(u) end)
+    local share = 1 / math.max(1, working)
+    local fitting = {}
+    for _, option in ipairs(options) do
+        if economy.affords(option, 120, share) then
+            fitting[#fitting + 1] = option
+        end
+    end
+    if #fitting == 0 and #options > 0 then
+        local cheapest = nil
+        for _, option in ipairs(options) do
+            if cheapest == nil or option.cost < cheapest then
+                cheapest = option.cost
+            end
+        end
+        for _, option in ipairs(options) do
+            if option.cost <= cheapest * 1.5 then
+                fitting[#fitting + 1] = option
+            end
+        end
+    end
+    options = fitting
     return util.weighted(options, function(e)
         local weight = tier_weight[math.min(5, e.tier)] or 1
         -- Air keeps a smaller part of the army: it cannot hold ground.
