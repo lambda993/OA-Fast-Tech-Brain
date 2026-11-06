@@ -1,7 +1,7 @@
 # Fast Tech — notes for continuing the work
 
 Fast Tech is a computer player ("brain", Lua) for the **TA: Escalation** mod
-in **Open Annihilation** (OA, engine 0.8.11). It races up the tech tiers,
+in **Open Annihilation** (OA, engine 0.9.0). It races up the tech tiers,
 winds the lower tiers down, builds the base as a city grid and plays without
 full awareness. The brain package is `fast-tech/`; this file, the README and
 `.gitignore` sit outside it because a brain package may hold only its own
@@ -297,6 +297,10 @@ error is logged once and the seat keeps playing).
     factories inherited hold fire (ships); slowdowns at start and in
     fights; targets forgotten as soon as they enter the fog; scout ships
     stuck going for land points (try timer).
+25. A table of all Escalation units with targets, threat level and tags
+    (`data/units.json`, see state below), to fix the brain from it next
+    with criteria to agree. **Not done yet**: the brain does not read it.
+    Do not change the brain until the user says the table is finished.
 
 ## State and open points
 
@@ -441,6 +445,108 @@ error is logged once and the seat keeps playing).
   other layouts, order wheel, water explosions, rendering speed. Nothing
   in `src/sim/brains`, `src/sim/match-runtime` or `docs/brains` (only a
   model-runtime test). `brain check` passes.
+- Engine 0.9.0 (2026-11-06, the Boneyards lobby, MCP server): `src/sim`,
+  `docs/brains` and `brains` unchanged since 0.8.11. Escalation is now
+  10.2.0 (packaging revision 6, requires engine >= 0.9.0). No brain change
+  needed: `brain check` ok (Fast Tech and Classic), six test matches vs
+  built-in hard on rich: 4 wins, 2 draws on time (Core Prime seed 7,
+  Luschaven seed 7), no script errors. 4-seat games not tested.
+- `data/units.json` (tracked; the user renamed `examples/` to `data/`):
+  the user's table, all 549 unit types with `id`, `name`, `description`,
+  `faction`, `built_by`, `threat_level`, `priority_targets`, `ignore_units`,
+  `attack_only`, `tags`. It is the source now: the scripts that generated
+  it were scratch files and are not kept, so change the file itself. All
+  tags with their units, for reading (a snapshot, republish after changes):
+  https://claude.ai/artifact/BzimK4tatcJJV3UZXJDUj2 (private).
+  Read from the FBI files of the mod and checked against `units[]` in a
+  probe. `built_by` is the union of the `guiE/*.gui` player menus (buttons,
+  `id=1`, page file = builder), the `downloadsE` menus (without
+  `UNITMENU=BLANK`) and `[CANBUILD]`: 1 821 builder/unit pairs, of which
+  only 936 are in `game.build_list` (a brain gets `not_buildable` on the
+  rest; 73 units have no brain builder at all). 15 units have no builder
+  (commanders, mission units, `ZZZ`). Abilities such as `xHACK`/`xOMNI`
+  count as built by ARMZIG/CORZIG (`builder=0`, `WorkerTime=0`).
+  The other fields are deduced from the user's six example rows and rules:
+  movement class, FBI keys, weapon flags and the description. User's
+  rules: armed buildings have no targets, except static artillery
+  (priority `commander, decoy, economy, facility, defense`, then `t5` down
+  to `t1`) and nukes (`attack_only` those three); commanders and decoys
+  are the top target (`threat_level` 6); bombers (not torpedo bombers)
+  `commander, decoy, economy, facility, defense`; mobile artillery
+  has the target lists of other mobile units; only its movement differs
+  (user's rule: stays at range, retreats out of the reach of enemy weapons
+  when they close in; not in this table, not in the brain as stated:
+  `keep_range` covers range ≥ 700 and enemies within half the range; the
+  user wants the table finished first, then the brain fixed from it with
+  criteria to agree: do not change the brain before that); a unit without anti-sub weapons ignores
+  `underwater`; any anti-air weapon gives the `anti-air` tag (also
+  Torrent; so does any anti-sub weapon for `anti-sub`). Mine, not yet
+  confirmed: `economy` = static energy/metal/storage; `facility` = static
+  factory, teleporter, radar, sonar, jammer, repair, shield, charge field,
+  ARMTECH/CORTECH; `threat_level` = tier if armed, else 0 (crawling bombs
+  by tier); `attack_only` only when all weapons are nukes (confirmed by
+  the user). `skirmisher` (user's name) = mobile non-air units that keep
+  their distance while firing: best surface weapon ≥ 700 at T1-T3, ≥ 1 300
+  at T4-T5, no builders, artillery or `aoe` (the T3 threshold came out of a
+  misunderstanding; the user keeps it, it may turn out interesting); Vandal
+  `CORLART` is `artillery`. `frontliner` (user's name) = mobile non-air
+  units fighting up close: a surface weapon, none of `skirmisher`,
+  `artillery`, `aoe`, builder, mine layer, scout, commander, decoy or
+  dedicated or heavy anti-air (subs and bombs are out). User's list on top
+  of these rules: `skirmisher` also Crusader, Enforcer, Nixer, Wombat, Fido,
+  Manticore, Behemoth, Centurion, Cerberus, Overseer, Renegade; `scout` also
+  A.K., Jeffy, Peewee, Freaker, Zipper. `aoe` (name accepted) = special area
+  weapons, must stay away from allies: Pounder, Gorgon, Gargant, Decimator,
+  Zenith, Bastion (also `artillery`), Matriarch, Defiler, Tsar. An `aoe`
+  unit is neither `skirmisher` nor `frontliner`. Mirage is to fight from
+  range, paralyzing what can be paralyzed (user). `kamikaze` (user's name; the
+  brain will use them in a special way) = FBI `kamikaze=1`: crawling bombs,
+  mines but Perimeter Beacon, also Tick. `invisible` (user's name) =
+  `cloakcost` or `cloakcostmoving` > 0, or mines with `init_cloaked`.
+  `stealth` (user's name; invisible to radar) = `stealth=1`. Upgrades take
+  these two from the building: their own `init_cloaked`/`stealth` only mark
+  the hidden add-on. Engine: `can_cloak` needs `cloakcost` > 0, so Mirage,
+  Revenant, Invader, Roach, Vermin and Tick (cost 0 standing, 40 M moving,
+  `init_cloaked`) start cloaked but cannot be switched by order. Subs attack
+  only water units (user's rule; `submarine` stays): `attack_only: water` on
+  Lurker, Snake, Piranha, Shark, Maelstrom, Megalodon. Left out on the user's
+  word, as their missiles reach the surface: Stalker, Leviathan, Deluge,
+  Hammerhead, Abyssal, Vortex. Mines keep `threat_level` 0 (confirmed).
+  `hunter` (user's name) = concentrates fire on the first of its
+  `priority_targets`: Piranha, Shark (`submarine, commander, decoy` first,
+  as the brain does), Zephyr, Cormorant (`submarine` first); not Archer,
+  Shredder, Whirlwind, Banshee, Leviathan, Centaur, Shooter (user's choice).
+  Weapon damage tables: every torpedo and depth charge does ×4 on subs,
+  anti-air weapons hit aircraft; no bonus against tanks or tiers, except
+  Leviathan's torpedoes (×2 on commanders and decoys). `paralyzer-immune` (name accepted) =
+  `immunetoparalyzer=1`, 114 types (for upgrades their own flag, not the
+  building's); every `paralyzer` has it in
+  `ignore_units` (user's rule, also Warden; the mixed Medusa and Gorgon too,
+  as their other guns only tickle immune units, mostly T3+).
+  `carrier` = carriers (no `transport`); `transport` only for
+  units that load and unload, teleporters included (user's rule). VTOL
+  transports have no `canload`/`transportcapacity` in their FBI (commented
+  out, the mod loads them by script, "ferry" in its changelog): they stay
+  `transport`. Mission `mTRUCK` shows no way to load: no `transport`.
+  Conflicts between lists (user's rule): `underwater` in
+  `ignore_units` always wins, otherwise `priority_targets` wins. The 15
+  upgrades bolted on one building carry that building's tags, priority and
+  ignore lists (user's rule), but keep their own tier from the mod's
+  category and `threat_level` 0 (confirmed by the user; 9 share the
+  building's tier, 6 are one above it); ARMTECH/
+  CORTECH and ALL_L2/ALL_L3 do not inherit. The `amphibious` tag means land
+  and water: no `BOATD*` submarine has it (those classes have a minimum water
+  depth), Ark `ARMTSUB` does (`TANKDH6`, no minimum depth). In the
+  `priority_targets` of 12 armed subs `amphibious` names a target, as in the
+  user's ARMAABOAT row. The brain does not read this table. Weapon facts (engine `ballistic.cpp`):
+  a non-water weapon never hits a submerged target; a water weapon hits
+  only floating or submerged targets, not hovercraft, unless it has
+  `surfacefire`; `nottounderwater` rules out submerged targets. Facts:
+  the engine cuts Lua `name` at 31 characters (2 `*SFUS_UPGRADE` names);
+  CORSONJAM and CORUSUB say `side=ARM` in the mod, written as CORE; other
+  sides are ALL (9), MIS (6, mission units), GOK (1); `print` keeps at most
+  256 lines and 16 384 bytes in a tick, so a probe must spread long lists
+  over ticks.
 - Fixed after the user's 4-seat Core Prime game on 0.8.11 (all Fast Tech,
   rich; "economy hiccuping on a metal map"): metal income swung 45 ↔ 1 000
   with the same extractors, as energy stalls closed the extractors' gate,

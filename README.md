@@ -10,6 +10,10 @@ The package sits in a folder of its own because a brain package may hold
 only its own files, and because the same folder can be copied as is into
 the project's brains repository.
 
+[`data/units.json`](data/units.json) is a table of all Escalation units with
+their builders, threat level, target lists and tags. It stays outside the
+package and the brain does not read it yet.
+
 ## Pack and check
 
 `oa-tool` comes with the game.
