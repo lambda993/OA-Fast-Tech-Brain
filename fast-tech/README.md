@@ -294,6 +294,12 @@ on the water (scout ships stuck at the shore trying to reach land). The
 rest go to unexplored starts, then to grid cells the seat cannot see, unexplored
 ground first, never where another scout is going.
 
+**One map-wide radar.** Panopticon (Arm) and Shaper (Core) see 13 440
+units, the whole map: once one stands or is going up, no more radar towers
+are built (sonar still is). They hold 10 000 energy and 2 500 metal and
+jam, so they used to count as storage and jammers too, and a seat in the
+user's game raised twelve of them; now they are only radar.
+
 **Radar and sonar spread out.** The first tower faces the enemy (a sonar
 by the shore); each later one of the same kind goes to the explored
 point round the base (400 to 1 400 units out, on land for radar, on
@@ -376,7 +382,8 @@ the water only when there is dry ground within its reach of it, on its
 side.
 Otherwise a target on the unit's priority list is fair even if ignored, and
 a tier on that list only orders targets. Paralyzers ignore immune units with
-all their weapons. An area weapon never fires at a ground target with an own
+all their weapons, and economy buildings (tag `economy`, user's rule: a
+stunned generator or store loses nothing worth it). An area weapon never fires at a ground target with an own
 or allied ground unit within its blast, half of the weapon's
 `areaofeffect`. Paralyzers and area weapons hold fire and are given their
 targets by the brain (a unit on hold fire picks nothing itself but obeys an

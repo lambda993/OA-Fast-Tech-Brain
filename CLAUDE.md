@@ -334,8 +334,32 @@ error is logged once and the seat keeps playing).
 29. User's Metal Isles game (2026-11-07): check an FBI error in the log;
     a wave down to fewer than five units must regroup with another group
     and follow that wave.
+30. User's Painted Desert game (2026-11-08): one Panopticon is enough,
+    T4 builders should assist and repair around; were Tribulation and
+    B.F.G. in the build lists; a Centaur on patrol in the enemy base
+    attacked nothing; paralyzers must ignore economy buildings.
 
 ## State and open points
+
+- User's 4-seat Painted Desert game (2026-11-07/08, all Fast Tech, rich,
+  60 min, no errors):
+  - Twelve Panopticons in seat 1 (six in seat 3): `storage:` and
+    `jammer:` lines; ARMZIG/CORZIG have EnergyStorage 10 000, MetalStorage
+    2 500, RadarDistanceJam 2 688. Now `entry.map_radar` (radar ≥ 8 000) is
+    no storage or jammer, and with one standing no more radar towers.
+    Not seen in a headless match (none reached tier 4 in time).
+  - Tribulation ARMSSILO: in no AI list (probe of ARMUCV/ARMUCH: only
+    ARMZIG). B.F.G. CORBFG: CORUCK and CORUCH list it, but no Core seat
+    reached tier 4 in that game. T4 builders' other work (help frames,
+    assist factories, repairs) is the existing builder logic.
+  - A Centaur on patrol in the enemy base attacked nothing: not found.
+    Catalog: armed, combat, hits ground, range 600, not careful, index
+    201. FBI: `BadTargetCategory=NEXP`, `StandingMoveOrder=0` (hold
+    position); the engine only ranks bad-target categories lower
+    (`select_automatic_target`, `combat_state.cpp`). Energy was full. No
+    trace of the game; asked the user for time and place if seen again.
+  - Paralyzers (6 units) ignore `economy` (user's rule), in
+    `data/units.json`.
 
 - User's 4-seat Metal Isles game (2026-11-07, all Fast Tech, rich, ~45
   min, no script errors; the engine log shows 8×8 anti-aliasing at that
@@ -777,7 +801,8 @@ error is logged once and the seat keeps playing).
   `immunetoparalyzer=1`, 114 types (for upgrades their own flag, not the
   building's); every `paralyzer` has it in
   `ignore_units` (user's rule, also Warden; the mixed Medusa and Gorgon too,
-  as their other guns only tickle immune units, mostly T3+).
+  as their other guns only tickle immune units, mostly T3+), and
+  `economy` too (user's rule, 2026-11-08).
   `carrier` = carriers (no `transport`); `transport` only for
   units that load and unload, teleporters included (user's rule). VTOL
   transports have no `canload`/`transportcapacity` in their FBI (commented

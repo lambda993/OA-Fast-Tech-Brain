@@ -281,6 +281,13 @@ local function classify(index, record, inferred_tier)
     entry.energy_storage = entry.structure and not entry.builder and not entry.armed
         and num(record.energystorage) >= 500 and num(record.makesmetal) == 0 and entry.extracts == 0
         and num(record.energymake) <= num(record.energyuse)
+    -- A radar that covers the whole map (Panopticon, Shaper: 13 440): one
+    -- is enough (user). Their energy and metal stores and jammer made the
+    -- builders put up twelve of them as storage and jammers.
+    entry.map_radar = entry.radar_tower and entry.radar >= 8000
+    if entry.map_radar then
+        entry.jammer, entry.metal_storage, entry.energy_storage = false, false, false
+    end
     entry.metal_capacity = num(record.metalstorage)
     entry.energy_capacity = num(record.energystorage)
     entry.geo = string.find(string.upper(name), "GEOTHERMAL", 1, true) ~= nil

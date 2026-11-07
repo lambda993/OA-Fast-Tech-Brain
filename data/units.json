@@ -857,7 +857,8 @@
     "priority_targets": [],
     "ignore_units": [
       "underwater",
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [
@@ -1288,7 +1289,8 @@
     "ignore_units": [
       "aircraft",
       "underwater",
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [
@@ -3414,7 +3416,8 @@
     "ignore_units": [
       "aircraft",
       "underwater",
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [
@@ -5509,7 +5512,8 @@
     "ignore_units": [
       "aircraft",
       "underwater",
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [
@@ -5742,7 +5746,8 @@
     "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [
@@ -13651,7 +13656,8 @@
     "ignore_units": [
       "aircraft",
       "underwater",
-      "paralyzer-immune"
+      "paralyzer-immune",
+      "economy"
     ],
     "attack_only": [],
     "tags": [

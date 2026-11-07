@@ -1149,7 +1149,9 @@ local function try_radar(unit, entry)
     end
     local best
     local have = count_of(function(_, e) return e.radar_tower end)
-    if have < wanted then
+    -- One map-wide radar (Panopticon, Shaper) and no more radar towers.
+    local map_radar = count_of(function(_, e) return e.map_radar end) > 0
+    if have < wanted and not map_radar then
         for _, option in ipairs(catalog.buildable(entry, function(e) return e.radar_tower end)) do
             if best == nil or option.radar > best.radar then
                 best = option
