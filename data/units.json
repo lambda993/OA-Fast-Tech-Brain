@@ -11,6 +11,7 @@
       "CORAVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -32,6 +33,7 @@
       "CORGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -54,6 +56,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -74,6 +77,7 @@
       "ARMSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -104,6 +108,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -129,6 +134,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -158,6 +164,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -179,6 +186,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -209,6 +217,7 @@
       "ARMVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -230,6 +239,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -251,6 +261,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -270,6 +281,7 @@
       "ARMSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -291,6 +303,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -312,6 +325,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -330,6 +344,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -352,6 +367,7 @@
       "ARMHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -386,6 +402,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -410,6 +427,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -434,6 +452,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -472,6 +491,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -494,6 +514,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -521,6 +542,7 @@
       "ARMHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -548,6 +570,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -584,6 +607,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -607,6 +631,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -627,6 +652,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -656,6 +682,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -680,6 +707,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -699,6 +727,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -724,6 +753,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -747,6 +777,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -775,6 +806,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -799,6 +831,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -820,6 +853,7 @@
       "ARMELAB"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater",
@@ -843,6 +877,7 @@
       "ARMASP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -864,6 +899,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -895,6 +931,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -919,6 +956,7 @@
       "ARMECSUB"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -942,6 +980,7 @@
       "ARMPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -965,6 +1004,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -987,6 +1027,7 @@
       "ARMVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1010,6 +1051,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1035,6 +1077,7 @@
       "ARMVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1061,6 +1104,7 @@
       "ARMACV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -1095,6 +1139,7 @@
       "ARMBRTHA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -1132,6 +1177,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "ship",
       "submarine",
@@ -1163,6 +1209,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1185,6 +1232,7 @@
       "ARMHCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1205,6 +1253,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -1234,6 +1283,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1259,6 +1309,7 @@
       "ARMELAB"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -1283,6 +1334,7 @@
       "ARMHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1303,6 +1355,7 @@
       "ARMLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1319,6 +1372,7 @@
     "faction": "ARM",
     "built_by": [],
     "threat_level": 6,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1343,6 +1397,7 @@
       "ARMELAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1364,6 +1419,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1388,6 +1444,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1409,6 +1466,7 @@
       "ARMSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1429,6 +1487,7 @@
       "ARMPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1448,6 +1507,7 @@
       "ARMVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1469,6 +1529,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 6,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1496,6 +1557,7 @@
       "ARMPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "submarine",
       "ship",
@@ -1532,6 +1594,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1551,6 +1614,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1573,6 +1637,7 @@
       "ARMFSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1593,6 +1658,7 @@
       "ARMFEHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1613,6 +1679,7 @@
       "ARMELAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1631,6 +1698,7 @@
       "ARMESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1651,6 +1719,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1670,6 +1739,7 @@
       "ARMESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1690,6 +1760,7 @@
       "ARMGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1709,6 +1780,7 @@
       "ARMECH"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1731,6 +1803,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1755,6 +1828,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1783,6 +1857,7 @@
       "ARMECA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1806,6 +1881,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1834,6 +1910,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1856,6 +1933,7 @@
       "ARMECSA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1878,6 +1956,7 @@
       "ARMECA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1901,6 +1980,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1922,6 +2002,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -1941,6 +2022,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -1961,6 +2043,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -1992,6 +2075,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2012,6 +2096,7 @@
       "ARMECH"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2033,6 +2118,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -2058,6 +2144,7 @@
       "ARMECSUB"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2080,6 +2167,7 @@
       "ARMCSA"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -2116,6 +2204,7 @@
       "ARMCSA"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2143,6 +2232,7 @@
       "ARMECS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2164,6 +2254,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2189,6 +2280,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2212,6 +2304,7 @@
       "ARMPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -2238,6 +2331,7 @@
       "ARMSSY"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2265,6 +2359,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2285,6 +2380,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2306,6 +2402,7 @@
       "ARMLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2329,6 +2426,7 @@
       "ARMDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2352,6 +2450,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2376,6 +2475,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2403,6 +2503,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2425,6 +2526,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2445,6 +2547,7 @@
       "ARMSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2471,6 +2574,7 @@
       "ARMDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2492,6 +2596,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -2522,6 +2627,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2542,6 +2648,7 @@
       "ARMESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2562,6 +2669,7 @@
       "ARMFUS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2588,6 +2696,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2610,6 +2719,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2636,6 +2746,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2661,6 +2772,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2686,6 +2798,7 @@
       "ARMDECOM"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2706,6 +2819,7 @@
       "ARMGEO"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -2733,6 +2847,7 @@
       "ARMSPOT"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -2767,6 +2882,7 @@
       "ARMGUARD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -2804,6 +2920,7 @@
       "ARMFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -2830,6 +2947,7 @@
       "ARMLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2853,6 +2971,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2878,6 +2997,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -2902,6 +3022,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -2927,6 +3048,7 @@
       "ARMVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -2955,6 +3077,7 @@
       "ARMFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -2979,6 +3102,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -3012,6 +3136,7 @@
       "ARMFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -3038,6 +3163,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -3065,6 +3191,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -3097,6 +3224,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3122,6 +3250,7 @@
       "ARMSPOT"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3141,6 +3270,7 @@
       "ARMHLT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3163,6 +3293,7 @@
       "ARMFEHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3201,6 +3332,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3222,6 +3354,7 @@
       "ARMFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -3248,6 +3381,7 @@
       "ARMELAB"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -3273,6 +3407,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3300,6 +3435,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3324,6 +3460,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3346,6 +3483,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3366,6 +3504,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3387,6 +3526,7 @@
       "ARMLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -3429,6 +3569,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3451,6 +3592,7 @@
       "ARMVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "ship",
       "submarine",
@@ -3479,6 +3621,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3501,6 +3644,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -3524,6 +3668,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3546,6 +3691,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3568,6 +3714,7 @@
       "ARMHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3594,6 +3741,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3620,6 +3768,7 @@
       "ARMSPOT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3646,6 +3795,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3667,6 +3817,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3688,6 +3839,7 @@
       "ARMLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3707,6 +3859,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -3732,6 +3885,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3753,6 +3907,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -3773,6 +3928,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -3796,6 +3952,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -3816,6 +3973,7 @@
       "ARMELAB"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -3839,6 +3997,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -3869,6 +4028,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3890,6 +4050,7 @@
       "ARMHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -3915,6 +4076,7 @@
       "ARMVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3935,6 +4097,7 @@
       "ARMSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3955,6 +4118,7 @@
       "ARMVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3978,6 +4142,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -3998,6 +4163,7 @@
       "ARMESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4017,6 +4183,7 @@
       "ARMELAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4040,6 +4207,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4061,6 +4229,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -4092,6 +4261,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4115,6 +4285,7 @@
       "ARMVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4135,6 +4306,7 @@
       "ARMHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4159,6 +4331,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4179,6 +4352,7 @@
       "ARMELAB"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4201,6 +4375,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -4228,6 +4403,7 @@
       "ARMULAB"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [
       "aircraft",
       "commander",
@@ -4258,6 +4434,7 @@
       "ARMULAB"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4286,6 +4463,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4311,6 +4489,7 @@
       "ARMACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4330,6 +4509,7 @@
       "ARMESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4353,6 +4533,7 @@
       "ARMPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4380,6 +4561,7 @@
       "ARMECS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4403,6 +4585,7 @@
       "ARMVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -4431,6 +4614,7 @@
       "ARMSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4453,6 +4637,7 @@
       "ARMLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4481,6 +4666,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4501,6 +4687,7 @@
       "ARMELAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4526,6 +4713,7 @@
       "ARMSPOT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4546,6 +4734,7 @@
       "ARMLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4567,6 +4756,7 @@
       "ARMSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -4592,6 +4782,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -4619,6 +4810,7 @@
       "ARMUCV"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "commander",
       "decoy",
@@ -4656,6 +4848,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -4686,6 +4879,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4704,6 +4898,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -4735,6 +4930,7 @@
       "ARMESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4756,6 +4952,7 @@
       "ARMSCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -4780,6 +4977,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4799,6 +4997,7 @@
       "ARMSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4823,6 +5022,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4843,6 +5043,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -4868,6 +5069,7 @@
       "ARMSCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -4897,6 +5099,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -4924,6 +5127,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4945,6 +5149,7 @@
       "ARMSFUS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -4971,6 +5176,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -4992,6 +5198,7 @@
       "ARMHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5019,6 +5226,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5040,6 +5248,7 @@
       "ARMSHGEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5062,6 +5271,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -5086,6 +5296,7 @@
       "ARMECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -5114,6 +5325,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5137,6 +5349,7 @@
       "ARMECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5163,6 +5376,7 @@
       "ARMACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5184,6 +5398,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5212,6 +5427,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5236,6 +5452,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5260,6 +5477,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5281,6 +5499,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5307,6 +5526,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5328,6 +5548,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5354,6 +5575,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5374,6 +5596,7 @@
       "ARMUCV"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -5405,6 +5628,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -5438,6 +5662,7 @@
       "ARMUCV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5459,6 +5684,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5481,6 +5707,7 @@
       "ARMVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5506,6 +5733,7 @@
       "ARMECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "paralyzer-immune"
@@ -5531,6 +5759,7 @@
       "ARMSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "ship",
       "submarine",
@@ -5564,6 +5793,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "commander",
@@ -5615,6 +5845,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5638,6 +5869,7 @@
       "ARMUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -5672,6 +5904,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5692,6 +5925,7 @@
       "ARMHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5715,6 +5949,7 @@
       "ARMPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -5743,6 +5978,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -5773,6 +6009,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5797,6 +6034,7 @@
       "ARMDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5817,6 +6055,7 @@
       "ARMSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5837,6 +6076,7 @@
       "ARMGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5857,6 +6097,7 @@
       "ARMSSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5878,6 +6119,7 @@
       "ARMULAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5903,6 +6145,7 @@
       "ARMUCV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -5923,6 +6166,7 @@
       "ARMSSY"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -5952,6 +6196,7 @@
       "ARMSSY"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -5985,6 +6230,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6010,6 +6256,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6036,6 +6283,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6060,6 +6308,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6085,6 +6334,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6111,6 +6361,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6138,6 +6389,7 @@
       "ARMECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6161,6 +6413,7 @@
       "ARMACSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6186,6 +6439,7 @@
       "ARMDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6208,6 +6462,7 @@
       "ARMTICK"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6227,6 +6482,7 @@
       "ARMGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -6251,6 +6507,7 @@
       "ARMTICK"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6289,6 +6546,7 @@
       "ARMECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6313,6 +6571,7 @@
       "ARMECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -6347,6 +6606,7 @@
       "ARMULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -6375,6 +6635,7 @@
       "ARMLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -6403,6 +6664,7 @@
       "ARMSPOT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6425,6 +6687,7 @@
       "ARMFSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -6448,6 +6711,7 @@
       "ARMESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -6471,6 +6735,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -6497,6 +6762,7 @@
       "ARMNOMAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -6519,6 +6785,7 @@
       "ARMUCV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6544,6 +6811,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6564,6 +6832,7 @@
       "CORSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -6594,6 +6863,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -6619,6 +6889,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -6650,6 +6921,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6671,6 +6943,7 @@
       "CORVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6692,6 +6965,7 @@
       "CORFAHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6713,6 +6987,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6732,6 +7007,7 @@
       "CORSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6754,6 +7030,7 @@
       "CORESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6775,6 +7052,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6793,6 +7071,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -6814,6 +7093,7 @@
       "CORHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -6848,6 +7128,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6868,6 +7149,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -6893,6 +7175,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -6913,6 +7196,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -6939,6 +7223,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -6982,6 +7267,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7005,6 +7291,7 @@
       "CORVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -7030,6 +7317,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7050,6 +7338,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -7079,6 +7368,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7100,6 +7390,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -7134,6 +7425,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7162,6 +7454,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7186,6 +7479,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7207,6 +7501,7 @@
       "CORASP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7234,6 +7529,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7258,6 +7554,7 @@
       "CORECSUB"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7282,6 +7579,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7304,6 +7602,7 @@
       "CORVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7327,6 +7626,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -7348,6 +7648,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -7370,6 +7671,7 @@
       "CORUCK"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [
       "commander",
       "decoy",
@@ -7405,6 +7707,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "ship",
       "submarine",
@@ -7438,6 +7741,7 @@
       "CORUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7458,6 +7762,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -7489,6 +7794,7 @@
       "CORECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -7524,6 +7830,7 @@
       "CORHCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7544,6 +7851,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -7566,6 +7874,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -7595,6 +7904,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -7618,6 +7928,7 @@
       "CORHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7638,6 +7949,7 @@
       "CORLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7654,6 +7966,7 @@
     "faction": "CORE",
     "built_by": [],
     "threat_level": 6,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -7678,6 +7991,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -7704,6 +8018,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -7725,6 +8040,7 @@
       "CORSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7745,6 +8061,7 @@
       "CORPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7765,6 +8082,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -7787,6 +8105,7 @@
       "CORVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7805,6 +8124,7 @@
       "COREVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7827,6 +8147,7 @@
       "CORESPEN"
     ],
     "threat_level": 6,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -7855,6 +8176,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7877,6 +8199,7 @@
       "CORPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "submarine",
       "ship",
@@ -7913,6 +8236,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7932,6 +8256,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -7954,6 +8279,7 @@
       "CORFSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7974,6 +8300,7 @@
       "CORFEHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -7994,6 +8321,7 @@
       "CORGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8015,6 +8343,7 @@
       "CORUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8034,6 +8363,7 @@
       "CORESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8054,6 +8384,7 @@
       "CORUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8073,6 +8404,7 @@
       "CORESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8093,6 +8425,7 @@
       "COREVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8112,6 +8445,7 @@
       "CORECH"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8133,6 +8467,7 @@
       "CORECA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8156,6 +8491,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8184,6 +8520,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8206,6 +8543,7 @@
       "CORECSA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8227,6 +8565,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8247,6 +8586,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8269,6 +8609,7 @@
       "CORECA"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8292,6 +8633,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8313,6 +8655,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -8334,6 +8677,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -8365,6 +8709,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8385,6 +8730,7 @@
       "CORECH"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8406,6 +8752,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -8431,6 +8778,7 @@
       "CORECSUB"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8452,6 +8800,7 @@
       "CORHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -8476,6 +8825,7 @@
       "CORCSA"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8503,6 +8853,7 @@
       "CORECS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8527,6 +8878,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8550,6 +8902,7 @@
       "CORPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8569,6 +8922,7 @@
       "CORSSY"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -8596,6 +8950,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8620,6 +8975,7 @@
       "CORDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8643,6 +8999,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8667,6 +9024,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8691,6 +9049,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8712,6 +9071,7 @@
       "CORCSA"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -8749,6 +9109,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8769,6 +9130,7 @@
       "CORSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -8795,6 +9157,7 @@
       "CORDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8816,6 +9179,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -8846,6 +9210,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8866,6 +9231,7 @@
       "CORESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8886,6 +9252,7 @@
       "CORFUS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8912,6 +9279,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8934,6 +9302,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8960,6 +9329,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -8981,6 +9351,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9006,6 +9377,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9031,6 +9403,7 @@
       "CORDECOM"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9051,6 +9424,7 @@
       "CORGEO"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9074,6 +9448,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9096,6 +9471,7 @@
       "CORFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -9124,6 +9500,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9149,6 +9526,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9173,6 +9551,7 @@
       "CORFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -9197,6 +9576,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -9230,6 +9610,7 @@
       "CORFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -9257,6 +9638,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -9280,6 +9662,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -9307,6 +9690,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -9339,6 +9723,7 @@
       "CORFAHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9361,6 +9746,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9389,6 +9775,7 @@
       "CORMPAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9408,6 +9795,7 @@
       "CORHLT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9430,6 +9818,7 @@
       "CORFEHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9468,6 +9857,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9489,6 +9879,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9511,6 +9902,7 @@
       "CORFEHP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -9537,6 +9929,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -9562,6 +9955,7 @@
       "CORFAHP"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9586,6 +9980,7 @@
       "CORSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9609,6 +10004,7 @@
       "CORVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -9641,6 +10037,7 @@
       "CORACV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -9675,6 +10072,7 @@
       "CORINT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -9715,6 +10113,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9735,6 +10134,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9757,6 +10157,7 @@
       "CORGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9777,6 +10178,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -9816,6 +10218,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9836,6 +10239,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9857,6 +10261,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9878,6 +10283,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9903,6 +10309,7 @@
       "CORUSCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9929,6 +10336,7 @@
       "CORMPAD"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9948,6 +10356,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -9970,6 +10379,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -9988,6 +10398,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10016,6 +10427,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10037,6 +10449,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -10058,6 +10471,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10083,6 +10497,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10103,6 +10518,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10131,6 +10547,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10152,6 +10569,7 @@
       "CORHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -10174,6 +10592,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -10199,6 +10618,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -10226,6 +10646,7 @@
       "CORVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10246,6 +10667,7 @@
       "CORSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10266,6 +10688,7 @@
       "CORVP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10289,6 +10712,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10309,6 +10733,7 @@
       "CORESY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10328,6 +10753,7 @@
       "CORGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10351,6 +10777,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10372,6 +10799,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10394,6 +10822,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10416,6 +10845,7 @@
       "CORULAB"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -10438,6 +10868,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -10469,6 +10900,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10492,6 +10924,7 @@
       "CORVCAR"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10512,6 +10945,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10531,6 +10965,7 @@
       "CORHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10555,6 +10990,7 @@
       "CORUCK"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "commander",
       "decoy",
@@ -10590,6 +11026,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -10620,6 +11057,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10645,6 +11083,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10672,6 +11111,7 @@
       "CORECS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10692,6 +11132,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10713,6 +11154,7 @@
       "CORSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10740,6 +11182,7 @@
       "CORMPAD"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -10774,6 +11217,7 @@
       "CORPUN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -10811,6 +11255,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -10838,6 +11283,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10858,6 +11304,7 @@
       "CORVP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10879,6 +11326,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10904,6 +11352,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -10925,6 +11374,7 @@
       "CORGANT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10950,6 +11400,7 @@
       "CORMPAD"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10970,6 +11421,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -10989,6 +11441,7 @@
       "CORSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -11014,6 +11467,7 @@
       "CORLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11033,6 +11487,7 @@
       "CORESY"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -11064,6 +11519,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11088,6 +11544,7 @@
       "CORSCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -11112,6 +11569,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -11141,6 +11599,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11162,6 +11621,7 @@
       "CORSCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -11192,6 +11652,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11213,6 +11674,7 @@
       "CORSFUS"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11239,6 +11701,7 @@
       "CORUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -11264,6 +11727,7 @@
       "CORHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11290,6 +11754,7 @@
       "CORPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "commander",
       "decoy",
@@ -11321,6 +11786,7 @@
       "CORESPEN"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "commander",
@@ -11358,6 +11824,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11382,6 +11849,7 @@
       "CORUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -11416,6 +11884,7 @@
       "CORECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -11446,6 +11915,7 @@
       "CORESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11465,6 +11935,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11492,6 +11963,7 @@
       "CORUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft"
     ],
@@ -11519,6 +11991,7 @@
       "CORECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11545,6 +12018,7 @@
       "CORACV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11566,6 +12040,7 @@
       "CORHP"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11596,6 +12071,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11620,6 +12096,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11644,6 +12121,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11665,6 +12143,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11683,6 +12162,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -11710,6 +12190,7 @@
       "CORECV"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "commander",
       "decoy",
@@ -11747,6 +12228,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11770,6 +12252,7 @@
       "CORESPEN"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11793,6 +12276,7 @@
       "CORESPEN"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -11826,6 +12310,7 @@
       "CORUCK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11846,6 +12331,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11869,6 +12355,7 @@
       "CORSY"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "ship",
       "submarine",
@@ -11900,6 +12387,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -11939,6 +12427,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -11962,6 +12451,7 @@
       "CORUSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [
       "aircraft",
       "submarine",
@@ -11991,6 +12481,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -12012,6 +12503,7 @@
       "CORGANT"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -12036,6 +12528,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12056,6 +12549,7 @@
       "CORHP"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12076,6 +12570,7 @@
       "CORLAB"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -12101,6 +12596,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12123,6 +12619,7 @@
       "CORVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "ship",
       "submarine",
@@ -12155,6 +12652,7 @@
       "CORDECOM"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12179,6 +12677,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "commander",
       "decoy",
@@ -12217,6 +12716,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -12244,6 +12744,7 @@
       "CORULAB"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -12269,6 +12770,7 @@
       "CORSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12288,6 +12790,7 @@
       "CORSSY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12309,6 +12812,7 @@
       "CORULAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12334,6 +12838,7 @@
       "CORUCK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12354,6 +12859,7 @@
       "CORSSY"
     ],
     "threat_level": 4,
+    "veteran_kills": 50,
     "priority_targets": [
       "aircraft"
     ],
@@ -12383,6 +12889,7 @@
       "CORSSY"
     ],
     "threat_level": 5,
+    "veteran_kills": 100,
     "priority_targets": [
       "submarine",
       "amphibious"
@@ -12416,6 +12923,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12441,6 +12949,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12467,6 +12976,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12491,6 +13001,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12516,6 +13027,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12542,6 +13054,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12569,6 +13082,7 @@
       "CORECSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12592,6 +13106,7 @@
       "CORACSUB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12617,6 +13132,7 @@
       "CORDECOM"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12641,6 +13157,7 @@
       "CORPLAT"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12662,6 +13179,7 @@
       "CORVCAR"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [
       "aircraft"
     ],
@@ -12693,6 +13211,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12716,6 +13235,7 @@
       "COREVP"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -12742,6 +13262,7 @@
       "CORPLAT"
     ],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -12770,6 +13291,7 @@
       "CORFSCAR"
     ],
     "threat_level": 3,
+    "veteran_kills": 20,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -12795,6 +13317,7 @@
       "CORACV"
     ],
     "threat_level": 2,
+    "veteran_kills": 10,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12814,6 +13337,7 @@
       "CORLAB"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12849,6 +13373,7 @@
       "CORECV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12870,6 +13395,7 @@
       "CORBULK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12889,6 +13415,7 @@
       "CORBULK"
     ],
     "threat_level": 2,
+    "veteran_kills": 5,
     "priority_targets": [
       "aircraft"
     ],
@@ -12919,6 +13446,7 @@
       "CORMPAD"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12940,6 +13468,7 @@
       "CORUCK"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12959,6 +13488,7 @@
     "faction": "GOK",
     "built_by": [],
     "threat_level": 3,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "underwater"
@@ -12979,6 +13509,7 @@
     "faction": "ARM",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -12995,6 +13526,7 @@
     "faction": "ARM",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13014,6 +13546,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13030,6 +13563,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13046,6 +13580,7 @@
     "faction": "CORE",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13065,6 +13600,7 @@
     "faction": "CORE",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13081,6 +13617,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13097,6 +13634,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 2,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -13118,6 +13656,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 1,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [
       "aircraft",
@@ -13138,6 +13677,7 @@
     "faction": "MIS",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13153,6 +13693,7 @@
     "faction": "ARM",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13173,6 +13714,7 @@
       "CORZIG"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13194,6 +13736,7 @@
       "CORMLV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13221,6 +13764,7 @@
       "CORMLV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13248,6 +13792,7 @@
       "CORMLV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13273,6 +13818,7 @@
       "CORMLV"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13296,6 +13842,7 @@
       "CORSPY"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13319,6 +13866,7 @@
       "CORZIG"
     ],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],
@@ -13335,6 +13883,7 @@
     "faction": "CORE",
     "built_by": [],
     "threat_level": 0,
+    "veteran_kills": 5,
     "priority_targets": [],
     "ignore_units": [],
     "attack_only": [],

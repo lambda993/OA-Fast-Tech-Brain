@@ -18,10 +18,12 @@ with open("fast-tech/lua/unit_table.lua", "w", encoding="utf-8", newline="\n") a
     out.write("-- SPDX-FileCopyrightText: Lambda993\n")
     out.write("-- SPDX-License-Identifier: GPL-3.0-only\n\n")
     out.write("-- Generated from data/units.json by data/make_unit_table.py: do not edit.\n")
-    out.write("-- threat, priority targets, ignored units, attack-only targets, tags.\n")
+    out.write("-- threat, priority targets, ignored units, attack-only targets, tags,\n")
+    out.write("-- kills for the first veteran level.\n")
     out.write("return {\n")
     for row in rows:
-        out.write('["%s"]={%d,%s,%s,%s,%s},\n' % (
+        out.write('["%s"]={%d,%s,%s,%s,%s,%d},\n' % (
             row["id"].upper(), row["threat_level"], words(row["priority_targets"]),
-            words(row["ignore_units"]), words(row["attack_only"]), words(row["tags"])))
+            words(row["ignore_units"]), words(row["attack_only"]), words(row["tags"]),
+            row["veteran_kills"]))
     out.write("}\n")

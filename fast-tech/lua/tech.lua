@@ -316,6 +316,20 @@ function tech.could_scout(unit, entry)
     return false
 end
 
+-- From tier 2 the seat keeps an air factory (user's rule: aircraft are
+-- useful whatever the map). Its best finished one keeps making aircraft
+-- when it falls a tier behind, and is never reclaimed for room.
+function tech.air_factory()
+    local best, best_tier
+    for _, unit in ipairs(world.select(function(u, e) return e.factory and e.line == "air" and world.finished(u) end)) do
+        local tier = catalog.factory_tier(catalog.of(unit))
+        if best_tier == nil or tier > best_tier then
+            best, best_tier = unit, tier
+        end
+    end
+    return best
+end
+
 -- The lowest, nearest factory below the top tier: room for a large lab.
 -- Only one whose ground is a good part of the lab's: an 8x6 plant gone
 -- leaves no room for an 18x18 lab (it was reclaimed for nothing).
@@ -323,10 +337,11 @@ function tech.make_room()
     local base = world.base or world.start
     local best, best_key
     local wanted = tech.goal ~= nil and tech.goal.footprint or 0
+    local air = tech.air_factory()
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
         local entry = catalog.of(unit)
         local tier = catalog.factory_tier(entry)
-        if unit ~= tech.scout_lab and tier < world.tier and tech.reclaiming[unit.id] == nil
+        if unit ~= tech.scout_lab and unit ~= air and tier < world.tier and tech.reclaiming[unit.id] == nil
             and not tech.leads_on(entry) and entry.footprint >= wanted * 0.6 then
             local at = util.pos(unit)
             local key = tier * 100000 + (at and util.dist(at, base) or 0)

@@ -111,7 +111,10 @@ building would sit there. Every factory site, in the grid or outside it,
 also needs open ground for its widest unit three cells out of both ends
 along the axis its units leave by: `map:passable` sees trees, rocks,
 cliffs, water for a land plant and buildings already up (factories were
-put down between trees and a building and their units stayed in). When a
+put down between trees and a building and their units stayed in). A
+shipyard or floating plant needs only one open end, as by the shore one end
+is always land (six seats of seven found no site for their first Shipyard
+on Seven Islands); the open water kept round it does the rest. When a
 finished factory's lanes are blocked anyway, a builder within 1 200 units
 reclaims what stands there (reclaiming a point takes features only; under
 the sea or inside an own building is skipped), at most three times per
@@ -151,7 +154,14 @@ test matches. A repairer that stands idle ten seconds after it was sent
 (it could not get there) drops the repair, and is not sent to that
 target again for a minute; repairers are only builders that can reach
 the target, and the commander waits at home for repair only when one
-can. A builder alone on a frame is never sent to other work (no new task,
+can. The same goes for help: a builder helps a frame or a factory, or
+mends a unit, only when it gets within its build distance of it (to the
+thing itself or to a point at its edge); subs and ships no longer stand
+for minutes helping frames on land, nor land builders frames out on the
+water. In one turn at most eight builders look for new work, in turn
+round the list (a seat with forty builders was stopped for a turn past
+250 ms), and none more after a wide search for a lab site (some thirty
+placements), which also holds the scouts back a turn. A builder alone on a frame is never sent to other work (no new task,
 no emergency repair, no call back for the economy) until the frame is
 up; it runs only when it is under fire (hit in the last ten seconds) and
 down to 75 % health. The commander keeps its own rules. No builder is sent to a site it cannot get to: every site is
@@ -325,7 +335,11 @@ anti-air on top of another role keep that role.
 weapons at aircraft, other weapons at the rest, and the table narrows that
 down. `attack_only` is a closed list (Lurker, Snake, Piranha, Shark,
 Maelstrom and Megalodon only shoot `water` units). `underwater` among the
-ignored always wins, so does an amphibious unit standing under water.
+ignored always wins, so does an amphibious unit standing under water: a
+target that dives is dropped, and not chased. An amphibious unit with no
+water weapon cannot fire from under the sea, so it takes a target out on
+the water only when there is dry ground within its reach of it, on its
+side.
 Otherwise a target on the unit's priority list is fair even if ignored, and
 a tier on that list only orders targets. Paralyzers ignore immune units with
 all their weapons. An area weapon never fires at a ground target with an own
@@ -353,10 +367,15 @@ over 60 % and income pays for it, and all drop it under 20 %.
 `kamikaze` units (crawling bombs, Tick, mines) are in no AI build list, so
 the brain cannot make them.
 
+A unit keeps its target for at least ten seconds (from the order) before it
+looks for a better one, unless the target dies, leaves its sight or its
+reach (user's idea, for speed: the search for every unit every three seconds
+was most of the army's cost in big fights).
+
 **Paths.** A soldier whose path failed waits thirty seconds before its next
 attack-move: ships sent to a point they cannot reach asked for the path again
-every step. Each minute the seat log counts the step-backs and the cloaked
-units (`distance: ...`).
+every step. Each minute the seat log counts the step-backs, the cloaked
+units, and the targets kept and searched (`distance: ...`).
 
 **Air raids.** Four or more enemy aircraft that hit the ground, within
 600 units of each other and of own or allied ground units, are a swarm.
@@ -365,7 +384,9 @@ anti-air (mobile or a tower, own or allied) within 2 000 units for ten
 seconds, and every fighter of the seat goes for the raiders (`air raid
 (n raiders): a units to anti-air, b fighters sent`). Factories keep at
 least three mobile anti-air units in the army, one more for every ten
-other ground units, so every group that leaves has some.
+other ground units, so every group that leaves has some. Until enemy
+aircraft are seen, at most ten escorts stand (user's rule; static anti-air
+is not limited).
 
 **Orders and speed.** A unit's damage events are read at most every ten
 ticks (a unit under fire is hit many times a second). An attack order is given again only for a new
@@ -455,12 +476,24 @@ come out; every armed factory is set to hold fire once it is finished.
 
 **Emergency repairs.** While the base is under attack (an alarm within
 the last minute), buildings worth 5 000 metal or more below half health
-get three builders each, who drop what they do. Units worth 5 000 metal
-or more, whatever their tier, go home below 30 % health; within 900
-units of the base three builders mend each, and the unit rejoins the
-army at 95 %. Ships, and any unit that cannot get to the base, wait on
-the water by it (within 1 600 units); one that stands idle short of its
-spot is sent again, and after three tries rejoins the army. From tier 3 the builders put up the
+get three builders each, who drop what they do.
+
+**Repairs of units** (user's rule). Every veteran (its kills reach the
+first veteran level of its type: the mod's `VeterancyThresholds`, kept in
+the table as `veteran_kills`, else the engine's 5) and every unit worth
+5 000 metal or more goes home below half health, and waits there until
+mended to full health (99 %) before it joins a wave again. Aircraft go to
+repair pads instead. Within 900 units of the base two free builders (idle
+or parked, not at work on a frame or a walk) mend each. Ships, and any
+unit that cannot get to the base, wait on the water by it (within 1 600
+units); one that stands idle short of its spot is sent again, and after
+three tries rejoins the army. A unit is sent only while some builder
+could come to mend it, and one nobody mends for three minutes goes back
+to the army. Builders below half health go home too, even off a frame
+they were alone on, and take no work until mended (`builders home for
+repair: N`); only while another builder could mend them, for at most two
+minutes. The seat log's `army:` line each minute gives the units home and
+sent so far. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other
@@ -503,7 +536,13 @@ spent rather than stored.
 **More factories.** With metal and energy to spare and the next lab not
 going up, builders add factories of the top tier or the one below, up to
 three (fair) or four of each, never while energy is short and never past
-three times that in all.
+three times that in all. From tier 2, if the seat has no air factory, the first extra
+factory is one (user's rule: aircraft are useful on any map, and with the
+enemy across water the line order never chose one): the highest tier the
+builder can put up, a seaplane platform on a map that is mostly water
+(`air factory: <name>`). The seat's best air factory goes on making
+aircraft (60 % of its turns) when it falls a tier behind, and is never
+reclaimed for room.
 
 ## Engine limitations
 
@@ -597,7 +636,16 @@ seen and how; whether it is a fault is for the engine's author to judge.
     hovercraft and sea-floor walkers going more than 3 000 units are judged
     on that coarse map alone there: their long searches cost about 2.3 s per
     seat at the start of an 8Islands game, the lag of some ten seconds the
-    user saw with eight seats. Scouts send at most two a tick and their reach
+    user saw with eight seats. On such a map that is mostly sea (60 % or
+    more) a land class (`TANKS*`, `KBOT*`) is not routed where the coarse map
+    says no: from an island, shallow-water tanks searched the whole million
+    cells, forty routes a seat on Seven Islands (map line at 8-12 s before,
+    under 2 s now). A tick asks at most 24 fresh `map:reachable`
+    questions, of at most four movement classes (the engine rebuilds the
+    regions of every class past four in a tick); past that the answer is
+    "not now" and the builder or scout tries again later: seats stopped in
+    builders, army and scouts on Seven Islands and 8Islands without it.
+    Scouts send at most two a tick and their reach
     tests are cached, as on that map each new movement class in a turn
     rebuilds its regions (the engine keeps four a tick).
 

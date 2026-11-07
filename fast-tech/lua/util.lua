@@ -91,6 +91,14 @@ end
 -- large map, and a turn over 250 ms stops the seat.
 local route_turn = -1
 local reach_cache = {} -- "class:from>to" -> {tick, result}
+-- Fresh map:reachable questions a tick: the engine keeps the regions of
+-- four movement classes a tick and builds them again for each other one,
+-- which on a map past a million cells cost turns past 250 ms (Seven
+-- Islands, 8Islands: seats stopped in builders, army and scouts). Past the
+-- budget the answer is "not now" (nil): the caller tries again later.
+local budget_classes = 4
+local budget_asks = 24
+local budget_tick, budget_seen, budget_count, budget_kinds = -1, {}, 0, 0
 local route_cap = 1048576
 
 -- Whether `unit` can travel to `point`. Aircraft and units without a
@@ -151,6 +159,18 @@ function util.reachable(unit, point, sure)
     if known ~= nil and me.tick - known.tick < 30 * 60 then
         result = known.result
     else
+        if budget_tick ~= me.tick then
+            budget_tick, budget_seen, budget_count, budget_kinds = me.tick, {}, 0, 0
+        end
+        if budget_count >= budget_asks or (not budget_seen[class] and budget_kinds >= budget_classes) then
+            util.reach_deferred = (util.reach_deferred or 0) + 1
+            return nil
+        end
+        if not budget_seen[class] then
+            budget_seen[class] = true
+            budget_kinds = budget_kinds + 1
+        end
+        budget_count = budget_count + 1
         local ok, answer = pcall(function() return game.map:reachable(from, to, class) end)
         result = ok and answer or nil
         reach_cache[key] = {tick = me.tick, result = result}

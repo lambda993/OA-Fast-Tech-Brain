@@ -66,6 +66,10 @@ local function count_crews()
     if #frames == 0 then
         return
     end
+    local by_id = {}
+    for _, frame in ipairs(frames) do
+        by_id[frame.id] = frame
+    end
     for _, worker in ipairs(world.select(function(u, e) return e.mobile_builder and world.finished(u) end)) do
         local orders = worker:orders()
         local head = type(orders) == "table" and orders[1] or nil
@@ -73,11 +77,7 @@ local function count_crews()
             local target = head.target
             local found = nil
             if (type(target) == "userdata" or type(target) == "table") and target.id ~= nil then
-                for _, frame in ipairs(frames) do
-                    if frame.id == target.id then
-                        found = frame
-                    end
-                end
+                found = by_id[target.id]
             end
             local x, z = util.num(head.x), util.num(head.z)
             if found == nil and (x > 0 or z > 0) then
@@ -151,6 +151,39 @@ local factory_margin = 64
 local function half_size(entry)
     return math.max(util.num(entry.record.footprintx), util.num(entry.record.footprintz)) * 8
 end
+
+-- Whether a builder gets within its build distance of `target` (a frame, a
+-- factory, a unit to mend): to the thing itself, or to a point at its edge,
+-- the side facing the builder first. Subs and ships stood for minutes
+-- helping frames on land they could never reach (user's Seven Islands
+-- game), and land builders frames out on the water.
+local function reaches_work(unit, target)
+    local where = util.pos(target)
+    local at = util.pos(unit)
+    if where == nil or at == nil then
+        return true
+    end
+    if util.reachable(unit, where) then
+        return true
+    end
+    local kind = catalog.of(target)
+    local half = kind ~= nil and math.max(util.num(kind.record.footprintx), util.num(kind.record.footprintz)) * 8 or 16
+    local reach = half + math.max(64, util.num(unit.type and unit.type.builddistance)) * 0.8
+    if util.dist(at, where) <= reach then
+        return true
+    end
+    if util.reachable(unit, util.clamp(util.toward(where, at, reach), 32)) then
+        return true
+    end
+    for step = 0, 3 do
+        if util.reachable(unit, util.clamp(util.around(where, step / 4, reach), 32)) then
+            return true
+        end
+    end
+    return false
+end
+
+builders.reaches_work = reaches_work
 
 -- A factory's units leave by its door, on the axis it faces (facing 0 and
 -- 2, heading 0 and 32768: the z axis). Its door and back must stay clear
@@ -243,7 +276,7 @@ local function exit_cells(entry, x, z, axis, first)
             end
             local ok, cell = pcall(function() return map:passable(class, ax, az) end)
             if ok and cell == 0 then
-                found[#found + 1] = {x = ax * 16 + unit_size * 8, z = az * 16 + unit_size * 8}
+                found[#found + 1] = {x = ax * 16 + unit_size * 8, z = az * 16 + unit_size * 8, side = side}
                 if first then
                     return found
                 end
@@ -253,8 +286,24 @@ local function exit_cells(entry, x, z, axis, first)
     return found
 end
 
+-- A shipyard or floating plant needs one open end: by the shore one end
+-- is always land, and six seats of seven found no site for their first
+-- Shipyard on Seven Islands (two minutes lost each); ships leave by more
+-- than one side anyway (the open water round it is kept by `rings`).
 local function exit_blocked(entry, x, z, facing)
-    return #exit_cells(entry, x, z, facing % 2 == 0 and "z" or "x", true) > 0
+    local axis = facing % 2 == 0 and "z" or "x"
+    if not entry.water_only then
+        return #exit_cells(entry, x, z, axis, true) > 0
+    end
+    local front, back = false, false
+    for _, cell in ipairs(exit_cells(entry, x, z, axis, false)) do
+        if cell.side > 0 then
+            front = true
+        else
+            back = true
+        end
+    end
+    return front and back
 end
 
 local function crowds_factory(entry, x, z, facing)
@@ -484,7 +533,7 @@ end
 
 -- Puts `entry` down near `near`, searching `radius` world units. When
 -- `walk` is set and the ground is unexplored, the builder walks there.
-local function place(unit, entry, near, radius, walk)
+local function place(unit, entry, near, radius, walk, keep_off)
     local spot = util.clamp(near, 64)
     for attempt = 1, 3 do
         local facing = brain.random(4) - 1
@@ -494,7 +543,8 @@ local function place(unit, entry, near, radius, walk)
             return attempt == 1 and walk == true and scout_site(unit, spot)
         end
         x, z = util.whole(x), util.whole(z)
-        if not crowds_factory(entry, x, z, facing) and util.reachable(unit, {x = x, z = z}, entry.factory) then
+        local off = keep_off == nil or util.dist({x = x, z = z}, keep_off.at) >= keep_off.range
+        if off and not crowds_factory(entry, x, z, facing) and util.reachable(unit, {x = x, z = z}, entry.factory) then
             return unit:build(entry.record, {x = x, z = z}, facing) == true
         end
     end
@@ -531,6 +581,8 @@ local function place_wide(unit, entry, centre)
         return false, false
     end
     clock[entry.index] = me.tick
+    -- Some thirty placements: the rest of this turn's work waits.
+    builders.heavy_tick = me.tick
     local home = base()
     local function near_home(x, z)
         return not commander or home == nil or util.dist(home, {x = x, z = z}) <= builders.leash
@@ -577,11 +629,30 @@ end
 -- builders that cannot sail still reach them. With no room on explored
 -- ground a builder other than the commander walks out to the nearest
 -- unexplored block.
+local shore_reserve = 320
+
 local function build_in_city(unit, entry, toward)
     if entry.water_only then
         local water = terrain.shore or terrain.water_point
         if water == nil then
             return false
+        end
+        -- The shore point is kept for shipyards: Arm's commander put its
+        -- first Floating Wind Generator there, and the open water a
+        -- shipyard keeps round it then left no site for the first Shipyard
+        -- (Seven Islands, two minutes lost by every Arm seat; Core built
+        -- no water power first and was well ahead). Other water buildings
+        -- go some way along the shore.
+        if not entry.factory then
+            local aside = util.clamp(util.around(water, brain.random(1000) / 1000, shore_reserve + 80), 64)
+            if place(unit, entry, aside, 480, true, {at = water, range = shore_reserve}) then
+                return true
+            end
+            -- With a shipyard up, the shore point is free to take.
+            if count_of(function(_, e) return e.factory and e.water_only end) == 0 then
+                return false
+            end
+            return place(unit, entry, water, 480, true)
         end
         if place(unit, entry, water, 480, true) then
             return true
@@ -674,7 +745,7 @@ local function try_goal(unit, entry)
     end
     if tech.frame_alive() then
         tech.orders = 0
-        return unit:help(tech.frame) == true
+        return reaches_work(unit, tech.frame) and unit:help(tech.frame) == true
     end
     if recently("goal", 45) or not tech.affordable() then
         return false
@@ -1190,6 +1261,28 @@ local function try_more_factories(unit, entry)
         count[level] = (count[level] or 0) + 1
     end
     local limit = me.difficulty == "hard" and 3 or 4
+    -- From tier 2 an air factory first, if the seat has none (user's rule:
+    -- aircraft are useful whatever the map; with the enemy across water the
+    -- line order put air behind ships and hover, and none was ever built):
+    -- the highest tier this builder can put up, a seaplane platform on a
+    -- map that is mostly water.
+    if tier >= 2 and count_of(function(_, f) return f.factory and f.line == "air" end) == 0 then
+        local wet = terrain.water_share >= 0.5
+        local air, air_score
+        for _, option in ipairs(catalog.buildable(entry, function(f)
+            return f.factory and f.line == "air" and catalog.factory_tier(f) <= tier and f ~= tech.goal
+        end, terrain.ship_ok)) do
+            local score = catalog.factory_tier(option) * 10 + ((option.water_only == wet) and 5 or 0)
+            if air_score == nil or score > air_score then
+                air, air_score = option, score
+            end
+        end
+        if air ~= nil and build_in_city(unit, air) then
+            mark("factory")
+            print("air factory: " .. air.name)
+            return true
+        end
+    end
     -- All tiers together: old factories wait to be reclaimed, and the
     -- builders and energy go to the new ones.
     local total = 0
@@ -1318,7 +1411,7 @@ local function try_help(unit, reach)
         local where = util.pos(frame)
         if where ~= nil then
             local d = util.dist(at, where)
-            if d <= reach and (best_d == nil or d < best_d) then
+            if d <= reach and (best_d == nil or d < best_d) and reaches_work(unit, frame) then
                 best, best_d = frame, d
             end
         end
@@ -1338,7 +1431,7 @@ local function try_help_frame(unit)
     end
     local at = util.pos(unit)
     local where = util.pos(tech.frame)
-    if at == nil or where == nil or util.dist(at, where) > 2500 then
+    if at == nil or where == nil or util.dist(at, where) > 2500 or not reaches_work(unit, tech.frame) then
         return false
     end
     if unit:help(tech.frame) then
@@ -1439,7 +1532,7 @@ local function try_resume(unit)
     local best, best_left
     for _, frame in ipairs(frames) do
         local where = util.pos(frame)
-        if where ~= nil and util.reachable(unit, where) then
+        if where ~= nil and reaches_work(unit, frame) then
             local mine = frame.id == own
             local idle = (builders.crew[frame.id] or 0) == 0
             if mine or (idle and util.dist(at, where) <= 1500) then
@@ -1515,7 +1608,8 @@ local function try_assist(unit, reach)
         end)) do
             local where = util.pos(candidate)
             local d = (at and where) and util.dist(at, where) or 0
-            if (reach == nil or d <= reach) and (factory_d == nil or d < factory_d) then
+            if (reach == nil or d <= reach) and (factory_d == nil or d < factory_d)
+                and reaches_work(unit, candidate) then
                 factory, factory_d = candidate, d
             end
         end
@@ -1858,9 +1952,14 @@ local function try_sweep(unit)
 end
 
 -- Emergencies: builders drop what they do to repair buildings worth 5000
--- metal or more that are below half health while the base is under fire,
--- and heavy units sent home to be mended.
+-- metal or more that are below half health while the base is under fire.
+-- Units sent home to be mended (veterans and heavy units, builders below
+-- half health) are repaired by free builders only: idle or parked ones,
+-- not one at work on a frame or a walk. They are mended to full health.
 builders.mend = {}      -- unit id -> tick it was sent home for repair
+builders.mend_done = 99
+builders.self_mend = {} -- builder id -> tick it went home to be mended
+local unit_repairers = 2
 builders.repairing = {} -- builder id -> id of what it repairs
 builders.repair_tick = {}   -- builder id -> tick it was sent to repair
 builders.repair_failed = {} -- "builder>target" -> tick the repair came to nothing
@@ -1899,7 +1998,7 @@ local function repair_targets()
     for id in pairs(builders.mend) do
         local unit = world.own[id]
         local at = unit and util.pos(unit)
-        if unit == nil or util.num(unit.health_percent) >= 95 then
+        if unit == nil or util.num(unit.health_percent) >= builders.mend_done then
             builders.mend[id] = nil
         -- Ships wait on the water by the base, further out.
         elseif at ~= nil and home ~= nil
@@ -1927,7 +2026,8 @@ local function send_repairs()
         if builder ~= nil and target ~= nil and util.free(builder) and me.tick - since > 30 * 10 then
             builders.repair_failed[builder_id .. ">" .. target_id] = me.tick
             builders.repairing[builder_id] = nil
-        elseif builder ~= nil and target ~= nil and util.num(target.health_percent) < 95 then
+        elseif builder ~= nil and target ~= nil
+            and util.num(target.health_percent) < (builders.mend[target_id] and builders.mend_done or 95) then
             crews[target_id] = (crews[target_id] or 0) + 1
         else
             builders.repairing[builder_id] = nil
@@ -1936,17 +2036,22 @@ local function send_repairs()
     local free = world.select(function(u, e)
         return e.mobile_builder and not e.commander and world.finished(u) and builders.repairing[u.id] == nil
             and (e.decoy or builders.running[u.id] == nil) and alone_on_frame(u) == nil
+            and builders.self_mend[u.id] == nil
     end)
     for _, target in ipairs(targets) do
         local where = util.pos(target)
-        local wanted = catalog.of(target).commander and commander_repairers or repairers_each
+        local kind = catalog.of(target)
+        local mobile = builders.mend[target.id] ~= nil
+        local wanted = kind.commander and commander_repairers or (mobile and unit_repairers or repairers_each)
         while where ~= nil and (crews[target.id] or 0) < wanted and #free > 0 do
             local best, best_index, best_d
             for index, unit in ipairs(free) do
                 local at = util.pos(unit)
                 local d = at and util.dist(at, where) or 1e9
                 local failed = builders.repair_failed[unit.id .. ">" .. target.id]
-                if (failed ~= nil and me.tick - failed < 30 * 60) or not util.reachable(unit, where) then
+                if (failed ~= nil and me.tick - failed < 30 * 60) or unit.id == target.id
+                    or (mobile and not util.free(unit) and builders.parked[unit.id] == nil)
+                    or not reaches_work(unit, target) then
                     d = 1e9
                 end
                 -- Decoys go first: they never leave an emergency repair.
@@ -2665,13 +2770,94 @@ local function released(unit, entry)
     return true
 end
 
+-- Builders below half health go home to be repaired (user's rule), even
+-- off a frame they were alone on, and take no work until mended. Only
+-- while another builder could come to mend them, else they work on; after
+-- two minutes with no mending they go back to work.
+local builder_mend_below = 50
+local builder_mend_wait = 30 * 120
+local turns_per_step = 8
+
+local function mend_spot(unit, entry)
+    local home = base()
+    if home == nil then
+        return nil
+    end
+    if entry.water_only or not util.reachable(unit, home) then
+        return terrain.shore or terrain.water_point
+    end
+    return home
+end
+
+local function other_mender(unit)
+    for _, other in ipairs(world.select(function(u, e)
+        return e.mobile_builder and not e.commander and world.finished(u) and u.id ~= unit.id
+            and builders.self_mend[u.id] == nil
+    end)) do
+        if reaches_work(other, unit) then
+            return true
+        end
+    end
+    return false
+end
+
+local function mend_builder(unit, entry)
+    local since = builders.self_mend[unit.id]
+    local health = util.num(unit.health_percent)
+    local at = util.pos(unit)
+    if since ~= nil then
+        if health >= builders.mend_done or me.tick - since > builder_mend_wait then
+            builders.self_mend[unit.id] = nil
+            builders.mend[unit.id] = nil
+            return false
+        end
+        local spot = mend_spot(unit, entry)
+        if at ~= nil and spot ~= nil and util.dist(at, spot) > 400 and util.free(unit) then
+            unit:move(util.clamp(util.toward(spot, at, 150), 64))
+        end
+        return true
+    end
+    if entry.commander or health >= builder_mend_below or at == nil then
+        return false
+    end
+    local spot = mend_spot(unit, entry)
+    if spot == nil or not other_mender(unit) then
+        return false
+    end
+    builders.self_mend[unit.id] = me.tick
+    builders.mend[unit.id] = me.tick
+    builders.repairing[unit.id] = nil
+    builders.parked[unit.id] = nil
+    local walk = builders.walking[unit.id]
+    if walk ~= nil then
+        builders.walking[unit.id] = nil
+        economy.claim({x = walk.x, z = walk.z}, 120)
+    end
+    if util.dist(at, spot) > 400 then
+        unit:move(util.clamp(util.toward(spot, at, 150), 64))
+    else
+        unit:stop()
+    end
+    builders.new_menders = (builders.new_menders or 0) + 1
+    return true
+end
+
 function builders.step()
     economy.read()
     count_crews()
     send_repairs()
     builders.new_runners = 0
     local list = world.select(function(u, e) return e.mobile_builder and world.finished(u) end)
-    for _, unit in ipairs(list) do
+    -- At most `turns_per_step` builders look for new work in one turn, in
+    -- turn round the list: a seat with forty builders (fifteen of them
+    -- decoys) ran a turn past 250 ms in builders.step at 63 minutes and was
+    -- stopped (user's Seven Islands game). The others wait a second.
+    local turns = 0
+    local count = #list
+    builders.cursor = (builders.cursor or 0) % math.max(1, count)
+    local first = builders.cursor
+    for step = 0, count - 1 do
+        local unit = list[(first + step) % count + 1]
         local entry = catalog.of(unit)
         local busy = false
         if entry.commander then
@@ -2701,11 +2887,17 @@ function builders.step()
                 builders.mend_walk = nil
             end
         elseif entry.decoy then
-            busy = guard_decoy(unit, entry)
+            busy = guard_decoy(unit, entry) or mend_builder(unit, entry)
         else
-            busy = guard_builder(unit, entry)
+            busy = guard_builder(unit, entry) or mend_builder(unit, entry)
+        end
+        if not busy and (turns >= turns_per_step or builders.heavy_tick == me.tick) then
+            busy = true
+        elseif not busy and turns == turns_per_step - 1 then
+            builders.cursor = (first + step + 1) % count
         end
         if not busy and (ready(unit) or released(unit, entry)) and builders.repairing[unit.id] == nil then
+            turns = turns + 1
             if entry.commander then
                 if not commander_turn(unit, entry) then
                     send_home(unit)
@@ -2720,6 +2912,15 @@ function builders.step()
     end
     if builders.new_runners > 0 then
         print("builders flee: " .. builders.new_runners)
+    end
+    if (builders.new_menders or 0) > 0 then
+        print("builders home for repair: " .. builders.new_menders)
+        builders.new_menders = 0
+    end
+    for id in pairs(builders.self_mend) do
+        if world.own[id] == nil then
+            builders.self_mend[id] = nil
+        end
     end
     for id in pairs(builders.running) do
         if world.own[id] == nil then

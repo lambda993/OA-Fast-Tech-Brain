@@ -28,6 +28,7 @@ local decoys_wanted = 15
 
 -- Worth of the army the seat keeps at home, by tier, before racing on.
 local guard_worth = {[0] = 0, 1200, 5000, 15000, 40000, 60000}
+local escort_cap = 10
 
 local function army_worth()
     local total = 0
@@ -155,16 +156,35 @@ local function pick_combat(entry)
     end
     options = fitting
     -- Every group that leaves takes anti-air along: at least three mobile
-    -- anti-air units, one more for every ten other ground units.
-    local ground, anti_air = 0, 0
+    -- anti-air units, one more for every ten other ground units. Until
+    -- enemy aircraft are seen, at most ten escorts (dedicated mobile
+    -- anti-air, tag `escort`) stand (user's rule; static anti-air is not
+    -- limited): seats on Seven Islands built dozens with no enemy aircraft.
+    local ground, anti_air, escorts = 0, 0, 0
     for _, unit in ipairs(world.select(function(u, e) return e.combat and not e.air end)) do
-        if catalog.of(unit).mobile_anti_air then
+        local kind = catalog.of(unit)
+        if kind.mobile_anti_air then
             anti_air = anti_air + 1
         else
             ground = ground + 1
         end
+        if kind.tags.escort then
+            escorts = escorts + 1
+        end
     end
-    if anti_air < 3 + ground // 10 then
+    if not world.enemy_air and escorts >= escort_cap then
+        local others = {}
+        for _, option in ipairs(options) do
+            if not option.tags.escort then
+                others[#others + 1] = option
+            end
+        end
+        if #others == 0 then
+            return nil
+        end
+        options = others
+    end
+    if anti_air < 3 + ground // 10 and (world.enemy_air or escorts < escort_cap) then
         local guns = {}
         for _, option in ipairs(options) do
             if option.mobile_anti_air then
@@ -344,6 +364,10 @@ local function one_factory(unit)
         end
     end
     local share = production_share(tier, top) * level_share()
+    -- The seat's air factory goes on making aircraft a tier behind.
+    if tier < top and world.tier >= 2 and unit == tech.air_factory() then
+        share = math.max(share, 0.6 * level_share())
+    end
     -- Metal piling up is metal wasted: spend it.
     local e = economy.now or economy.read()
     if e.metal_share > 0.8 and e.energy_share > 0.3 then

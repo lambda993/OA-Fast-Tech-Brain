@@ -55,6 +55,7 @@ local function weapon_info(record)
     local anti_air, any, water, range, shot = false, false, true, 0, 0
     local ground, bomb, stockpile, other = false, false, false, false
     local ground_range, ground_blast = 0, 0
+    local some_water = false
     for slot = 1, 3 do
         local weapon_name = record["weapon" .. slot]
         if type(weapon_name) == "string" and weapon_name ~= "" then
@@ -85,6 +86,8 @@ local function weapon_info(record)
                 end
                 if not flag(weapon.waterweapon) then
                     water = false
+                else
+                    some_water = true
                 end
                 range = math.max(range, num(weapon.range))
                 shot = math.max(shot, num(weapon.energypershot))
@@ -92,7 +95,7 @@ local function weapon_info(record)
         end
     end
     return anti_air, any and water, range, shot, ground, bomb, stockpile, stockpile and not other,
-        ground_range, ground_blast
+        ground_range, ground_blast, some_water
 end
 
 -- The user's table (data/units.json) for one type: threat level, target
@@ -105,9 +108,12 @@ local function read_table(entry)
     if row == nil then
         entry.threat = entry.armed and entry.tier or 0
         entry.first_targets, entry.ignored, entry.only = {}, {}, {}
+        entry.veteran_kills = 5
         return
     end
     entry.threat = row[1]
+    -- The mod's VeterancyThresholds (first level), else the engine's 5.
+    entry.veteran_kills = row[6] or 5
     entry.first_targets, entry.ignored, entry.only = row[2], row[3], row[4]
     for _, tag in ipairs(row[5]) do
         entry.tags[tag] = true
@@ -197,7 +203,7 @@ local function classify(index, record, inferred_tier)
     -- shot_energy: what one shot of the hungriest weapon draws from the store.
     local ground, bomb, ground_blast
     entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb, entry.stockpile, entry.stockpile_only,
-        entry.ground_range, ground_blast = weapon_info(record)
+        entry.ground_range, ground_blast, entry.water_weapon = weapon_info(record)
     read_table(entry)
     entry.anti_air = entry.anti_air or entry.tags["anti-air"] == true
     -- Whether its weapons can hit ground targets: units with only

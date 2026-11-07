@@ -304,8 +304,87 @@ error is logged once and the seat keeps playing).
     the seat has strike aircraft, then the table; `aoe` units do not fire
     with friends in their blast and stay apart; a skirmisher steps back at
     half its reach; every cloakable unit cloaks with spare energy.
+26. User's 7-seat Seven Islands game (2026-11-07): veterans of any tier
+    (and units ≥ 5 000 metal) go home below 50 % and wait for full repair
+    by free builders before the next wave; builders always go home for
+    repair below 50 %; a delay before a unit changes target, for speed
+    (the user's idea; done as a 10 s hold); water builders must not help
+    frames they cannot reach, nor land builders water frames; at most 10
+    mobile anti-air (escorts; static excluded) until enemy aircraft are
+    seen; non-torpedo units must not attack submerged amphibious units,
+    amphibious units without water weapons must not attack from under
+    the sea. Also asked to check: no tier-4 lab (Fleet Shipyard) though
+    many tier-3 builders, Core winning more often than Arm, a script stop,
+    no aircraft/seaplane plants (see state below).
 
 ## State and open points
+
+- User's 7-seat Seven Islands game (2026-11-07, all Fast Tech, rich, 73
+  min; 93 % water, oversized like 8Islands). Findings and fixes:
+  - Arm seats 1, 5, 7 died, Core 2, 4, 6 won. Cause found: Arm's
+    commander puts its first Floating Wind Generator on the shore point,
+    and the 160 units of open water a shipyard keeps (`rings`) then left
+    no site for the first Shipyard (6 seats of 7 `no site for Shipyard`,
+    about two minutes lost); the exit check also wanted open water at both
+    ends, by the shore one is land. Now non-factory water buildings keep
+    320 units off the shore point (`shore_reserve`) until a water factory
+    stands, and water factories need one open end. Mirrors after it (6
+    maps, 30 min): all draws, Arm ahead on kills on 4, even on Seven
+    Islands (before: Core far ahead there).
+  - Seat 3 stopped at 63 minutes in builders.step (40 builders, 15 of them
+    decoys). Mirror tests on Seven Islands/8Islands then stopped seats in
+    builders, army and scouts: map:reachable rebuilds regions for every
+    class past four in a tick. Now at most 8 builder turns a step (in turn
+    round the list) and a budget in `util.reachable` (24 fresh questions,
+    4 classes a tick; past it nil = not now). After it: no stops.
+  - Start lag: 40 failed land routes a seat (TANKSH* from an island
+    search the whole million cells). Mostly-sea oversized maps now take the
+    coarse map's no for land classes; map line at tick 12-45 instead of
+    252-315; 900 ticks two Fast Tech seats 7.68 s vs 10.24 s (built-in
+    7.36 s). The survey now waits for the catalog refresh (it finished
+    before it once and judged hover unreachable).
+  - Water builders helping unreachable frames: help, frame help, resume,
+    assist and repairs now need `builders.reaches_work` (the target or a
+    point at its edge within build distance reachable).
+  - Repairs (user's rules, item 26): `veteran_kills` added to
+    `data/units.json` from the FBI `VeterancyThresholds` (first level; 197
+    types, 5 for the rest, the engine default); the brain reads
+    `unit.kills` (engine: the veteran count). Builders below 50 % go home
+    (`builders.self_mend`). Mended to 99 %. Seen in tests: units sent home
+    1-5 a match, `builders home for repair` up to 12.
+  - Target hold 10 s (`target_hold` in army.lua). Log `targets kept N,
+    searched M`: most searches are units with nothing near (cheap with the
+    enemy grid), so the gain is small; speed in fights is still mostly
+    the engine. The user's log again shows 8×8 anti-aliasing and frames of
+    958 977 vertices at zoom 0.17.
+  - Escorts capped at 10 until enemy aircraft are seen (`escort_cap`).
+  - Submerged amphibious targets are dropped and not chased; amphibious
+    shooters without water weapons (`entry.water_weapon`) skip targets on
+    the water without dry ground in reach (`world.out_of_reach`).
+  - Fleet Shipyard (24×24, tier 4, its line reads "air": it builds
+    aircraft carriers) and the 18×18 tier-3 water labs: `no site` all game
+    on the islands; probably the same rings round floating power. Not
+    verified after the shore fix (needs a 60-minute game).
+  - No aircraft or seaplane plants: by the line order (item 5), with
+    the enemy across water hover and ships rank before air, and extra
+    factories score `- rank * 300`, so air came only when every water
+    lab had no site (seat 2 once). User: from tier 2 there must be
+    aircraft. Now the first extra factory from tier 2 is an air factory
+    when the seat has none (seaplanes on maps ≥ 50 % water), and
+    `tech.air_factory()` (the best finished one) keeps producing a tier
+    behind and is never reclaimed for room. Tests (8 vs built-in): air
+    factory in every seat at 7-16 minutes (Seaplane Platform for Core on
+    Seven Islands), 5 wins 1 draw as before. One stop on Seven Islands
+    (scouts after a wide lab-site search in the same turn): after a wide
+    search (`builders.heavy_tick`) no more builder turns and the scouts
+    wait a turn. Six mirrors after it: no stops, Arm ahead on kills on all
+    six (Luschaven an Arm win); watch that Arm is not now the stronger.
+  - Engine log: `runtime type has no FBI definition` at tick 89 491 in the
+    earlier 8Islands game (known limitation).
+  - Tests after all of it, 8 matches vs built-in hard on rich: 5 wins and 1
+    draw of 6 (wins: Seven Islands Arm, before a draw, and Core; Ashap,
+    Crater Islands, Luschaven; Core Prime a draw on time), 2 mirror draws, no errors, no
+    stops.
 
 - User's Two Continents game (2026-11-01, 4 seats Fast Tech, rich, 19
   min, no script errors). Fixes:
@@ -538,8 +617,9 @@ error is logged once and the seat keeps playing).
   there.
 - `data/units.json` (tracked; the user renamed `examples/` to `data/`):
   the user's table, all 549 unit types with `id`, `name`, `description`,
-  `faction`, `built_by`, `threat_level`, `priority_targets`, `ignore_units`,
-  `attack_only`, `tags`. It is the source now: the scripts that generated
+  `faction`, `built_by`, `threat_level`, `veteran_kills` (kills for the first
+  veteran level, from the FBI `VeterancyThresholds`, else 5),
+  `priority_targets`, `ignore_units`, `attack_only`, `tags`. It is the source now: the scripts that generated
   it were scratch files and are not kept, so change the file itself, then
   run `python3 data/make_unit_table.py` from the repo's top folder: it writes
   `fast-tech/lua/unit_table.lua`, which is what the brain reads (the package

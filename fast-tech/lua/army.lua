@@ -66,6 +66,7 @@ local apart_limit = 400
 army.backed = {} -- unit id -> tick it last stepped away
 army.escort_moved = {} -- escort id -> tick it was last sent behind its leader
 army.stepped = {skirmisher = 0, artillery = 0, apart = 0, escort = 0} -- counted for the seat log
+army.targets_kept, army.searched = 0, 0 -- targets kept and searched, for the seat log
 
 local function away_from(unit, at, from, step, wait)
     -- Stepped away a moment ago: still on its way.
@@ -169,26 +170,43 @@ army.attack = attack
 -- on an attack-move, unless something of higher priority is in sight.
 -- Returns the unit to shoot, or nil and the point to chase to.
 local chase_time = 30 * 40
+-- A unit keeps its target at least this long before it looks for a better
+-- one (user's idea, for speed: the target search for every unit of the
+-- army every three seconds was most of the army's cost in big fights).
+-- A target that dies, slips out of sight or out of reach is replaced at
+-- once.
+local target_hold = 30 * 10
+
+local function keeps(entry, from, reach, row)
+    return world.can_hit(entry, row.entry) and util.dist(from, row) <= reach * 1.5
+        and not world.out_of_reach(entry, from, row)
+end
 
 local function pick(unit, from, reach)
     local entry = catalog.of(unit)
+    local last = army.aimed[unit.id]
+    local row = last and world.enemy_row(last.id)
+    if row ~= nil and me.tick - last.tick < target_hold and keeps(entry, from, reach, row) then
+        army.targets_kept = army.targets_kept + 1
+        return row.unit
+    end
+    army.searched = army.searched + 1
     local best = world.best_target(from, reach, entry)
     local best_priority = best and world.rank(entry, catalog.of(best)) or 0
-    local last = army.aimed[unit.id]
     if last == nil then
         return best
     end
-    local row = world.enemy_row(last.id)
     if row ~= nil then
         if (best == nil or best.id == last.id or best_priority <= (last.priority or 0))
-            and world.can_hit(entry, row.entry) and util.dist(from, row) <= reach * 1.5 then
+            and keeps(entry, from, reach, row) then
             return row.unit
         end
         return best
     end
     local seen = world.sightings[last.id]
     if seen ~= nil and me.tick - seen.tick < chase_time and (last.worth or 0) >= 3
-        and best_priority <= (last.priority or 0) then
+        and best_priority <= (last.priority or 0)
+        and world.can_hit(entry, seen.entry) and not world.out_of_reach(entry, from, seen) then
         return nil, seen
     end
     army.aimed[unit.id] = nil
@@ -753,25 +771,49 @@ local function send_aircraft_to_pads()
     end
 end
 
--- Units worth 5 000 metal or more, of any tier (the same bar as for
--- buildings), go home below 30 % health to be repaired, and rejoin once
--- mended.
-army.mending = {} -- unit id -> true
+-- Veterans (user's rule: kills at the first veteran level of the type, the
+-- mod's VeterancyThresholds or 5) and units worth 5 000 metal or more go
+-- home below half health to be repaired, and wait there until fully mended
+-- before they join a wave again. Aircraft go to repair pads instead. Only
+-- while some builder could come to mend them; one that waits three minutes
+-- with nobody mending it goes back to the army.
+army.mending = {} -- unit id -> tick it was sent home
 local mend_value = 5000
+local mend_below = 50
+local mend_wait = 30 * 180
+
+local function veteran(unit, entry)
+    return util.num(unit.kills) >= (entry.veteran_kills or 5)
+end
+
+local function any_mender(unit)
+    for _, builder in ipairs(world.select(function(u, e)
+        return e.mobile_builder and not e.commander and world.finished(u)
+    end)) do
+        if builders.reaches_work(builder, unit) then
+            return true
+        end
+    end
+    return false
+end
 
 local function send_to_mend(unit)
     local entry = catalog.of(unit)
-    if entry == nil or not entry.combat or entry.metal < mend_value or army.mending[unit.id] then
+    if entry == nil or not entry.combat or entry.air or entry.mobile_builder or army.mending[unit.id] then
         return
     end
-    if util.num(unit.health_percent) >= 30 then
+    if entry.metal < mend_value and not veteran(unit, entry) then
+        return
+    end
+    if util.num(unit.health_percent) >= mend_below then
         return
     end
     local point = army.mend_point(unit)
-    if point == nil then
+    if point == nil or not any_mender(unit) then
         return
     end
-    army.mending[unit.id] = true
+    army.mended_count = (army.mended_count or 0) + 1
+    army.mending[unit.id] = me.tick
     army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1}
     army.attacking[unit.id] = nil
     unit:move(point)
@@ -1109,11 +1151,15 @@ function army.step()
     util.guard("facilities", note_facilities)
     util.guard("emergency", watch_emergency)
     local home, attackers, escorts = {}, {}, {}
-    for id in pairs(army.mending) do
+    for id, since in pairs(army.mending) do
         local unit = world.own[id]
-        if unit == nil or util.num(unit.health_percent) >= 95 then
+        if unit == nil or util.num(unit.health_percent) >= builders.mend_done
+            or (me.tick - since > mend_wait and builders.crew_for(unit) == 0) then
             army.mending[id] = nil
             army.mend_to[id] = nil
+            if unit ~= nil then
+                builders.mend[id] = nil
+            end
         end
     end
     util.guard("mending", keep_mending)

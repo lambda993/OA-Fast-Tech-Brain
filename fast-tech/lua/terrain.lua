@@ -162,15 +162,23 @@ end
 -- going far are judged on the coarse map alone. Land classes still route:
 -- an island runs out of cells fast.
 local far_water = 3000
+-- Land classes on an oversized map that is mostly sea (Seven Islands, 93 %
+-- water, seven seats: a lag at the start that every player saw): from an
+-- island a route still searched its million cells, as shallow-water tanks
+-- spread over the shallows, forty of them a seat. There the coarse map's no
+-- is taken without a route; its yes is still checked by one.
+local sea_map = 0.6
 
 local function meets(a, b, class)
     local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
     local oversized = cells > route_cap
-    if oversized and util.dist(a, b) > far_water then
-        local upper = string.upper(class)
-        if not (string.sub(upper, 1, 5) == "TANKS" or string.sub(upper, 1, 4) == "KBOT") then
-            return coarse_meets(a, b, class), false
-        end
+    local upper = string.upper(class)
+    local land_only = string.sub(upper, 1, 5) == "TANKS" or string.sub(upper, 1, 4) == "KBOT"
+    if oversized and util.dist(a, b) > far_water and not land_only then
+        return coarse_meets(a, b, class), false
+    end
+    if oversized and land_only and terrain.water_share >= sea_map and not coarse_meets(a, b, class) then
+        return false, false
     end
     local found, route = pcall(function() return game.map:route(a, b, class) end)
     if found and route ~= nil then

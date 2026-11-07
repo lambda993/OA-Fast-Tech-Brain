@@ -415,6 +415,40 @@ local function out_of_reach_below(shooter, row)
     return ok and ground ~= nil and util.num(ground) >= 0 and util.num(ground) < util.num(game.map.sea_level)
 end
 
+local function under_sea(point)
+    local ok, ground = pcall(function() return game.map:ground(util.whole(point.x), util.whole(point.z)) end)
+    return ok and ground ~= nil and util.num(ground) < util.num(game.map.sea_level)
+end
+
+-- An amphibious unit with no water weapon cannot fire from under the sea:
+-- sent at a target out on the water it walked the sea floor beneath it,
+-- unable to shoot (user's game). Such a target is only worth it when there
+-- is dry ground within the shooter's reach of it, on the side it comes
+-- from.
+local function fires_only_dry(shooter)
+    return shooter ~= nil and shooter.tags.amphibious and not shooter.water_weapon
+        and not shooter.tags.hovercraft and not shooter.air
+end
+
+local function no_dry_ground(shooter, from, row)
+    if not fires_only_dry(shooter) or not under_sea(row) then
+        return false
+    end
+    local reach = math.max(64, shooter.ground_range > 0 and shooter.ground_range or shooter.range) * 0.85
+    if util.dist(from, row) <= reach then
+        return under_sea(from)
+    end
+    return under_sea(util.toward(row, from, reach))
+end
+
+-- Whether `shooter` (an entry) standing at `from` cannot get a shot at the
+-- enemy record `row` ({x, z, entry}) for where it is: a submerged amphibious
+-- target for a shooter that ignores underwater units, a target on the water
+-- with no dry ground near for an amphibious shooter without water weapons.
+function world.out_of_reach(shooter, from, row)
+    return out_of_reach_below(shooter, row) or no_dry_ground(shooter, from, row)
+end
+
 -- Enemies and friends in sight, as records {unit, x, z, entry} in a grid
 -- of 512-unit squares, built once a tick. Every unit of the army asks for
 -- a target; reading positions (f32 values) and entries for every enemy
@@ -465,7 +499,7 @@ function world.enemy_rows()
             add_row(enemy_cells, row)
             local priority = world.priority(entry)
             if priority >= 3 and entry ~= nil and not entry.structure then
-                world.sightings[enemy.id] = {x = at.x, z = at.z, tick = me.tick, priority = priority}
+                world.sightings[enemy.id] = {x = at.x, z = at.z, tick = me.tick, priority = priority, entry = entry}
             end
         end
     end
@@ -583,7 +617,7 @@ function world.best_target(from, reach, shooter)
                 local key = priority * 100000 - math.sqrt(d2)
                 if (best_key == nil or key > best_key)
                     and (blast <= 0 or (entry ~= nil and entry.air) or not world.friends_near(row, blast))
-                    and not out_of_reach_below(shooter, row) then
+                    and not world.out_of_reach(shooter, from, row) then
                     best, best_key = row.unit, key
                 end
             end

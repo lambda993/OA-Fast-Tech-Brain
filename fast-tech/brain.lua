@@ -58,8 +58,34 @@ local function status()
         #world.select(function(_, e) return e.defense and e.anti_air end),
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
-    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; cloaked %d",
-        army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort, util.count(army.cloaked)))
+    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; cloaked %d; targets kept %d, searched %d",
+        army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort, util.count(army.cloaked),
+        army.targets_kept, army.searched))
+    local escorts, made = 0, {}
+    for _, unit in ipairs(world.select(function(_, e) return e.combat end)) do
+        local entry = catalog.of(unit)
+        if entry.tags.escort then
+            escorts = escorts + 1
+        end
+        made[entry.name] = (made[entry.name] or 0) + 1
+    end
+    local names = {}
+    for name in pairs(made) do
+        names[#names + 1] = name
+    end
+    table.sort(names, function(a, b)
+        if made[a] ~= made[b] then
+            return made[a] > made[b]
+        end
+        return a < b
+    end)
+    local top = {}
+    for index = 1, math.min(8, #names) do
+        top[#top + 1] = string.format("%s %d", names[index], made[names[index]])
+    end
+    print(string.format("army: %s | escorts %d, enemy aircraft seen %s | repair: units home %d (sent %d), builders home %d",
+        table.concat(top, ", "), escorts, tostring(world.enemy_air == true), util.count(army.mending),
+        army.mended_count or 0, util.count(builders.self_mend)))
     print(string.format(
         "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
@@ -104,7 +130,12 @@ local function think()
     if hooks.dump_city and second % 600 == 0 then
         util.guard("city dump", require("city").dump)
     end
-    if second % 5 == 0 then
+    -- After a wide site search (some thirty placements) the scouts wait for
+    -- the next turn: together they ran a turn past 250 ms on Seven Islands.
+    if second % 5 == 0 and builders.heavy_tick == me.tick then
+        scouts.delayed = true
+    elseif second % 5 == 0 or scouts.delayed then
+        scouts.delayed = false
         util.guard("scouts", scouts.step)
         util.guard("prune", world.prune)
     end
@@ -116,7 +147,8 @@ end
 -- one: four seats asking on the same ticks every tenth of a second made
 -- the start of a game on a large map stutter (Two Continents).
 local function survey()
-    if terrain.ready or not world.located() then
+    -- The verdicts read the factories' build lists: the catalog first.
+    if terrain.ready or not refreshed or not world.located() then
         return
     end
     if (me.tick // 3) % 2 ~= (me.player or 0) % 2 then
