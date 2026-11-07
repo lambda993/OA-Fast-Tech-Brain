@@ -552,12 +552,127 @@ local function send_wave(home)
     end
     army.target = target
     army.sent_at = me.tick
+    army.wave_count = army.wave_count + 1
+    army.wave_size[army.wave_count] = #home
     for _, unit in ipairs(home) do
         unit:patrol(util.clamp(target, 64))
         army.attacking[unit.id] = true
+        army.wave_of[unit.id] = army.wave_count
     end
     print(string.format("wave of %d units (worth %.0f) to %.0f,%.0f", #home, worth(home), target.x, target.z))
     return true
+end
+
+-- Waves stay together (user's rule, after units fought on alone): a wave
+-- down to fewer than five units joins the nearest wave that still has five
+-- or more, and its units attack-move to that wave's middle until they are
+-- within 700 units of it. With no such wave, the weak waves out join the
+-- largest of them when together they make five; else it falls back to the
+-- rally point and leaves with the next one. Only a wave that lost units:
+-- one sent with fewer than five goes straight on (on Seven Islands small
+-- fresh waves chased the middle of the one ahead and won no game). Units
+-- back in the waves without a wave (mended in the field) count as a reduced
+-- wave of their own. A unit that cannot get to the wave it would join falls
+-- back.
+army.wave_of = {} -- unit id -> its wave's number
+army.wave_size = {} -- wave number -> units it left with
+army.wave_count = 0
+army.joining = {} -- unit id -> wave number it walks to
+local wave_min = 5
+local regroup_near = 700
+
+local function regroup(attackers)
+    local groups, order = {}, {}
+    for _, unit in ipairs(attackers) do
+        local wave = army.wave_of[unit.id] or 0
+        local group = groups[wave]
+        if group == nil then
+            group = {wave = wave, units = {}, sx = 0, sz = 0, placed = 0}
+            groups[wave] = group
+            order[#order + 1] = group
+        end
+        group.units[#group.units + 1] = unit
+        local at = util.pos(unit)
+        if at ~= nil and not catalog.of(unit).air then
+            group.sx, group.sz, group.placed = group.sx + at.x, group.sz + at.z, group.placed + 1
+        end
+    end
+    for _, group in ipairs(order) do
+        if group.placed > 0 then
+            group.mid = {x = group.sx / group.placed, z = group.sz / group.placed}
+        end
+    end
+    local strong, weak = {}, {}
+    for _, group in ipairs(order) do
+        if #group.units >= wave_min then
+            strong[#strong + 1] = group
+        elseif group.wave == 0 or #group.units < (army.wave_size[group.wave] or 0) then
+            weak[#weak + 1] = group
+        end
+    end
+    local rally = rally_point()
+    local function fall_back(unit)
+        army.attacking[unit.id] = nil
+        army.wave_of[unit.id] = nil
+        army.joining[unit.id] = nil
+        army.patrolled[unit.id] = nil
+        army.aimed[unit.id] = nil
+        unit:move(world.clear_spot(util.clamp(util.around(rally, brain.random(1000) / 1000, 150), 64)))
+    end
+    local function join(group, into, why)
+        local back = 0
+        for _, unit in ipairs(group.units) do
+            if catalog.of(unit).air or util.reachable(unit, into.mid) ~= false then
+                army.wave_of[unit.id] = into.wave
+                army.joining[unit.id] = into.wave
+            else
+                fall_back(unit)
+                back = back + 1
+            end
+        end
+        print(string.format("wave %d (%d units) joins wave %d (%s)%s", group.wave, #group.units - back, into.wave, why,
+            back > 0 and string.format(", %d cannot get there and fall back", back) or ""))
+    end
+    if #strong == 0 and #weak > 1 then
+        local total, largest = 0, nil
+        for _, group in ipairs(weak) do
+            total = total + #group.units
+            if largest == nil or #group.units > #largest.units then
+                largest = group
+            end
+        end
+        if total >= wave_min and largest.mid ~= nil then
+            for _, group in ipairs(weak) do
+                if group ~= largest then
+                    join(group, largest, "together five or more")
+                end
+            end
+            return
+        end
+    end
+    for _, group in ipairs(weak) do
+        local best, best_d
+        for _, other in ipairs(strong) do
+            if other.mid ~= nil and group.mid ~= nil then
+                local d = util.dist(group.mid, other.mid)
+                if best_d == nil or d < best_d then
+                    best, best_d = other, d
+                end
+            end
+        end
+        if best ~= nil then
+            join(group, best, "down to " .. #group.units)
+        elseif group.wave ~= 0 then
+            for _, unit in ipairs(group.units) do
+                fall_back(unit)
+            end
+            print(string.format("wave %d down to %d units: back to the rally point", group.wave, #group.units))
+        end
+    end
+    army.wave_mid = {}
+    for _, group in ipairs(order) do
+        army.wave_mid[group.wave] = group.mid
+    end
 end
 
 -- Keeps the attackers moving: they fight what they see, and move on to the
@@ -576,26 +691,45 @@ local function push(attackers)
         target = world.enemy_target(lead)
         army.target = target
     end
+    util.guard("regroup", regroup, attackers)
     for _, unit in ipairs(attackers) do
         local at = util.pos(unit)
         local entry = catalog.of(unit)
-        -- Bombers look further for anti-air to take out, then their list.
-        local enemy, lost
-        if at ~= nil then
-            enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
+        local joining = army.joining[unit.id]
+        local mid = joining ~= nil and army.wave_mid and army.wave_mid[joining]
+        if joining ~= nil and (not army.attacking[unit.id] or mid == nil or (at ~= nil and util.dist(at, mid) <= regroup_near)) then
+            army.joining[unit.id] = nil
+            mid = nil
+            -- Its patrol to the wave's middle would go back and forth for
+            -- ever (a patrol loops, and only a free unit is sent on): the
+            -- joined wave stood still for minutes on Seven Islands.
+            if army.attacking[unit.id] and target ~= nil then
+                army.patrolled[unit.id] = nil
+                patrol(unit, target)
+            end
         end
-        local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200)
-        if keep_range(unit) then
-            -- Stepped back from a close enemy.
-        elseif enemy ~= nil then
-            attack(unit, enemy)
-        elseif lost ~= nil then
-            chase(unit, lost)
-        elseif contact then
-            -- Seen only on radar or sonar: close in, fighting on the way.
-            patrol(unit, contact)
-        elseif target ~= nil and util.free(unit) then
-            patrol(unit, target)
+        if mid and at ~= nil then
+            -- On its way to the wave it joins, fighting on the way.
+            patrol(unit, mid)
+        else
+            -- Bombers look further for anti-air to take out, then their list.
+            local enemy, lost
+            if at ~= nil then
+                enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
+            end
+            local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200)
+            if keep_range(unit) then
+                -- Stepped back from a close enemy.
+            elseif enemy ~= nil then
+                attack(unit, enemy)
+            elseif lost ~= nil then
+                chase(unit, lost)
+            elseif contact then
+                -- Seen only on radar or sonar: close in, fighting on the way.
+                patrol(unit, contact)
+            elseif target ~= nil and util.free(unit) then
+                patrol(unit, target)
+            end
         end
     end
 end
@@ -1577,6 +1711,12 @@ function army.step()
     for id in pairs(army.attacking) do
         if world.own[id] == nil then
             army.attacking[id] = nil
+        end
+    end
+    for id in pairs(army.wave_of) do
+        if not army.attacking[id] then
+            army.wave_of[id] = nil
+            army.joining[id] = nil
         end
     end
     for id, failed in pairs(army.no_path) do

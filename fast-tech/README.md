@@ -310,7 +310,19 @@ hard difficulty), or half of it when no wave left for five minutes and
 eight units wait (armies of 20-30 units stood at home for the first
 fifteen minutes). Patrols, attacks and step-backs are not ordered again
 while the unit is still on the same one. Waves go for the nearest remembered enemy
-building, a recent contact, or a start position nobody has looked at. A
+building, a recent contact, or a start position nobody has looked at.
+Waves stay together (user's rule): a wave that lost units and is down to
+fewer than five joins the nearest wave out with five or more, and its
+units attack-move to that wave's middle; within 700 units of it they take
+the target again (their patrol to the middle would loop for ever: the
+joined wave stood still on Seven Islands). With no wave of five out,
+reduced waves join the largest of them when together they make five, else
+they fall back to the rally point and leave with the next wave. A unit
+that cannot get to the wave it would join falls back; a wave sent with
+fewer than five that lost nobody goes straight on (small fresh waves
+chasing the one ahead won no game on Seven Islands). Log: `wave N (K
+units) joins wave M (...)`, `wave N down to K units: back to the rally
+point`. A
 small guard stays home, and when the base is hit, every factory builds and
 the home army answers. Torpedo-only units (torpedo bombers too) are built
 only when ships reach the enemy.
@@ -651,7 +663,9 @@ seen and how; whether it is a fault is for the engine's author to judge.
    definition` (`Match::fields`, `match.cpp`): a unit whose type has no
    definition in the runtime table, probably one of these types (Core
    builds CORUWMEX, CORUWMOHO, CORVP there). Units of these types are
-   built and finish (CORVP, CORVROC seen in test matches).
+   built and finish (CORVP, CORVROC seen in test matches). The same line
+   came in the user's later games (8Islands tick 89 491, Metal Isles
+   ticks 57 303 and 57 605; 4 seats, all Fast Tech); the match goes on.
 2. **What a brain may build is the AI table, not the players' menus.**
    `game.build_list` is `[CANBUILD]` of `gamedatE/SIDEDATA.tdf` plus the
    `downloadsE` menus, cut at `limits.build-list-entries` (36); the

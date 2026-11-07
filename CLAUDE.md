@@ -331,8 +331,26 @@ error is logged once and the seat keeps playing).
     medics never mended, why the Exp. Unit Fabricator made only
     construction vehicles, and why those just guarded it, blocking its
     exit (see state below).
+29. User's Metal Isles game (2026-11-07): check an FBI error in the log;
+    a wave down to fewer than five units must regroup with another group
+    and follow that wave.
 
 ## State and open points
+
+- User's 4-seat Metal Isles game (2026-11-07, all Fast Tech, rich, ~45
+  min, no script errors; the engine log shows 8×8 anti-aliasing at that
+  match's start). `simulation error: match tick 57303: runtime type has
+  no FBI definition`: `Match::fields` (`match.cpp`) finds no definition
+  for a unit's type, the same 511-type limit as the empty `category`
+  (README "Engine limitations" 1); the match goes on, nothing for the
+  brain to do. Units fought on alone: waves now regroup (item 29,
+  `regroup` in army.lua, `army.wave_of`, `army.wave_size`,
+  `army.joining`). First version: fresh 3-4 unit waves joined the one
+  ahead and joiners kept patrolling to its middle (patrols loop; only free
+  units get the target again), so merged waves stood still: Seven Islands
+  vs built-in two draws, kills 57 vs 117. Now only waves that lost units,
+  and joiners take the target at 700 units: 6 wins of 6, 2 mirror draws,
+  Seven Islands Arm kills 145.
 
 - User's 4-seat Trout Farm game (2026-11-07, all Fast Tech, rich, no
   errors): a veteran Penetrator turned home and was on patrol again a few
