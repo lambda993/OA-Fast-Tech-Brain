@@ -83,9 +83,10 @@ local function status()
     for index = 1, math.min(8, #names) do
         top[#top + 1] = string.format("%s %d", names[index], made[names[index]])
     end
-    print(string.format("army: %s | escorts %d, enemy aircraft seen %s | repair: units home %d (sent %d), builders home %d",
+    print(string.format("army: %s | escorts %d, enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d",
         table.concat(top, ", "), escorts, tostring(world.enemy_air == true), util.count(army.mending),
-        army.mended_count or 0, util.count(builders.self_mend)))
+        army.mended_count or 0, army.field_count or 0, army.fought_on or 0, util.count(builders.self_mend),
+        #world.select(function(_, e) return e.medic end)))
     print(string.format(
         "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),

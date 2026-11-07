@@ -498,19 +498,58 @@ get three builders each, who drop what they do.
 **Repairs of units** (user's rule). Every veteran (its kills reach the
 first veteran level of its type: the mod's `VeterancyThresholds`, kept in
 the table as `veteran_kills`, else the engine's 5) and every unit worth
-5 000 metal or more goes home below half health, and waits there until
-mended to full health (99 %) before it joins a wave again. Aircraft go to
-repair pads instead. Within 900 units of the base two free builders (idle
-or parked, not at work on a frame or a walk) mend each. Ships, and any
-unit that cannot get to the base, wait on the water by it (within 1 600
-units); one that stands idle short of its spot is sent again, and after
-three tries rejoins the army. A unit is sent only while some builder
-could come to mend it, and one nobody mends for three minutes goes back
-to the army. Builders below half health go home too, even off a frame
+5 000 metal or more falls back below half health and waits until mended
+to full health (99 %) before it fights again. Aircraft go to repair pads
+instead. Where it goes:
+
+1. To a **field medic** when one is free (fewer than three patients, not
+   hurt itself), can reach it, is within 2 500 units and nearer than home.
+   The unit walks to the medic, the medic repairs it, and once mended it
+   rejoins the waves (`repair: <unit> to medic <medic> N units off`).
+2. Else **home**, when home is within 2 500 units and some builder or
+   medic could come to mend it (`repair: <unit> home from N units`).
+3. Else it **fights on** (`repair: <unit> fights on`) and is weighed again
+   on each hit and every army step, until a medic comes or it dies.
+
+At home, within 900 units of the base, two free builders (idle or
+parked, not at work on a frame or a walk) mend each. Ships, and any unit
+that cannot get to the base, wait on the water by it (within 1 600 units).
+One that stands idle short of its spot (a failed path stops it) is sent
+again and again, from the third try to a point halfway home when home is
+over 1 200 units off; it no longer rejoins the army after three tries (a
+Penetrator in the user's game turned home and was back on patrol seconds
+later). The water spot is taken only on a sure no from `map:reachable`,
+not on a deferred answer. One left unmended three minutes goes back to
+the army. The seat log ends each case with `mended after S s`, `left
+unmended after S s` or `lost after S s`.
+
+**Field medics** (tag `repair`, user's rule): mobile units that repair
+but are no construction units: scavengers Flea, Mite, Wisp, Toad;
+resurrectors Rector, Necro, Siren, Kraken (Shaman and Heretic have no
+builder in the AI lists); S.P.O.T. and Mechanic; the carriers Angler,
+Refuge, Colossus, Hive, Expedition, Halcyon, Atlantis, Nexus, Armada,
+Anchorage. Aircraft carriers (Condor, Singularity) are no medics: they
+cannot keep pace with a ground wave, and the engine lets only units with
+`canreclamate` repair (Singularity has none). Medics are no builders for
+the builders' tasks. With 8 ground soldiers a seat wants one medic, one
+more for every 20, at most 4. The factory making it is the one that makes
+the most mending (work time) for its metal, up to 2 000 metal, of a
+kind that gets to the enemy; with carriers allowed (3 400 metal) the
+Seven Islands seats spent 12 000 metal on them and drew games they used
+to win (log `medic: <name>`). While waves are out the medics wait 900 units
+behind the front (the attackers at least 70 % as far from home as the
+farthest), further back 400 at a time while a known enemy gun reaches the
+spot; else at the rally point, on a short patrol (a patrolling builder
+mends what it passes). A medic gets a new order only when its spot moved
+500 units or it stopped (a Necro given a new path every few seconds
+hardly left the base). A medic below half health goes home for repair
+and its patients are weighed again. The `army:` line each minute gives
+units falling back, sent, sent to medics, fought on, and the medics.
+
+Builders below half health go home too, even off a frame
 they were alone on, and take no work until mended (`builders home for
 repair: N`); only while another builder could mend them, for at most two
-minutes. The seat log's `army:` line each minute gives the units home and
-sent so far. From tier 3 the builders put up the
+minutes. From tier 3 the builders put up the
 commander upgrade building (Arm's Research Facility, Core's Upgrade
 Center) right after the next lab. It runs from any enemy
 commander or decoy within 1 100 units: two commanders D-gunning each other

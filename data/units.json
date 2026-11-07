@@ -2009,6 +2009,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "t2"
     ]
   },
@@ -2409,6 +2410,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "stealth",
       "t1"
     ]
@@ -4315,6 +4317,7 @@
       "ground",
       "water",
       "builder",
+      "repair",
       "stealth",
       "t1"
     ]
@@ -4518,6 +4521,7 @@
       "underwater",
       "water",
       "builder",
+      "repair",
       "t3"
     ]
   },
@@ -4694,6 +4698,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "t3"
     ]
   },
@@ -5533,6 +5538,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "stealth",
       "t2"
     ]
@@ -10832,6 +10838,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "t2"
     ]
   },
@@ -10952,6 +10959,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "t2"
     ]
   },
@@ -10974,6 +10982,7 @@
       "ground",
       "water",
       "builder",
+      "repair",
       "stealth",
       "t1"
     ]
@@ -11381,6 +11390,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "t3"
     ]
   },
@@ -11474,6 +11484,7 @@
     "tags": [
       "ground",
       "builder",
+      "repair",
       "stealth",
       "t1"
     ]
@@ -12261,6 +12272,7 @@
       "underwater",
       "water",
       "builder",
+      "repair",
       "t3"
     ]
   },

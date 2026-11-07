@@ -348,6 +348,15 @@ local function one_factory(unit)
             return
         end
     end
+    -- Field medics (tag `repair`) to follow the waves: the best one any
+    -- factory of the seat makes, from this factory only if it is that one.
+    local medic = factories.medic_type
+    if medic ~= nil and catalog.can_build(entry, medic) and economy.affords(medic, 120, 0.5) then
+        unit:queue(medic.record, 1)
+        factories.medic_type = nil
+        print("medic: " .. medic.name)
+        return
+    end
     -- Carriers once the seat flies many aircraft: a mobile repair base for
     -- every sixteen, counted with the pads.
     local fleet = #world.select(function(_, e) return e.air and e.combat and not e.scout end)
@@ -483,8 +492,41 @@ local function hold_fire()
     end
 end
 
+-- Field medics wanted (user's rule): none below 8 ground soldiers, then one
+-- and one more for every 20, at most 4. The kind: the most mending (work
+-- time) for its metal that any finished factory of the seat makes, up to
+-- 2 000 metal, that gets to the enemy. With carriers allowed (Colossus,
+-- Hive: 3 400 metal) the Seven Islands seats spent 12 000 metal on them and
+-- drew games they used to win. Medics on their way out count too.
+local function medics_wanted()
+    local soldiers = #world.select(function(_, e) return e.combat and not e.air end)
+    if world.tier < 1 or soldiers < 8 then
+        return 0
+    end
+    return math.min(4, 1 + soldiers // 20)
+end
+
+local function choose_medic()
+    factories.medic_type = nil
+    if #world.select(function(_, e) return e.medic end) >= medics_wanted() then
+        return
+    end
+    local best, best_work
+    for _, factory in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do
+        for _, built in ipairs(catalog.of(factory).builds) do
+            local work = util.num(built.record.workertime) / math.max(1, built.metal)
+            if built.medic and built.metal <= 2000 and terrain.useful(built)
+                and (best == nil or work > best_work) then
+                best, best_work = built, work
+            end
+        end
+    end
+    factories.medic_type = best
+end
+
 function factories.step()
     util.guard("hold fire", hold_fire)
+    util.guard("medic", choose_medic)
     choose_scout_lab()
     util.guard("upgrades", upgrade_buildings)
     for _, unit in ipairs(world.select(function(u, e) return e.factory and world.finished(u) end)) do

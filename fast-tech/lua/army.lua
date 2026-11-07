@@ -515,6 +515,14 @@ local function watch_emergency()
 end
 
 function army.on_lost(unit, entry)
+    local since = army.mending[unit.id]
+    if since ~= nil then
+        local to = army.mend_to[unit.id]
+        print(string.format("repair: %s lost after %d s on its way home or waiting",
+            to and to.name or (entry and entry.name) or "?", (me.tick - since) // 30))
+        army.mending[unit.id] = nil
+        army.mend_to[unit.id] = nil
+    end
     local at = army.facility_at[unit.id]
     army.facility_at[unit.id] = nil
     if entry == nil or not entry.tags.facility or not entry.structure then
@@ -773,15 +781,22 @@ local function send_aircraft_to_pads()
 end
 
 -- Veterans (user's rule: kills at the first veteran level of the type, the
--- mod's VeterancyThresholds or 5) and units worth 5 000 metal or more go
--- home below half health to be repaired, and wait there until fully mended
--- before they join a wave again. Aircraft go to repair pads instead. Only
--- while some builder could come to mend them; one that waits three minutes
--- with nobody mending it goes back to the army.
-army.mending = {} -- unit id -> tick it was sent home
+-- mod's VeterancyThresholds or 5) and units worth 5 000 metal or more fall
+-- back below half health and wait until fully mended before they fight
+-- again. Aircraft go to repair pads instead. Where to (user's rule, after
+-- veterans died on the walk home from the enemy base): to a field medic
+-- (tag `repair`) when one is free, can reach the unit and is nearer than
+-- home; else home when home is within 2 500 units and some builder could
+-- come to mend them; else the unit fights on until a medic comes or it
+-- dies. One that waits three minutes unmended goes back to the army.
+army.mending = {} -- unit id -> tick it fell back
+army.mend_checked = {} -- unit id -> tick its fall-back was last weighed
+army.fought_on = 0 -- hurt units that fought on, far from home with no medic
+local fight_noted = {} -- unit id -> true once its fighting on was logged
 local mend_value = 5000
 local mend_below = 50
 local mend_wait = 30 * 180
+local near_home = 2500
 
 local function veteran(unit, entry)
     return util.num(unit.kills) >= (entry.veteran_kills or 5)
@@ -789,7 +804,7 @@ end
 
 local function any_mender(unit)
     for _, builder in ipairs(world.select(function(u, e)
-        return e.mobile_builder and not e.commander and world.finished(u)
+        return (e.mobile_builder or e.medic) and not e.commander and world.finished(u)
     end)) do
         if builders.reaches_work(builder, unit) then
             return true
@@ -798,15 +813,91 @@ local function any_mender(unit)
     return false
 end
 
+-- Field medics: the units tagged `repair` that the engine lets repair
+-- (catalog `medic`). They keep 900 units behind the waves, out of reach of
+-- the enemy guns they know of (`army.field`), or at the rally point with no
+-- wave out, on a short patrol there (a patrolling builder mends what it
+-- passes). A medic takes up to three patients, mends them one at a time,
+-- and goes home itself below half health.
+army.medic_job = {} -- medic id -> patient ids
+army.medic_order = {} -- medic id -> tick of its last order
+army.medic_home = {} -- medic id -> tick it went home hurt
+army.medic_to = {} -- medic id -> the spot it was last sent to
+army.field = nil -- {x, z}: where the medics wait behind the waves
+local medic_reach = 2500
+local medic_patients = 3
+local field_behind = 900
+
+local function medics()
+    return world.select(function(u, e) return e.medic and world.finished(u) end)
+end
+
+local function free_medic(unit, at)
+    local best, best_d
+    for _, medic in ipairs(medics()) do
+        local job = army.medic_job[medic.id]
+        if army.medic_home[medic.id] == nil and (job == nil or #job < medic_patients) then
+            local from = util.pos(medic)
+            local d = from and util.dist(from, at)
+            if d ~= nil and d <= medic_reach and (best_d == nil or d < best_d)
+                and builders.reaches_work(medic, unit) then
+                best, best_d = medic, d
+            end
+        end
+    end
+    return best, best_d
+end
+
 local function send_to_mend(unit)
     local entry = catalog.of(unit)
     if entry == nil or not entry.combat or entry.air or entry.mobile_builder or army.mending[unit.id] then
         return
     end
+    if util.num(unit.health_percent) >= mend_below then
+        return
+    end
     if entry.metal < mend_value and not veteran(unit, entry) then
         return
     end
-    if util.num(unit.health_percent) >= mend_below then
+    -- Weighed at most every three seconds: hits come many times a second.
+    local last = army.mend_checked[unit.id]
+    if last ~= nil and me.tick - last < 30 * 3 then
+        return
+    end
+    army.mend_checked[unit.id] = me.tick
+    local at = util.pos(unit)
+    local home = world.base or world.start
+    if at == nil or home == nil then
+        return
+    end
+    local home_d = util.dist(at, home)
+    local medic, medic_d = free_medic(unit, at)
+    if medic ~= nil and medic_d < home_d then
+        local spot = util.pos(medic)
+        army.mended_count = (army.mended_count or 0) + 1
+        army.field_count = (army.field_count or 0) + 1
+        army.mending[unit.id] = me.tick
+        army.mend_to[unit.id] = {x = spot.x, z = spot.z, tries = 1, name = entry.name, medic = medic.id}
+        army.attacking[unit.id] = nil
+        local job = army.medic_job[medic.id] or {}
+        job[#job + 1] = unit.id
+        army.medic_job[medic.id] = job
+        unit:move(util.clamp(spot, 64))
+        if #job == 1 then
+            medic:repair(unit)
+            army.medic_order[medic.id] = me.tick
+        end
+        print(string.format("repair: %s to medic %s %.0f units off (home %.0f; %d%% health, %d kills)",
+            entry.name, catalog.of(medic).name, medic_d, home_d, util.num(unit.health_percent), util.num(unit.kills)))
+        return
+    end
+    if home_d > near_home then
+        if not fight_noted[unit.id] then
+            fight_noted[unit.id] = true
+            army.fought_on = army.fought_on + 1
+            print(string.format("repair: %s fights on, home %.0f units off and no medic near (%d%% health)",
+                entry.name, home_d, util.num(unit.health_percent)))
+        end
         return
     end
     local point = army.mend_point(unit)
@@ -815,17 +906,19 @@ local function send_to_mend(unit)
     end
     army.mended_count = (army.mended_count or 0) + 1
     army.mending[unit.id] = me.tick
-    army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1}
+    army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1, name = entry.name}
     army.attacking[unit.id] = nil
     unit:move(point)
     builders.mend_unit(unit)
+    print(string.format("repair: %s home from %.0f units (%d%% health, %d kills)", entry.name,
+        util.dist(at, point), util.num(unit.health_percent), util.num(unit.kills)))
 end
 
 -- Where a hurt unit waits for repair: by the base, or for a ship (and
 -- anything that cannot get to the base) on the water by it. A Torrent
 -- sent onto land stood still in Standby, badly hurt, for the rest of
 -- the match.
-army.mend_to = {} -- unit id -> {x, z, tries}
+army.mend_to = {} -- unit id -> {x, z, tries, name, medic}
 
 function army.mend_point(unit)
     local home = world.base or world.start
@@ -834,7 +927,9 @@ function army.mend_point(unit)
     end
     local entry = catalog.of(unit)
     local point = world.clear_spot(util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64))
-    if entry.water_only or not util.reachable(unit, point) then
+    -- Only a sure no: past the turn's budget reachable answers nil, and a
+    -- land unit was then sent to the shore.
+    if entry.water_only or util.reachable(unit, point) == false then
         local water = terrain.shore or terrain.water_point
         if water ~= nil then
             point = util.clamp(util.around(water, brain.random(1000) / 1000, 120), 64)
@@ -843,22 +938,181 @@ function army.mend_point(unit)
     return point
 end
 
--- A unit sent home for repair that stands idle short of its spot is sent
--- again; after three tries it rejoins the army rather than stand there.
+-- Lets a patient go: it is weighed again at once (another medic, home, or
+-- fighting on).
+local function drop_patient(id)
+    army.mending[id] = nil
+    army.mend_to[id] = nil
+    army.mend_checked[id] = nil
+end
+
+-- A unit falling back that stands idle short of its spot (a failed path
+-- stops it, see hooks.onPathFailed) is sent again. It used to rejoin the
+-- army after three tries, nine seconds of army steps: in the user's game a
+-- Penetrator turned home and was back on patrol a few seconds later. Now it
+-- keeps trying, from the third try by a point halfway home (a shorter path),
+-- and only the three minutes unmended let it go. A patient of a medic
+-- follows its medic; with the medic dead or gone home it is weighed again.
 local function keep_mending()
     for id in pairs(army.mending) do
         local unit = world.own[id]
         local to = army.mend_to[id]
         local at = unit and util.pos(unit)
-        if unit ~= nil and to ~= nil and at ~= nil and util.free(unit) and util.dist(at, to) > 300 then
-            if to.tries >= 3 then
-                army.mending[id] = nil
-                army.mend_to[id] = nil
+        if unit ~= nil and to ~= nil and at ~= nil and to.medic ~= nil then
+            local medic = world.own[to.medic]
+            local spot = medic and army.medic_home[to.medic] == nil and util.pos(medic)
+            if not spot then
+                drop_patient(id)
+            elseif util.dist(at, spot) > 250 and (util.free(unit) or util.dist(to, spot) > 400) then
+                to.x, to.z = spot.x, spot.z
+                unit:move(util.clamp(spot, 64))
+            end
+        elseif unit ~= nil and to ~= nil and at ~= nil and util.free(unit) and util.dist(at, to) > 300 then
+            local point = army.mend_point(unit)
+            if point == nil then
+                break
+            end
+            to.tries = to.tries + 1
+            to.x, to.z = point.x, point.z
+            if to.tries >= 3 and util.dist(at, point) > 1200 then
+                point = util.clamp({x = (at.x + point.x) / 2, z = (at.z + point.z) / 2}, 64)
+            end
+            unit:move(point)
+        end
+    end
+end
+
+-- Where the medics wait while waves are out: 900 units from the middle of
+-- the front (the attackers at least 70 % as far from home as the farthest:
+-- waves leave one after another, and the middle of all of them lay by the
+-- base) toward home, then further back, 400 at a time, while a known enemy
+-- gun reaches it; never past home.
+local function field_zone(attackers)
+    local home = world.base or world.start
+    if home == nil then
+        army.field = nil
+        return
+    end
+    local placed, farthest = {}, 0
+    for _, unit in ipairs(attackers) do
+        local at = not catalog.of(unit).air and util.pos(unit)
+        if at then
+            local d = util.dist(at, home)
+            placed[#placed + 1] = {at = at, d = d}
+            farthest = math.max(farthest, d)
+        end
+    end
+    local sx, sz, count = 0, 0, 0
+    for _, row in ipairs(placed) do
+        if row.d >= farthest * 0.7 then
+            sx, sz, count = sx + row.at.x, sz + row.at.z, count + 1
+        end
+    end
+    if count == 0 then
+        army.field = nil
+        return
+    end
+    local cx, cz = sx / count, sz / count
+    local dx, dz = home.x - cx, home.z - cz
+    local length = math.sqrt(dx * dx + dz * dz)
+    if length < field_behind * 1.5 then
+        army.field = nil
+        return
+    end
+    local ux, uz = dx / length, dz / length
+    local back = field_behind
+    local point = {x = cx + ux * back, z = cz + uz * back}
+    for _ = 1, 4 do
+        local danger = false
+        for _, row in ipairs(world.enemies_near(point, 1500)) do
+            if armed_on_ground(row.entry) and util.dist(point, row) < row.entry.ground_range + 250 then
+                danger = true
+                break
+            end
+        end
+        if not danger or back + 400 > length then
+            break
+        end
+        back = back + 400
+        point = {x = cx + ux * back, z = cz + uz * back}
+    end
+    army.field = world.clear_spot(util.clamp(point, 64))
+end
+
+local function step_medics()
+    local home = world.base or world.start
+    local rally = rally_point()
+    for _, medic in ipairs(medics()) do
+        local id = medic.id
+        local at = util.pos(medic)
+        local health = util.num(medic.health_percent)
+        local last = army.medic_order[id] or 0
+        if army.medic_home[id] ~= nil then
+            if health >= builders.mend_done then
+                army.medic_home[id] = nil
+            elseif at ~= nil and home ~= nil and util.free(medic) and util.dist(at, home) > 500 then
+                local point = army.mend_point(medic)
+                if point ~= nil then
+                    medic:move(point)
+                end
+            end
+        elseif health < mend_below then
+            army.medic_home[id] = me.tick
+            for _, patient in ipairs(army.medic_job[id] or {}) do
+                drop_patient(patient)
+            end
+            army.medic_job[id] = nil
+            local point = army.mend_point(medic)
+            if point ~= nil then
+                medic:move(point)
+                builders.mend_unit(medic)
+                print(string.format("repair: medic %s goes home (%d%% health)", catalog.of(medic).name, health))
+            end
+        end
+        if army.medic_home[id] == nil and at ~= nil then
+            local keep, patient = {}, nil
+            for _, patient_id in ipairs(army.medic_job[id] or {}) do
+                local other = world.own[patient_id]
+                local to = army.mend_to[patient_id]
+                if other ~= nil and army.mending[patient_id] and to ~= nil and to.medic == id then
+                    keep[#keep + 1] = patient_id
+                    if patient == nil and util.num(other.health_percent) < builders.mend_done then
+                        patient = other
+                    end
+                end
+            end
+            army.medic_job[id] = #keep > 0 and keep or nil
+            if patient ~= nil then
+                if util.free(medic) or me.tick - last > 30 * 10 then
+                    medic:repair(patient)
+                    army.medic_order[id] = me.tick
+                end
             else
-                to.tries = to.tries + 1
-                local point = army.mend_point(unit)
-                to.x, to.z = point.x, point.z
-                unit:move(point)
+                local spot = army.field or rally
+                if spot ~= nil then
+                    -- A new order only when the spot moved on or the medic
+                    -- stopped: every new order is a new path search, and a
+                    -- Necro given one every few seconds hardly left the base.
+                    local going = army.medic_to[id]
+                    if util.dist(at, spot) > 300 then
+                        if util.free(medic) or going == nil or util.dist(going, spot) > 500 then
+                            local point = world.clear_spot(util.clamp(util.around(spot, brain.random(1000) / 1000, 120), 64))
+                            medic:move(point)
+                            army.medic_order[id] = me.tick
+                            army.medic_to[id] = {x = spot.x, z = spot.z}
+                        end
+                    elseif util.free(medic) then
+                        medic:patrol(util.clamp(util.around(spot, brain.random(1000) / 1000, 150), 64))
+                        army.medic_order[id] = me.tick
+                    end
+                end
+            end
+        end
+    end
+    for _, table_ in ipairs({army.medic_job, army.medic_order, army.medic_home, army.medic_to}) do
+        for id in pairs(table_) do
+            if world.own[id] == nil then
+                table_[id] = nil
             end
         end
     end
@@ -1184,13 +1438,41 @@ function army.step()
     local home, attackers, escorts = {}, {}, {}
     for id, since in pairs(army.mending) do
         local unit = world.own[id]
-        if unit == nil or util.num(unit.health_percent) >= builders.mend_done
-            or (me.tick - since > mend_wait and builders.crew_for(unit) == 0) then
+        local to = army.mend_to[id]
+        local field = to ~= nil and to.medic ~= nil
+        local mended = unit ~= nil and util.num(unit.health_percent) >= builders.mend_done
+        local waited = unit ~= nil and not mended and me.tick - since > mend_wait
+            and (field or builders.crew_for(unit) == 0)
+        if unit == nil or mended or waited then
+            -- Mended in the field: back to the wave it left.
+            if field and mended and army.target ~= nil then
+                army.attacking[id] = true
+            end
+            if mended then
+                fight_noted[id] = nil
+            end
+            if unit ~= nil then
+                print(string.format("repair: %s %s after %d s (%d tries)", catalog.of(unit).name,
+                    mended and "mended" or "left unmended", (me.tick - since) // 30,
+                    army.mend_to[id] and army.mend_to[id].tries or 0))
+            end
             army.mending[id] = nil
             army.mend_to[id] = nil
             if unit ~= nil then
                 builders.mend[id] = nil
             end
+        end
+    end
+    for id in pairs(army.mend_checked) do
+        if world.own[id] == nil then
+            army.mend_checked[id] = nil
+            fight_noted[id] = nil
+        end
+    end
+    -- Hurt units not hit again are weighed here too (a medic may have come).
+    for _, unit in ipairs(soldiers()) do
+        if util.num(unit.health_percent) < mend_below and army.mending[unit.id] == nil then
+            send_to_mend(unit)
         end
     end
     util.guard("mending", keep_mending)
@@ -1218,6 +1500,8 @@ function army.step()
             army.no_path[id] = nil
         end
     end
+    util.guard("field", field_zone, attackers)
+    util.guard("medics", step_medics)
     util.guard("escorts", step_escorts, escorts)
     for id in pairs(army.escort_moved) do
         if world.own[id] == nil then

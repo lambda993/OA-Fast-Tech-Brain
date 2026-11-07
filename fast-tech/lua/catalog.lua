@@ -238,6 +238,17 @@ local function classify(index, record, inferred_tier)
     entry.mobile = not entry.structure
     entry.factory = entry.structure and entry.builder
     entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0
+    -- Field medics (tag `repair`, user's rule): mobile units that mend but
+    -- are no construction units (scavengers, resurrectors, S.P.O.T.,
+    -- Mechanic, carriers). They follow the waves and mend the units that
+    -- fall back; the builders leave them alone. The engine lets a unit
+    -- repair only with `canreclamate` (Singularity has none), and aircraft
+    -- cannot keep pace with a wave on the ground.
+    entry.medic = entry.mobile_builder and not entry.air and entry.tags.repair == true
+        and (record.canreclamate == true or num(record.canreclamate) > 0)
+    if entry.medic then
+        entry.mobile_builder = false
+    end
     if entry.in_table then
         entry.scout = entry.mobile and entry.tags.scout == true
     else

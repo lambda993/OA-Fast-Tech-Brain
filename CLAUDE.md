@@ -316,8 +316,34 @@ error is logged once and the seat keeps playing).
     the sea. Also asked to check: no tier-4 lab (Fleet Shipyard) though
     many tier-3 builders, Core winning more often than Arm, a script stop,
     no aircraft/seaplane plants (see state below).
+27. User's Trout Farm game (2026-11-07): veterans turned home and were
+    back on patrol (fixed). Then the user's rule: a hurt veteran near home
+    goes home; otherwise a repair zone at a safe distance from the fight,
+    with units specialised in repairs (tag `repair`: Angler, S.P.O.T.,
+    Wisp, Necro and equivalents, non-construction units that repair) that
+    follow the waves at a distance and mend the units falling back. Units
+    falling back go to a medic first, else home; too far and no medic near,
+    they fight on until a medic comes or they die. The user asked for the
+    list of those units (given in the reply, see README "Field medics").
 
 ## State and open points
+
+- User's 4-seat Trout Farm game (2026-11-07, all Fast Tech, rich, no
+  errors): a veteran Penetrator turned home and was on patrol again a few
+  seconds later. Cause: a failed path stops any unit (`hooks.onPathFailed`
+  calls `builders.on_path_failed`), `keep_mending` re-sent it every army
+  step (3 s) and after three tries released it to the waves. Now it keeps
+  trying (halfway home from the third try) until the three-minute limit;
+  `army.mend_point` takes the water spot only on reachable's sure no (a
+  deferred nil sent land units to the shore). Log lines `repair: ...`
+  (sent, mended, left unmended, lost). Seen in tests: most units are sent
+  from 5 000-18 000 units away, deep in the enemy base, and die on the way
+  (traced: no new order, they crawl through their own wave). The user
+  chose field medics (item 27, above); a unit farther than 2 500 from home
+  with no medic now fights on. Speed: the user turned anti-aliasing off
+  mid-game (the log shows the start setting) and saw little gain; next
+  game with it off from the start. Tests after it: 8 vs built-in 6 wins, 2 mirror draws, no
+  errors.
 
 - User's 4-seat Ror Shock game (2026-11-07, all Fast Tech, rich, 47 min,
   no errors): factories blocked by builders and units standing by them;
