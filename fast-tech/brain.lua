@@ -58,9 +58,9 @@ local function status()
         #world.select(function(_, e) return e.defense and e.anti_air end),
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
-    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; cloaked %d; targets kept %d, searched %d",
+    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; cloaked %d; targets kept %d, searched %d; moved out of factory lanes %d",
         army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort, util.count(army.cloaked),
-        army.targets_kept, army.searched))
+        army.targets_kept, army.searched, army.lanes_cleared or 0))
     local escorts, made = 0, {}
     for _, unit in ipairs(world.select(function(_, e) return e.combat end)) do
         local entry = catalog.of(unit)
@@ -96,48 +96,57 @@ local function status()
         counts.radar, counts.defense, counts.water, util.count(world.enemy_buildings)))
 end
 
+-- The work of a second is spread over six turns, a sixth of a second apart:
+-- with builders, factories, army, scouts and the status line in one turn,
+-- seats on Seven Islands ran turns past 250 ms and were stopped. Slot 0:
+-- world and builders (every second); 1: status, city dump; 2: factories
+-- (every 2 s); 3: scouts (every 5 s); 4: army (every 3 s).
 local function think()
-    -- The first turn only reads the build lists again: with everything
-    -- else on top of it a first turn passed 250 ms and stopped the seat.
-    if not refreshed then
-        catalog.refresh_builds()
-        tech.reset()
-        refreshed = true
-        return
-    end
-    util.guard("world", function()
-        world.update_tier()
-        world.update_base()
-        tech.choose_goal()
-    end)
-    -- Nothing can be placed or sent before the seat knows where it stands.
-    if not world.located() then
-        return
-    end
+    local slot = (me.tick // 5) % 6
     local second = me.tick // 30
-    util.guard("builders", builders.step)
-    if second % 2 == 0 then
-        util.guard("factories", factories.step)
-        util.guard("makers", require("economy").toggle_makers)
-        util.guard("boosters", require("economy").toggle_boosters)
+    if slot == 0 then
+        -- The first turn only reads the build lists again: with everything
+        -- else on top of it a first turn passed 250 ms and stopped the seat.
+        if not refreshed then
+            catalog.refresh_builds()
+            tech.reset()
+            refreshed = true
+            return
+        end
+        util.guard("world", function()
+            world.update_tier()
+            world.update_base()
+            tech.choose_goal()
+        end)
     end
-    if second % 3 == 0 then
-        util.guard("army", army.step)
+    -- Nothing can be placed or sent before the seat knows where it stands.
+    if not refreshed or not world.located() then
+        return
     end
-    if second % 60 == 0 then
-        util.guard("status", status)
-    end
-    if hooks.dump_city and second % 600 == 0 then
-        util.guard("city dump", require("city").dump)
-    end
-    -- After a wide site search (some thirty placements) the scouts wait for
-    -- the next turn: together they ran a turn past 250 ms on Seven Islands.
-    if second % 5 == 0 and builders.heavy_tick == me.tick then
-        scouts.delayed = true
-    elseif second % 5 == 0 or scouts.delayed then
-        scouts.delayed = false
-        util.guard("scouts", scouts.step)
-        util.guard("prune", world.prune)
+    if slot == 0 then
+        util.guard("builders", builders.step)
+    elseif slot == 1 then
+        if second % 60 == 0 then
+            util.guard("status", status)
+        end
+        if hooks.dump_city and second % 600 == 0 then
+            util.guard("city dump", require("city").dump)
+        end
+    elseif slot == 2 then
+        if second % 2 == 0 then
+            util.guard("factories", factories.step)
+            util.guard("makers", require("economy").toggle_makers)
+            util.guard("boosters", require("economy").toggle_boosters)
+        end
+    elseif slot == 3 then
+        if second % 5 == 0 then
+            util.guard("scouts", scouts.step)
+            util.guard("prune", world.prune)
+        end
+    elseif slot == 4 then
+        if second % 3 == 0 then
+            util.guard("army", army.step)
+        end
     end
 end
 
@@ -170,7 +179,7 @@ function hooks.start()
     world.reset()
     refreshed = false
     if not armed then
-        brain.every(30, think)
+        brain.every(5, think)
         brain.every(3, survey)
         armed = true
     end

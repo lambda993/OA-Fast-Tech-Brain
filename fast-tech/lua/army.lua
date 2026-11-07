@@ -31,8 +31,9 @@ local army = {
 -- sat at home for the first fifteen minutes (tier 2 asked for 7 200).
 local wave_worth = {[0] = 3000, 3000, 5000, 20000, 60000, 120000}
 
+-- Toward the front, where the city puts its factories: out of their lanes.
 local function rally_point()
-    return world.front(380)
+    return world.clear_spot(world.front(380))
 end
 
 local function soldiers()
@@ -832,7 +833,7 @@ function army.mend_point(unit)
         return nil
     end
     local entry = catalog.of(unit)
-    local point = util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64)
+    local point = world.clear_spot(util.clamp(util.around(home, brain.random(1000) / 1000, 250), 64))
     if entry.water_only or not util.reachable(unit, point) then
         local water = terrain.shore or terrain.water_point
         if water ~= nil then
@@ -1145,7 +1146,37 @@ local function busy(unit)
     return chase ~= nil and me.tick - chase < 30 * 8
 end
 
+-- Idle units of the seat standing in a factory's lane step out of its side,
+-- each at most every ten seconds; looked at every other army step.
+army.cleared = {} -- unit id -> tick it was moved out of a lane
+local lane_wait = 30 * 10
+
+local function clear_lanes()
+    local moved = 0
+    for _, unit in ipairs(world.select(function(u, e) return e.mobile and not e.air and world.finished(u) end)) do
+        local last = army.cleared[unit.id]
+        if last == nil or me.tick - last >= lane_wait then
+            local at = util.pos(unit)
+            local lane = at and world.in_factory_way(at)
+            if lane ~= nil and util.free(unit) then
+                army.cleared[unit.id] = me.tick
+                unit:move(world.out_of_lane(at, lane))
+                moved = moved + 1
+            end
+        end
+    end
+    army.lanes_cleared = (army.lanes_cleared or 0) + moved
+    for id in pairs(army.cleared) do
+        if world.own[id] == nil then
+            army.cleared[id] = nil
+        end
+    end
+end
+
 function army.step()
+    if (me.tick // 90) % 2 == 0 then
+        util.guard("lanes", clear_lanes)
+    end
     util.guard("guns", aim_guns)
     util.guard("air repair", send_aircraft_to_pads)
     util.guard("facilities", note_facilities)
@@ -1242,7 +1273,7 @@ function army.step()
             -- An area weapon waits to the side of the others.
             local aside = math.min(catalog.of(unit).blast, apart_limit) * 1.5
             if util.dist(at, rally) > 250 + aside then
-                unit:move(util.clamp(util.around(rally, brain.random(1000) / 1000, 120 + aside), 64))
+                unit:move(world.clear_spot(util.clamp(util.around(rally, brain.random(1000) / 1000, 120 + aside), 64)))
             elseif aside > 0 then
                 keep_range(unit)
             end

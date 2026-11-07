@@ -161,7 +161,15 @@ for minutes helping frames on land, nor land builders frames out on the
 water. In one turn at most eight builders look for new work, in turn
 round the list (a seat with forty builders was stopped for a turn past
 250 ms), and none more after a wide search for a lab site (some thirty
-placements), which also holds the scouts back a turn. A builder alone on a frame is never sent to other work (no new task,
+placements); that search itself goes five ring points a turn, as one
+placement of an 18×18 lab on the water costs the engine milliseconds. A
+build order that raises no frame in 90 seconds is dropped (`build order
+dropped: ...`): the builder walks back to the base first (a commander held
+one for a whole game without moving) and the site is avoided for ten
+minutes; no factory goes within its half size and 96 units of the map's
+edge. The work of a second is spread over six turns: builders,
+the status line, factories, scouts and the army each have their own (all
+in one turn stopped seats on Seven Islands). A builder alone on a frame is never sent to other work (no new task,
 no emergency repair, no call back for the economy) until the frame is
 up; it runs only when it is under fire (hit in the last ten seconds) and
 down to 75 % health. The commander keeps its own rules. No builder is sent to a site it cannot get to: every site is
@@ -314,6 +322,15 @@ that it could shell, and goes on firing at will. Frontliners close in. A
 unit with an area weapon (`aoe`) moves away from own and allied ground units
 in its blast (at most 400 units of it), waits to the side of the rally point
 and goes on its own.
+
+**Factory lanes.** The ground in front of and behind every finished factory
+(not aircraft plants), 240 units past each end along the axis its units leave
+by and 48 past its sides, is kept clear (user's game: factories blocked by
+builders and units waiting by them; the rally point lay in the city's front
+district, where the factories stand). The rally point, the spots units wait
+on and are mended at, and the builders' parking keep out of it; every six
+seconds idle units of the seat standing in a lane step out of its side
+(`moved out of factory lanes N` in the `distance:` line).
 
 **Base in danger.** When three own facilities (tag `facility`) fall within
 1 600 units of the base in two minutes, or the commander is hit by anything

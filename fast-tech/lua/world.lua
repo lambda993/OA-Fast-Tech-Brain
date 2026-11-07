@@ -716,4 +716,79 @@ function world.front(distance)
     return util.clamp(util.toward(base, target, distance), 96)
 end
 
+-- Factory doors ---------------------------------------------------------------
+
+-- The ground in front of and behind each finished factory, along the axis
+-- its units leave by, is kept clear (user's game on Ror Shock: factories
+-- stood blocked by builders and units waiting nearby). The rally point and
+-- the builders' parking spots keep out of it, and idle units standing in it
+-- are moved aside (army.lua). Aircraft plants have no lane.
+local lane_length = 240 -- past the factory's edge
+local lane_side = 48    -- past its sides
+local lanes_tick, lanes = -1, {}
+
+local function factory_lanes()
+    if lanes_tick == me.tick then
+        return lanes
+    end
+    lanes = {}
+    for _, unit in ipairs(world.select(function(u, e) return e.factory and e.line ~= "air" and world.finished(u) end)) do
+        local at = util.pos(unit)
+        local entry = catalog.of(unit)
+        if at ~= nil then
+            local quarter = ((util.num(unit.heading) % 65536) + 8192) // 16384 % 4
+            lanes[#lanes + 1] = {
+                x = at.x, z = at.z,
+                half = math.max(util.num(entry.record.footprintx), util.num(entry.record.footprintz)) * 8,
+                axis = quarter % 2 == 0 and "z" or "x",
+            }
+        end
+    end
+    lanes_tick = me.tick
+    return lanes
+end
+
+-- The factory lane `point` stands in, or nil.
+function world.in_factory_way(point)
+    for _, lane in ipairs(factory_lanes()) do
+        local dx, dz = math.abs(point.x - lane.x), math.abs(point.z - lane.z)
+        local along, across = dz, dx
+        if lane.axis == "x" then
+            along, across = dx, dz
+        end
+        if across < lane.half + lane_side and along < lane.half + lane_length then
+            return lane
+        end
+    end
+    return nil
+end
+
+-- `point`, or the nearest point round it out of every factory lane.
+function world.clear_spot(point)
+    if world.in_factory_way(point) == nil then
+        return point
+    end
+    for ring = 1, 4 do
+        for step = 0, 7 do
+            local spot = util.clamp(util.around(point, step / 8, ring * 120), 64)
+            if world.in_factory_way(spot) == nil then
+                return spot
+            end
+        end
+    end
+    return point
+end
+
+-- Where a unit standing in a factory lane steps to: straight out of the
+-- lane's side, the nearer one.
+function world.out_of_lane(point, lane)
+    local margin = lane.half + lane_side + 80
+    if lane.axis == "z" then
+        local side = point.x >= lane.x and 1 or -1
+        return util.clamp({x = lane.x + side * margin, z = point.z}, 64)
+    end
+    local side = point.z >= lane.z and 1 or -1
+    return util.clamp({x = point.x, z = lane.z + side * margin}, 64)
+end
+
 return world

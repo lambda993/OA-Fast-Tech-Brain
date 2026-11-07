@@ -190,7 +190,7 @@ error is logged once and the seat keeps playing).
 
 | File | Role |
 | --- | --- |
-| `brain.lua` | Hooks; one turn a second (`think`): world, map survey, tech goal, then builders, factories (2 s), army (3 s), scouts and pruning (5 s), status (60 s), city dump (600 s). |
+| `brain.lua` | Hooks; the work of a second spread over six turns (`think`, every 5 ticks): world, tech goal and builders; status (60 s) and city dump (600 s); factories (2 s); scouts and pruning (5 s); army (3 s). Map survey on its own timer. |
 | `lua/unit_table.lua` | Generated from `data/units.json`: threat, target lists, tags per type. |
 | `lua/catalog.lua` | Every unit type sorted into roles: tier, line, builder/factory, combat, defence, anti-air, artillery, radar/sonar/jammer, economy, storage, decoy, upgrade, water-only, shot energy; wind/tide judged against solar. |
 | `lua/world.lua` | Own units, base and start, tier, enemy memory (buildings, contacts, wrecks, enemy air), target priority and `best_target`, radar contacts. |
@@ -318,6 +318,46 @@ error is logged once and the seat keeps playing).
     no aircraft/seaplane plants (see state below).
 
 ## State and open points
+
+- User's 4-seat Ror Shock game (2026-11-07, all Fast Tech, rich, 47 min,
+  no errors): factories blocked by builders and units standing by them;
+  speed still drops in medium fights; asked whether the brain, repo and
+  every name can become `escalated` (yes: manifest id and folder together,
+  install folder, repo via `gh repo rename`; the user put it off for now).
+  - The rally point (`world.front(380)`) lies in the city's front
+    district, where the factories are. Now `world.in_factory_way` keeps a
+    lane of 240 units past each end and 48 past the sides of every finished
+    non-air factory; rally point, waiting spots, mend spots and builder
+    parking take `world.clear_spot`, and every 6 s idle own units in a
+    lane step out of its side (`clear_lanes`, log `moved out of factory
+    lanes N`: 19-253 a match in tests).
+  - Speed: a traced 20-minute Painted Desert mirror gave about 5 000 brain
+    orders for both seats (4 a second) and 675 M Lua instructions in 104 s
+    of run time: the brain is a small part; fights cost in the engine.
+  - Seven Islands seats still stopped (3 in 8 tests) in turns where
+    builders, army, scouts and status ran together: `think` now runs every
+    5 ticks and each module has its own slot in the second. Still two stops,
+    both in builders.step: a profiling copy (counting brain.place, selects,
+    reachable, passable per step) showed the heavy steps were one builder's
+    wide lab-site search, ~40 `brain.place` of an 18×18 lab on the water
+    (each some milliseconds in the engine). `place_wide` now goes 5 explored
+    ring points a turn and resumes where it stopped (`builders.wide_pass`).
+  - Then Core's commander on 8Islands (seed 7) stayed at tier 0 all game:
+    it held a `MobileBuild` for a Shipyard 110 units off, never starting
+    and never moving, so it was never free for new work (the engine gives
+    no reason). Now a build order with no frame for 90 s is dropped
+    (`build order dropped: no frame in 90 s at x,z`), the site is avoided
+    ten minutes (`builders.bad_sites`), and the builder first walks back to
+    the base (given new work at once, it was sent to the same spot); no
+    factory site within its half size + 96 of the map's edge. Then it
+    reached tier 1 at 7 500 ticks. About 20 real drops a match on Core
+    Prime (poor ground); most `dropped` lines there are the older leash
+    lines.
+  - Tests after all of it: 8 vs built-in 5 wins 1 draw, 6 mirrors all
+    draws (8Islands Core 300 built, before 4), no errors, no stops.
+  - Seen in the logs: escorts 30 of ~100 units (seats 2, 4) and seat 1's
+    army almost all Swatters at the end: with enemy aircraft seen there is
+    no cap, and a poor seat takes its cheapest units. Not changed.
 
 - User's 7-seat Seven Islands game (2026-11-07, all Fast Tech, rich, 73
   min; 93 % water, oversized like 8Islands). Findings and fixes:

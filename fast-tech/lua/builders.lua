@@ -471,6 +471,8 @@ end
 
 builders.clearing = {} -- factory index -> tick its ground was last cleared
 builders.sweeping = {} -- builder id -> tick it was sent to clear ground
+builders.build_wait = {} -- builder id -> tick its build order was first seen without a frame
+builders.bad_sites = {}  -- {x, z, tick}: sites whose build order never raised a frame
 builders.tried = {}    -- cell key -> clearing attempts that left it blocked
 
 -- Ground for `entry` (a lab that fits nowhere) cleared of features: spots
@@ -533,6 +535,29 @@ end
 
 -- Puts `entry` down near `near`, searching `radius` world units. When
 -- `walk` is set and the ground is unexplored, the builder walks there.
+-- A factory hard by the map's edge: its units cannot leave that way (Core's
+-- commander on 8Islands was sent to put a Shipyard 54 units off the edge,
+-- and no frame ever rose).
+local bad_site_time = 30 * 600
+
+local function by_edge(entry, x, z)
+    -- A site where a build order stood without a frame: not for ten minutes.
+    for index = #builders.bad_sites, 1, -1 do
+        local bad = builders.bad_sites[index]
+        if me.tick - bad.tick > bad_site_time then
+            table.remove(builders.bad_sites, index)
+        elseif math.abs(bad.x - x) < 96 and math.abs(bad.z - z) < 96 then
+            return true
+        end
+    end
+    if not entry.factory then
+        return false
+    end
+    local edge = half_size(entry) + 96
+    return x < edge or z < edge or x > util.whole(game.map.world_width) - edge
+        or z > util.whole(game.map.world_height) - edge
+end
+
 local function place(unit, entry, near, radius, walk, keep_off)
     local spot = util.clamp(near, 64)
     for attempt = 1, 3 do
@@ -544,6 +569,9 @@ local function place(unit, entry, near, radius, walk, keep_off)
         end
         x, z = util.whole(x), util.whole(z)
         local off = keep_off == nil or util.dist({x = x, z = z}, keep_off.at) >= keep_off.range
+        if by_edge(entry, x, z) then
+            off = false
+        end
         if off and not crowds_factory(entry, x, z, facing) and util.reachable(unit, {x = x, z = z}, entry.factory) then
             return unit:build(entry.record, {x = x, z = z}, facing) == true
         end
@@ -563,6 +591,8 @@ end
 -- Returns true when ordered, and false plus true when three searches a
 -- minute apart found nothing.
 local wide_rings = {{0, 1}, {480, 8}, {960, 12}, {1440, 16}}
+local wide_per_turn = 5
+builders.wide_pass = {} -- search key -> {next point, first unexplored point}
 
 local function place_wide(unit, entry, centre)
     -- The commander keeps to its leash: it takes only sites within the leash of
@@ -574,40 +604,63 @@ local function place_wide(unit, entry, centre)
     local kind = catalog.of(unit)
     local commander = kind ~= nil and kind.commander
     local clock = commander and builders.wide_search_commander or builders.wide_search
-    local last = clock[entry.index]
-    -- The first lab cannot wait three minutes to learn it fits nowhere.
-    local pause = world.tier == 0 and 30 * 30 or 30 * 60
-    if last ~= nil and me.tick - last < pause then
-        return false, false
+    -- A search goes over several turns, `wide_per_turn` explored points a
+    -- turn: one placement of an 18x18 lab on the water costs the engine
+    -- some milliseconds, and all thirty-seven in one turn stopped seats on
+    -- Seven Islands.
+    local key = (commander and "c" or "b") .. entry.index
+    local pass = builders.wide_pass[key]
+    if pass == nil then
+        local last = clock[entry.index]
+        -- The first lab cannot wait three minutes to learn it fits nowhere.
+        local pause = world.tier == 0 and 30 * 30 or 30 * 60
+        if last ~= nil and me.tick - last < pause then
+            return false, false
+        end
+        clock[entry.index] = me.tick
+        pass = {next = 1, unseen = nil}
+        builders.wide_pass[key] = pass
     end
-    clock[entry.index] = me.tick
-    -- Some thirty placements: the rest of this turn's work waits.
+    -- The rest of this turn's builder work waits.
     builders.heavy_tick = me.tick
     local home = base()
     local function near_home(x, z)
         return not commander or home == nil or util.dist(home, {x = x, z = z}) <= builders.leash
     end
-    local unseen = nil
+    local points = {}
     for _, ring in ipairs(wide_rings) do
         local distance, count = ring[1], ring[2]
         for step = 0, count - 1 do
-            local near = util.clamp(util.around(centre, step / count, distance), 96)
-            if util.explored(near) then
-                local _, _, x, z = brain.place(entry.record, near, 480, 0)
-                if x ~= nil then
-                    x, z = util.whole(x), util.whole(z)
-                    if near_home(x, z) and not city.on_street(entry, x, z) and not crowds_factory(entry, x, z, 0)
-                        and util.reachable(unit, {x = x, z = z}, true)
-                        and unit:build(entry.record, {x = x, z = z}, 0) then
-                        builders.wide_failed[entry.index] = nil
-                        return true
-                    end
-                end
-            elseif unseen == nil then
-                unseen = near
-            end
+            points[#points + 1] = util.clamp(util.around(centre, step / count, distance), 96)
         end
     end
+    local tried = 0
+    while pass.next <= #points and tried < wide_per_turn do
+        local near = points[pass.next]
+        pass.next = pass.next + 1
+        if util.explored(near) then
+            tried = tried + 1
+            local _, _, x, z = brain.place(entry.record, near, 480, 0)
+            if x ~= nil then
+                x, z = util.whole(x), util.whole(z)
+                if near_home(x, z) and not by_edge(entry, x, z) and not city.on_street(entry, x, z)
+                    and not crowds_factory(entry, x, z, 0)
+                    and util.reachable(unit, {x = x, z = z}, true)
+                    and unit:build(entry.record, {x = x, z = z}, 0) then
+                    builders.wide_failed[entry.index] = nil
+                    builders.wide_pass[key] = nil
+                    return true
+                end
+            end
+        elseif pass.unseen == nil then
+            pass.unseen = near
+        end
+    end
+    if pass.next <= #points then
+        return false, false
+    end
+    builders.wide_pass[key] = nil
+    local unseen = pass.unseen
     -- A commander's search counts towards "fits nowhere" only while no
     -- other builder could build the lab.
     if commander and #tech.goal_builders() > 1 then
@@ -1627,9 +1680,11 @@ local function try_assist(unit, reach)
     return false
 end
 
+-- Builders wait round the base, out of the factories' lanes (user's game:
+-- factories blocked by builders standing by their doors).
 local function park(unit)
     local centre = base()
-    local spot = util.clamp(util.around(centre, brain.random(1000) / 1000, 220), 96)
+    local spot = world.clear_spot(util.clamp(util.around(centre, brain.random(1000) / 1000, 220), 96))
     if unit:patrol(spot) then
         builders.parked[unit.id] = me.tick
     end
@@ -2724,6 +2779,39 @@ local function ready(unit)
         end
         builders.sweeping[unit.id] = nil
         return true
+    end
+    -- A build order whose frame never rose (a site the builder cannot get to
+    -- or work on: Core's commander on 8Islands held a Shipyard order by the
+    -- map's edge for a whole game, never free for new work) is dropped after
+    -- ninety seconds.
+    local orders = unit:orders()
+    local head = type(orders) == "table" and orders[1] or nil
+    if head ~= nil and head.kind == "MobileBuild" and builders.on_frame[unit.id] == nil then
+        local since = builders.build_wait[unit.id]
+        if since == nil then
+            builders.build_wait[unit.id] = me.tick
+        elseif me.tick - since > 30 * 90 then
+            builders.build_wait[unit.id] = nil
+            local x, z = util.whole(util.num(head.x)), util.whole(util.num(head.z))
+            print(string.format("build order dropped: no frame in 90 s at %d,%d", x, z))
+            if x > 0 or z > 0 then
+                economy.claim({x = x, z = z}, 600)
+                builders.bad_sites[#builders.bad_sites + 1] = {x = x, z = z, tick = me.tick}
+            end
+            -- It may be stuck where it stands: a walk back to the base first.
+            unit:stop()
+            local at, home = util.pos(unit), base()
+            if at ~= nil and home ~= nil then
+                local spot = util.dist(at, home) > 200 and util.toward(home, at, 120)
+                    or util.around(home, brain.random(1000) / 1000, 200)
+                unit:move(util.clamp(spot, 64))
+                builders.walking[unit.id] = {x = util.whole(spot.x), z = util.whole(spot.z), tick = me.tick, limit = 30 * 20}
+                return false
+            end
+            return true
+        end
+    else
+        builders.build_wait[unit.id] = nil
     end
     local parked = builders.parked[unit.id]
     if parked ~= nil then
