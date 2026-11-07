@@ -132,7 +132,12 @@ grid, a building goes anywhere near the base instead.
 vehicle has no metal extractor, a construction kbot has. Factories make the
 builder that brings what the seat lacks first (extractors, the next lab,
 radar, metal makers, power), then more of the best kind, twice as many while metal piles up (they help
-the factories). Half the builders
+the factories). A builder of three kinds of building or fewer is made at
+most twice: Arm's Exp. Construction Vehicle builds only the Panopticon
+(Core's also the B.F.G.), and the Exp. Unit Fabricator made eight of them
+in the user's game before any tier-4 unit. Two stay worth it: each adds
+6 480 work time to the fabricator's 19 200, and a Centaur (6.4 million
+build time, 66 590 metal) takes the fabricator 5.5 minutes alone. Half the builders
 lean on the race and half on the economy; when metal has run out the
 economy half sees to the economy first, builds nothing else (anti-air,
 artillery, defences, storage, more factories) unless attacked, and is
@@ -379,7 +384,12 @@ in range first, seen or remembered, then follow their list.
 **Cloak.** Units that can cloak by order (`invisible` with a cost at rest:
 decoys, Infiltrator, Parasite, Catalyst, Aquifer, Forge, Vault, heavy
 reactors, Panopticon, Shaper) cloak one at a time while the energy store is
-over 60 % and income pays for it, and all drop it under 20 %.
+over 60 % and income pays for it, and all drop it under 20 %. A cloaked
+unit is not hidden while it works or fights (engine,
+`decloak_until_tick`): building holds the cloak off 10 seconds, repairing
+5, reclaiming 30, firing 20, and any enemy within its `mincloakdistance`
+(60 for commanders and decoys) while it is near. The cloak hides nothing
+from radar either. So a commander or decoy that builds or fights is seen.
 
 `kamikaze` units (crawling bombs, Tick, mines) are in no AI build list, so
 the brain cannot make them.
@@ -430,10 +440,21 @@ minutes (five from tier 4) plus a third of the stores: so Big Bertha or Intimida
 Buzzsaw, then Armageddon or Dictator, and the B.F.G. at tier 5. The
 brain aims them, as they rarely see their targets.
 
-**Allies.** When an ally is in grave danger (eight or more armed enemies
-among its units, read from the `allies` and `threat` grid layers) the
-home army goes to help, at most every two minutes, unless the seat's own
-base is under heavy attack (five armed enemies near it).
+**Allies** (user's rule). When a live ally's base is under attack (armed
+enemy units whose threat levels add up to 8 or more within 1 600 units of
+the ally's start) and the seat's own base is not in danger (no emergency,
+fewer than five armed enemies near it), half of the army goes to defend
+it: the units nearest that base, from home and from the waves, that can
+get there (`ally base attacked at x,z (threat N): M of K units go to
+defend it`). They fight what is near them there, else attack-move to the
+nearest enemy by the ally's base; the other half goes on with the waves.
+They come back once no such enemy has been seen there for 20 seconds, the
+ally died, or the seat's own base is in danger (`ally base at x,z: safe,
+N units back`); new rescuers go at most once a minute when all of them
+fell. The rule before it looked for enemies among any allied units, so in
+the user's 4-seat game it mostly answered the ally's own waves in the
+enemy base, and only with the units left at home, while the ally's base
+was razed.
 
 **Aircraft repair.** Once the seat flies four attacking aircraft its
 builders put up a repair pad, one for every four up to ten, right after
@@ -521,7 +542,10 @@ Penetrator in the user's game turned home and was back on patrol seconds
 later). The water spot is taken only on a sure no from `map:reachable`,
 not on a deferred answer. One left unmended three minutes goes back to
 the army. The seat log ends each case with `mended after S s`, `left
-unmended after S s` or `lost after S s`.
+unmended after S s` or `lost after S s`. The three minutes count from the
+last gain in health (a Behemoth mended by one Necro gains slowly and was
+let go half mended), and a unit at 0 % is not sent (the killing hit comes
+as damage too).
 
 **Field medics** (tag `repair`, user's rule): mobile units that repair
 but are no construction units: scavengers Flea, Mite, Wisp, Toad;

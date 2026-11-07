@@ -325,6 +325,12 @@ error is logged once and the seat keeps playing).
     falling back go to a medic first, else home; too far and no medic near,
     they fight on until a medic comes or they die. The user asked for the
     list of those units (given in the reply, see README "Field medics").
+28. User's 4-seat Core Prime game (2026-11-07): an ally holding its own
+    front must split its waves in two and help the ally whose base is
+    being razed; check why enemies see cloaked commanders/decoys, why the
+    medics never mended, why the Exp. Unit Fabricator made only
+    construction vehicles, and why those just guarded it, blocking its
+    exit (see state below).
 
 ## State and open points
 

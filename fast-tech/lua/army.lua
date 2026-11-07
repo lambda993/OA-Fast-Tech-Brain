@@ -22,7 +22,6 @@ local army = {
     sent_at = 0,
     grounded = {},  -- aircraft id -> tick it pulled back from anti-air
     air_mending = {}, -- aircraft id -> tick it was sent to a repair pad
-    rescue = nil,   -- {x, z, tick} an ally in trouble the army went to
 }
 
 -- Metal worth a wave needs before it leaves, by the seat's tier.
@@ -648,11 +647,20 @@ local function pull_back_aircraft(attackers)
     return keep
 end
 
--- Allies in grave danger: many armed enemies among an ally's units (the
--- `allies` and `threat` layers of a 32-cell grid, a cell and its
--- neighbours). The home army goes to help unless the seat's own base is
--- under heavy attack. At most one rescue every two minutes.
+-- An ally's base under attack (user's rule, after a 4-seat game where the
+-- stronger ally sent every wave at the enemy while its ally's base was
+-- razed): armed enemies with threat levels adding up to 8 or more within
+-- 1 600 units of a live ally's start. While the seat's own base is not in
+-- danger, half of its army (the units nearest that base, from home and from
+-- the waves) goes to defend it; the other half goes on as before. They come
+-- back once no such enemy has been seen there for 20 seconds, the ally is
+-- dead, or the seat's own base is in danger. The rule before it looked for
+-- enemies among any allied units, so it mostly answered the ally's own
+-- waves in the enemy base, and only with the units left at home.
 local rescue_threat = 8
+local rescue_reach = 1600
+army.rescuing = {} -- unit id -> true while it defends an ally's base
+army.ally_alarm = nil -- {player, x, z, quiet, staffed}
 
 local function heavy_attack_at_home()
     local base = world.base or world.start
@@ -669,70 +677,127 @@ local function heavy_attack_at_home()
     return armed >= 5
 end
 
+-- The live ally's base with the most armed enemy threat near its start,
+-- and that threat.
 function army.ally_in_danger()
-    local allies = me:allies()
-    if type(allies) ~= "table" or #allies == 0 then
+    local players = me:players()
+    if type(players) ~= "table" then
         return nil
     end
-    local size = 32
-    local grid = brain.grid({"allies", "threat"}, size)
-    if grid == nil then
-        return nil
-    end
-    local function at(layer, row, col)
-        if row < 0 or col < 0 or row >= size or col >= size then
-            return 0
-        end
-        return util.num(grid:get(layer * size * size + row * size + col + 1))
-    end
-    local width = util.whole(game.map.world_width)
-    local height = util.whole(game.map.world_height)
-    local base = world.base or world.start
     local best, best_threat
-    for row = 0, size - 1 do
-        for col = 0, size - 1 do
-            if at(0, row, col) >= 1 then
-                local threat = 0
-                for dr = -1, 1 do
-                    for dc = -1, 1 do
-                        threat = threat + at(1, row + dr, col + dc)
-                    end
+    for _, row in ipairs(players) do
+        if row.player ~= me.player and row.alive and row.start_x ~= nil and me:allied(row.player) == true then
+            local start = {x = util.whole(row.start_x), z = util.whole(row.start_z)}
+            local threat = 0
+            for _, enemy in ipairs(world.enemies_near(start, rescue_reach)) do
+                local kind = enemy.entry
+                if kind ~= nil and kind.armed and not kind.structure then
+                    threat = threat + math.max(1, kind.threat or 1)
                 end
-                local point = {x = col * width // size + width // (2 * size), z = row * height // size + height // (2 * size)}
-                -- Not the seat's own base: that is defended anyway.
-                local own = base ~= nil and util.dist(point, base) < 900
-                if threat >= rescue_threat and not own and (best_threat == nil or threat > best_threat) then
-                    best, best_threat = point, threat
-                end
+            end
+            if threat >= rescue_threat and (best_threat == nil or threat > best_threat) then
+                best, best_threat = {player = row.player, x = start.x, z = start.z}, threat
             end
         end
     end
     return best, best_threat
 end
 
-local function rescue_ally(home)
-    if #home < 3 or worth(home) < 1500 then
-        return false
+local function release_rescuers(reason)
+    local count = util.count(army.rescuing)
+    army.rescuing = {}
+    if army.ally_alarm ~= nil then
+        print(string.format("ally base at %.0f,%.0f: %s, %d units back", army.ally_alarm.x, army.ally_alarm.z, reason, count))
     end
-    if army.rescue ~= nil and me.tick - army.rescue.tick < 30 * 120 then
-        return false
+    army.ally_alarm = nil
+end
+
+-- Sends half the army to the ally's base and keeps the rescuers fighting
+-- there; called before the army is split into home, waves and rescuers.
+local function watch_allies(pool)
+    if army.emergency ~= nil or heavy_attack_at_home() then
+        if army.ally_alarm ~= nil then
+            release_rescuers("own base in danger")
+        end
+        return
     end
-    if heavy_attack_at_home() then
-        return false
+    local attack, threat = army.ally_in_danger()
+    local alarm = army.ally_alarm
+    if attack ~= nil then
+        if alarm == nil or alarm.player ~= attack.player then
+            if alarm ~= nil then
+                release_rescuers("another ally attacked")
+            end
+            alarm = {player = attack.player, x = attack.x, z = attack.z}
+            army.ally_alarm = alarm
+        end
+        alarm.quiet = nil
+        alarm.threat = threat
+    elseif alarm ~= nil then
+        alarm.quiet = alarm.quiet or me.tick
+        if me.tick - alarm.quiet >= 30 * 20 then
+            release_rescuers("safe")
+            return
+        end
+    else
+        return
     end
-    local point, threat = army.ally_in_danger()
-    if point == nil then
-        return false
+    -- Staffed once, and again when the rescuers fell (at most every minute).
+    for id in pairs(army.rescuing) do
+        if world.own[id] == nil then
+            army.rescuing[id] = nil
+        end
     end
-    army.rescue = {x = point.x, z = point.z, tick = me.tick}
-    army.target = point
-    army.sent_at = me.tick
-    for _, unit in ipairs(home) do
-        unit:patrol(util.clamp(point, 64))
-        army.attacking[unit.id] = true
+    if util.count(army.rescuing) == 0 and (alarm.staffed == nil or me.tick - alarm.staffed > 30 * 60) then
+        local sorted = {}
+        for _, unit in ipairs(pool) do
+            local at = util.pos(unit)
+            if at ~= nil and (terrain.useful(catalog.of(unit)) or catalog.of(unit).air)
+                and util.reachable(unit, alarm) ~= false then
+                sorted[#sorted + 1] = {unit = unit, d = util.dist(at, alarm)}
+            end
+        end
+        table.sort(sorted, function(p, q) return p.d < q.d end)
+        local half = math.ceil(#pool / 2)
+        if #sorted >= 3 then
+            for index = 1, math.min(half, #sorted) do
+                local unit = sorted[index].unit
+                army.rescuing[unit.id] = true
+                army.attacking[unit.id] = nil
+            end
+            alarm.staffed = me.tick
+            print(string.format("ally base attacked at %.0f,%.0f (threat %d): %d of %d units go to defend it",
+                alarm.x, alarm.z, alarm.threat or 0, util.count(army.rescuing), #pool))
+        end
     end
-    print(string.format("ally in danger at %d,%d (%d armed enemies): %d units go to help", point.x, point.z, threat, #home))
-    return true
+end
+
+-- Rescuers fight what is near them; on the way and with nothing in sight
+-- they attack-move to the ally's base or the enemies near it.
+local function step_rescuers(rescuers)
+    local alarm = army.ally_alarm
+    if alarm == nil then
+        return
+    end
+    for _, unit in ipairs(rescuers) do
+        local at = util.pos(unit)
+        if at ~= nil then
+            local target, lost
+            if util.dist(at, alarm) < rescue_reach + 600 then
+                target, lost = pick(unit, at, 900)
+            end
+            if keep_range(unit) then
+                -- Stepped back from a close enemy.
+            elseif target ~= nil then
+                attack(unit, target)
+            elseif lost ~= nil then
+                chase(unit, lost)
+            else
+                local enemy = nearest_enemy(alarm, rescue_reach)
+                patrol(unit, (enemy and util.pos(enemy)) or alarm)
+            end
+        end
+    end
 end
 
 -- Aircraft below half health fly to the nearest repair pad or carrier.
@@ -853,7 +918,10 @@ local function send_to_mend(unit)
     if entry == nil or not entry.combat or entry.air or entry.mobile_builder or army.mending[unit.id] then
         return
     end
-    if util.num(unit.health_percent) >= mend_below then
+    -- The killing hit comes as damage too: a unit at 0 % is dead (the
+    -- user's log had Champions and Chimeras sent at 0 % and lost at once).
+    local health = util.num(unit.health_percent)
+    if health >= mend_below or health <= 0 or not util.alive(unit) then
         return
     end
     if entry.metal < mend_value and not veteran(unit, entry) then
@@ -1435,13 +1503,20 @@ function army.step()
     util.guard("air repair", send_aircraft_to_pads)
     util.guard("facilities", note_facilities)
     util.guard("emergency", watch_emergency)
-    local home, attackers, escorts = {}, {}, {}
+    local home, attackers, escorts, rescuers = {}, {}, {}, {}
     for id, since in pairs(army.mending) do
         local unit = world.own[id]
         local to = army.mend_to[id]
         local field = to ~= nil and to.medic ~= nil
-        local mended = unit ~= nil and util.num(unit.health_percent) >= builders.mend_done
-        local waited = unit ~= nil and not mended and me.tick - since > mend_wait
+        local health = unit ~= nil and util.num(unit.health_percent) or 0
+        local mended = unit ~= nil and health >= builders.mend_done
+        -- Three minutes, counted from the last gain in health: a Behemoth
+        -- mended by one Necro gains slowly and was let go half mended.
+        if to ~= nil and (to.best == nil or health > to.best) then
+            to.best, to.gained = health, me.tick
+        end
+        local idle_since = math.max(since, to and to.gained or since)
+        local waited = unit ~= nil and not mended and me.tick - idle_since > mend_wait
             and (field or builders.crew_for(unit) == 0)
         if unit == nil or mended or waited then
             -- Mended in the field: back to the wave it left.
@@ -1476,12 +1551,21 @@ function army.step()
         end
     end
     util.guard("mending", keep_mending)
+    local pool = {}
+    for _, unit in ipairs(soldiers()) do
+        if not (army.mending[unit.id] or army.air_mending[unit.id] or catalog.of(unit).tags.escort) then
+            pool[#pool + 1] = unit
+        end
+    end
+    util.guard("allies", watch_allies, pool)
     util.guard("careful", aim_careful)
     util.guard("cloak", manage_cloak)
     util.guard("air cover", air_cover, soldiers())
     for _, unit in ipairs(soldiers()) do
         if army.mending[unit.id] or army.air_mending[unit.id] or busy(unit) then
             -- Waiting at home for the builders, or on a repair pad.
+        elseif army.rescuing[unit.id] then
+            rescuers[#rescuers + 1] = unit
         elseif catalog.of(unit).tags.escort then
             escorts[#escorts + 1] = unit
         elseif army.attacking[unit.id] then
@@ -1500,6 +1584,7 @@ function army.step()
             army.no_path[id] = nil
         end
     end
+    util.guard("rescuers", step_rescuers, rescuers)
     util.guard("field", field_zone, attackers)
     util.guard("medics", step_medics)
     util.guard("escorts", step_escorts, escorts)
@@ -1520,9 +1605,6 @@ function army.step()
             army.grounded[unit.id] = nil
             ready[#ready + 1] = unit
         end
-    end
-    if rescue_ally(ready) then
-        return
     end
     local mark = wave_worth[math.min(5, world.tier)]
     -- Hard levels wait less; a single experimental may go with an escort.

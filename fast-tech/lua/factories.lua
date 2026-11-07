@@ -252,6 +252,15 @@ local function pick_builder(entry, tier)
     if best == nil then
         return nil
     end
+    -- A builder with three kinds of building or fewer (Arm's Exp.
+    -- Construction Vehicle builds only the Panopticon, Core's the B.F.G.
+    -- too) is made twice at most: the Exp. Unit Fabricator made eight of
+    -- them and hardly any tier-4 unit in the user's game. Two, as they are
+    -- the best help for the fabricator (6 480 work time each, the
+    -- fabricator 19 200: a Centaur takes it 5.5 minutes alone).
+    if #best.builds <= 3 and #world.select(function(_, e) return e == best end) >= 2 then
+        return nil
+    end
     local brings_missing = best_score >= 100
     if brings_missing and (best_score >= 600 or tier >= world.tier) then
         return best
