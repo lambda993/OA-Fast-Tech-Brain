@@ -90,6 +90,7 @@
       "anti-air",
       "anti-sub",
       "water",
+      "escort",
       "t1"
     ]
   },
@@ -115,6 +116,7 @@
     "tags": [
       "anti-air",
       "ground",
+      "escort",
       "t2"
     ]
   },
@@ -193,6 +195,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t2"
     ]
   },
@@ -366,6 +369,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t1"
     ]
   },
@@ -706,6 +710,7 @@
       "ground",
       "radar",
       "anti-air",
+      "escort",
       "t3"
     ]
   },
@@ -2812,6 +2817,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t3"
     ]
   },
@@ -3076,6 +3082,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t2"
     ]
   },
@@ -3392,6 +3399,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t1"
     ]
   },
@@ -4596,6 +4604,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t1"
     ]
   },
@@ -6474,6 +6483,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t2"
     ]
   },
@@ -6570,6 +6580,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t1"
     ]
   },
@@ -6595,6 +6606,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t2"
     ]
   },
@@ -6819,6 +6831,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t1"
     ]
   },
@@ -6911,6 +6924,7 @@
       "ground",
       "radar",
       "anti-air",
+      "escort",
       "t3"
     ]
   },
@@ -7102,6 +7116,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t2"
     ]
   },
@@ -7675,6 +7690,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t1"
     ]
   },
@@ -9093,6 +9109,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t3"
     ]
   },
@@ -9307,6 +9324,7 @@
       "water",
       "anti-air",
       "anti-sub",
+      "escort",
       "t2"
     ]
   },
@@ -10168,6 +10186,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t1"
     ]
   },
@@ -11105,6 +11124,7 @@
     "tags": [
       "ground",
       "anti-air",
+      "escort",
       "t2"
     ]
   },

@@ -305,6 +305,13 @@ unit with an area weapon (`aoe`) moves away from own and allied ground units
 in its blast (at most 400 units of it), waits to the side of the rally point
 and goes on its own.
 
+**Escorts.** Mobile anti-air (`escort`) stays out of the waves and gets no
+attack orders: it fires at will at aircraft in reach from where it stands. It
+keeps behind the nearest own fighter of its kind, on the side away from the
+army's target, and walks out of the reach of any ground enemy's weapons. With
+no fighter within 1 500 units it goes back to the rally point. Units with
+anti-air on top of another role keep that role.
+
 **Targets.** Each unit shoots only what its weapons can hit: anti-air
 weapons at aircraft, other weapons at the rest, and the table narrows that
 down. `attack_only` is a closed list (Lurker, Snake, Piranha, Shark,

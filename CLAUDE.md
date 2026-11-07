@@ -470,6 +470,21 @@ error is logged once and the seat keeps playing).
   the new lists idle ships asked for one unreachable point over and over
   (Luschaven seed 7: 9 302 patrols and 7 675 stops, 1 078 and 381 after;
   the old brain had 1 818 and 1 222). Log line `distance: ...` each minute.
+  Escorts (user, after a 4-seat game on a 75 % water map: anti-air fighting
+  like frontliners in the melee): dedicated anti-air had no target among
+  ground units, so it took the wave's attack-move to the enemy base and the
+  engine fired its ground missile by itself. Now tag `escort` (user's name)
+  on 20 units, the 16 dedicated and Scorpion, Thrasher, Monsoon, Flail;
+  `step_escort` in army.lua: no waves, no attack orders, behind the nearest
+  fighter of its kind, out of reach of ground guns, back to the rally point
+  with no fighter within 1 500. Anti-air with another role (Marauder, Widow,
+  Panther, Riptide, Slipstream, Cerberus, Centurion...) keeps that role. Same
+  8 setups after it: 6 wins, 2 draws, no errors; escorts in waves 0 of 511
+  samples (before: 260 of 334, one sample a minute over 3 setups). Too few
+  samples under fire to judge: 2 of 511 vs 4 of 334. More of them stay
+  alive (peak 21 vs 19 on Core Prime, 10 vs 6 Steel Jungle, 11 vs 7 Painted
+  Desert) and Core Prime seed 7 gave 9 500 move orders vs 6 600 (not measured
+  with the back-off alone). No test had escorts in a 4-seat game.
   Tests, 8 matches vs built-in hard on rich: 6 wins (Painted Desert Arm and
   Core, Ashap seed 99 Core, Crater Islands seed 99 Arm, Luschaven seeds 7 and
   99), 2 draws on time (Core Prime seeds 7 and 99), no script errors. Same

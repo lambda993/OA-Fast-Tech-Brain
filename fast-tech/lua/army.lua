@@ -31,6 +31,10 @@ local army = {
 -- sat at home for the first fifteen minutes (tier 2 asked for 7 200).
 local wave_worth = {[0] = 3000, 3000, 5000, 20000, 60000, 120000}
 
+local function rally_point()
+    return world.front(380)
+end
+
 local function soldiers()
     return world.select(function(u, e) return e.combat and world.finished(u) end)
 end
@@ -60,7 +64,8 @@ end
 local artillery_margin = 64
 local apart_limit = 400
 army.backed = {} -- unit id -> tick it last stepped away
-army.stepped = {skirmisher = 0, artillery = 0, apart = 0} -- counted for the seat log
+army.escort_moved = {} -- escort id -> tick it was last sent behind its leader
+army.stepped = {skirmisher = 0, artillery = 0, apart = 0, escort = 0} -- counted for the seat log
 
 local function away_from(unit, at, from, step, wait)
     -- Stepped away a moment ago: still on its way.
@@ -240,6 +245,100 @@ local function patrol(unit, point)
     return unit:patrol(point)
 end
 
+-- Escorts (tag `escort`: mobile anti-air) stay out of the waves and get no
+-- attack orders: they fire at will at aircraft in reach, from where they
+-- stand. Under the guns of a ground enemy they walk out of that reach, as
+-- artillery does. Otherwise each stays behind the nearest own fighter of its
+-- kind, on the side away from the army's target, and goes back to the rally
+-- point when none is within 1 500.
+local escort_search = 1200
+local escort_group = 1500
+local escort_behind = 220
+local escort_slack = 200
+local escort_wait = 30 * 8
+
+local function can_lead(escort, kind)
+    if kind.tags.escort or kind.air or not kind.combat then
+        return false
+    end
+    -- Ships lead ships; a hovercraft may follow anything, and land units
+    -- follow what is not a ship.
+    if escort.tags.hovercraft then
+        return true
+    end
+    return (escort.tags.ship == true) == (kind.tags.ship == true or kind.tags.submarine == true)
+end
+
+local function step_escort(unit, entry, leaders)
+    local at = util.pos(unit)
+    if at == nil then
+        return
+    end
+    local worst, worst_step
+    for _, row in ipairs(world.enemies_near(at, escort_search)) do
+        if armed_on_ground(row.entry) then
+            local step = row.entry.ground_range + artillery_margin - util.dist(at, row)
+            if step > 0 and (worst == nil or step > worst_step) then
+                worst, worst_step = row, step
+            end
+        end
+    end
+    if worst ~= nil then
+        if away_from(unit, at, worst, worst_step + 100, 30 * 5) then
+            army.stepped.escort = army.stepped.escort + 1
+        end
+        return
+    end
+    local backed = army.backed[unit.id]
+    if no_way(unit) or (backed ~= nil and me.tick - backed < escort_wait) then
+        return
+    end
+    local leader, leader_d
+    for _, row in ipairs(leaders) do
+        if can_lead(entry, row.entry) then
+            local d = util.dist(at, row)
+            if leader_d == nil or d < leader_d then
+                leader, leader_d = row, d
+            end
+        end
+    end
+    local point
+    if leader ~= nil and leader_d <= escort_group then
+        local dx, dz = 0, 0
+        if army.target ~= nil then
+            dx, dz = leader.x - army.target.x, leader.z - army.target.z
+        end
+        local length = math.max(1, math.sqrt(dx * dx + dz * dz))
+        point = {x = leader.x + dx / length * escort_behind, z = leader.z + dz / length * escort_behind}
+    else
+        point = rally_point()
+    end
+    if util.dist(at, point) > escort_slack then
+        local last = army.escort_moved[unit.id]
+        if last == nil or me.tick - last >= escort_wait or util.free(unit) then
+            army.escort_moved[unit.id] = me.tick
+            unit:move(util.clamp(util.around(point, (unit.id % 16) / 16, 80), 64))
+        end
+    end
+end
+
+local function step_escorts(escorts)
+    if #escorts == 0 then
+        return
+    end
+    local leaders = {}
+    for _, unit in ipairs(soldiers()) do
+        local at = util.pos(unit)
+        local kind = catalog.of(unit)
+        if at ~= nil and not kind.tags.escort and not kind.air then
+            leaders[#leaders + 1] = {x = at.x, z = at.z, entry = kind}
+        end
+    end
+    for _, unit in ipairs(escorts) do
+        step_escort(unit, catalog.of(unit), leaders)
+    end
+end
+
 -- Each unit at `from` turns on the best target it can hit near `centre`;
 -- returns whether any had one.
 local function engage(units, centre, reach)
@@ -259,9 +358,6 @@ local function engage(units, centre, reach)
     return any
 end
 
-local function rally_point()
-    return world.front(380)
-end
 
 local function defend(home)
     local alarm = world.alarm
@@ -871,7 +967,7 @@ end
 function army.step()
     util.guard("guns", aim_guns)
     util.guard("air repair", send_aircraft_to_pads)
-    local home, attackers = {}, {}
+    local home, attackers, escorts = {}, {}, {}
     for id in pairs(army.mending) do
         local unit = world.own[id]
         if unit == nil or util.num(unit.health_percent) >= 95 then
@@ -886,6 +982,8 @@ function army.step()
     for _, unit in ipairs(soldiers()) do
         if army.mending[unit.id] or army.air_mending[unit.id] or busy(unit) then
             -- Waiting at home for the builders, or on a repair pad.
+        elseif catalog.of(unit).tags.escort then
+            escorts[#escorts + 1] = unit
         elseif army.attacking[unit.id] then
             attackers[#attackers + 1] = unit
         else
@@ -900,6 +998,12 @@ function army.step()
     for id, failed in pairs(army.no_path) do
         if me.tick - failed >= no_path_wait then
             army.no_path[id] = nil
+        end
+    end
+    util.guard("escorts", step_escorts, escorts)
+    for id in pairs(army.escort_moved) do
+        if world.own[id] == nil then
+            army.escort_moved[id] = nil
         end
     end
     push(pull_back_aircraft(attackers))
