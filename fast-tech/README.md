@@ -305,6 +305,15 @@ unit with an area weapon (`aoe`) moves away from own and allied ground units
 in its blast (at most 400 units of it), waits to the side of the rally point
 and goes on its own.
 
+**Base in danger.** When three own facilities (tag `facility`) fall within
+1 600 units of the base in two minutes, or the commander is hit by anything
+but an aircraft, every soldier in a wave comes home and joins the defence
+(`base in danger (...)`, `base in danger: N units called home`). Bombers and
+gunships come too; fighters stay on their patrols unless enemy aircraft are
+among the attackers. No wave leaves until no armed enemy is in sight within
+1 600 units of the base or the commander for twenty seconds (`base safe
+after N s`).
+
 **Escorts.** Mobile anti-air (`escort`) stays out of the waves and gets no
 attack orders: it fires at will at aircraft in reach from where it stands. It
 keeps behind the nearest own fighter of its kind, on the side away from the
@@ -584,7 +593,13 @@ seen and how; whether it is a fault is for the engine's author to judge.
     meet, so on a larger map (8Islands, 1 638 400 cells) a nil means little
     across open ground or sea. There the brain asks `map:reachable`, whose no
     settles it, and after its yes a coarse map of land and water decides. A
-    separate answer for "search gave up" would remove the guess.
+    separate answer for "search gave up" would remove the guess. Ships,
+    hovercraft and sea-floor walkers going more than 3 000 units are judged
+    on that coarse map alone there: their long searches cost about 2.3 s per
+    seat at the start of an 8Islands game, the lag of some ten seconds the
+    user saw with eight seats. Scouts send at most two a tick and their reach
+    tests are cached, as on that map each new movement class in a turn
+    rebuilds its regions (the engine keeps four a tick).
 
 ## Files
 

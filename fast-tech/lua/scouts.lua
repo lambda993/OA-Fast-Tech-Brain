@@ -89,17 +89,19 @@ local function enemy_start(entry)
     return best
 end
 
+-- Cached per class and square (util.reachable): on 8Islands (1.6 M cells)
+-- scouts of several classes asking map:reachable in one turn rebuilt the
+-- regions of each class (four are kept a tick) and a turn passed 250 ms.
 local function reachable(unit, entry, point)
     if entry.air then
         return true
     end
-    local class = entry.record.movementclass
-    if type(class) ~= "string" or class == "" then
-        return true
-    end
-    local ok, result = pcall(function() return game.map:reachable(unit, point, class) end)
-    return ok and result == true
+    return util.reachable(unit, point)
 end
+
+-- At most two scouts get a new point a tick, the rest on later turns.
+local sends_per_tick = 2
+local sent_tick, sent = -1, 0
 
 -- The place to send `unit` next, or nil.
 local function choose(unit, entry)
@@ -139,7 +141,7 @@ local function choose(unit, entry)
         end
     end
     table.sort(candidates, function(a, b) return a.score > b.score end)
-    for index = 1, math.min(6, #candidates) do
+    for index = 1, math.min(3, #candidates) do
         local point = candidates[index].point
         if reachable(unit, entry, point) then
             return point
@@ -158,6 +160,13 @@ local function send(unit)
     if entry == nil then
         return
     end
+    if sent_tick ~= me.tick then
+        sent_tick, sent = me.tick, 0
+    end
+    if sent >= sends_per_tick then
+        return
+    end
+    sent = sent + 1
     local point = choose(unit, entry)
     if point == nil then
         return

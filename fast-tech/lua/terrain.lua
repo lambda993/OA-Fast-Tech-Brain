@@ -156,13 +156,27 @@ local function coarse_meets(a, b, class)
     return false
 end
 
+-- Past the cap a long search over sea costs the most and tells the least
+-- (8Islands, eight seats: a lag of some ten seconds at the start, about
+-- 2.3 s of routes per seat): ships, hovercraft and walkers of the sea floor
+-- going far are judged on the coarse map alone. Land classes still route:
+-- an island runs out of cells fast.
+local far_water = 3000
+
 local function meets(a, b, class)
+    local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
+    local oversized = cells > route_cap
+    if oversized and util.dist(a, b) > far_water then
+        local upper = string.upper(class)
+        if not (string.sub(upper, 1, 5) == "TANKS" or string.sub(upper, 1, 4) == "KBOT") then
+            return coarse_meets(a, b, class), false
+        end
+    end
     local found, route = pcall(function() return game.map:route(a, b, class) end)
     if found and route ~= nil then
         return true, true
     end
-    local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
-    if cells <= route_cap then
+    if not oversized then
         return false, true
     end
     local ok, near = pcall(function() return game.map:reachable(a, b, class) end)

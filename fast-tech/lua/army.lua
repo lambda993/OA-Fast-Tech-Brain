@@ -379,6 +379,145 @@ local function defend(home)
     return true
 end
 
+-- The base in danger (user's rule): three own facilities (tag `facility`)
+-- destroyed near the base within two minutes, or the commander hit by a unit
+-- that is no aircraft. Then every soldier in a wave comes home and no wave
+-- leaves until the enemy is driven off: no armed enemy in sight within 1 600
+-- of the base or the commander for twenty seconds. Bombers and gunships come
+-- too; fighters stay on their patrols unless enemy aircraft are among the
+-- attackers.
+local emergency_reach = 1600
+local facility_window = 30 * 120
+local facilities_lost = 3
+local quiet_needed = 30 * 20
+army.emergency = nil -- {reason, since, quiet, x, z} while the base is in danger
+army.facility_losses = {} -- ticks own facilities were lost near the base
+army.facility_at = {} -- own facility id -> {x, z}, read while it stands
+
+local function note_facilities()
+    for _, unit in ipairs(world.select(function(u, e) return e.structure and e.tags.facility and world.finished(u) end)) do
+        if army.facility_at[unit.id] == nil then
+            local at = util.pos(unit)
+            if at ~= nil then
+                army.facility_at[unit.id] = {x = at.x, z = at.z}
+            end
+        end
+    end
+end
+
+local function danger_points()
+    local points = {}
+    local base = world.base or world.start
+    if base ~= nil then
+        points[#points + 1] = base
+    end
+    for _, unit in ipairs(world.select(function(_, e) return e.commander end)) do
+        local at = util.pos(unit)
+        if at ~= nil then
+            points[#points + 1] = at
+        end
+    end
+    return points
+end
+
+-- The armed enemy nearest the base or the commander, and whether enemy
+-- aircraft are among them.
+local function attackers_near()
+    local nearest, nearest_d, air = nil, nil, false
+    for _, point in ipairs(danger_points()) do
+        for _, row in ipairs(world.enemies_near(point, emergency_reach)) do
+            local kind = row.entry
+            if kind ~= nil and kind.armed then
+                if kind.air then
+                    air = true
+                end
+                local d = util.dist(point, row)
+                if nearest_d == nil or d < nearest_d then
+                    nearest, nearest_d = row, d
+                end
+            end
+        end
+    end
+    return nearest, air
+end
+
+local function raise_emergency(reason, at)
+    if army.emergency == nil then
+        army.emergency = {reason = reason, since = me.tick, quiet = nil, x = at.x, z = at.z}
+        print(string.format("base in danger (%s) at %.0f,%.0f", reason, at.x, at.z))
+    end
+    world.alarm = {x = at.x, z = at.z, tick = me.tick}
+    factories.raise_alarm(60)
+end
+
+-- Who comes home: everything on the ground and the sea, bombers and gunships,
+-- fighters only against enemy aircraft.
+local function called_home(entry, enemy_air)
+    if not entry.air then
+        return true
+    end
+    if entry.bomber or entry.tags.gunship then
+        return true
+    end
+    return enemy_air and (entry.fighter or entry.tags.fighter == true)
+end
+
+local function watch_emergency()
+    local state = army.emergency
+    if state == nil then
+        return false
+    end
+    local enemy, enemy_air = attackers_near()
+    if enemy ~= nil then
+        state.quiet = nil
+        state.x, state.z = enemy.x, enemy.z
+        world.alarm = {x = enemy.x, z = enemy.z, tick = me.tick}
+    elseif state.quiet == nil then
+        state.quiet = me.tick
+    elseif me.tick - state.quiet >= quiet_needed then
+        print(string.format("base safe after %d s (%s)", (me.tick - state.since) // 30, state.reason))
+        army.emergency = nil
+        return false
+    end
+    local called = 0
+    for id in pairs(army.attacking) do
+        local unit = world.own[id]
+        local entry = unit ~= nil and catalog.of(unit)
+        if entry and called_home(entry, enemy_air) then
+            army.attacking[id] = nil
+            army.patrolled[id] = nil
+            called = called + 1
+        end
+    end
+    if called > 0 then
+        print(string.format("base in danger: %d units called home", called))
+    end
+    return true
+end
+
+function army.on_lost(unit, entry)
+    local at = army.facility_at[unit.id]
+    army.facility_at[unit.id] = nil
+    if entry == nil or not entry.tags.facility or not entry.structure then
+        return
+    end
+    local base = world.base or world.start
+    if at == nil or base == nil or util.dist(at, base) > emergency_reach then
+        return
+    end
+    local recent = {}
+    for _, tick in ipairs(army.facility_losses) do
+        if me.tick - tick < facility_window then
+            recent[#recent + 1] = tick
+        end
+    end
+    recent[#recent + 1] = me.tick
+    army.facility_losses = recent
+    if #recent >= facilities_lost then
+        raise_emergency(#recent .. " facilities lost", at)
+    end
+end
+
 local function send_wave(home)
     local base = world.base or world.start
     local target = world.enemy_target(base)
@@ -967,6 +1106,8 @@ end
 function army.step()
     util.guard("guns", aim_guns)
     util.guard("air repair", send_aircraft_to_pads)
+    util.guard("facilities", note_facilities)
+    util.guard("emergency", watch_emergency)
     local home, attackers, escorts = {}, {}, {}
     for id in pairs(army.mending) do
         local unit = world.own[id]
@@ -1031,7 +1172,7 @@ function army.step()
     if me.tick - army.sent_at > 30 * 300 and #ready >= 8 then
         mark = mark * 0.5
     end
-    if worth(ready) >= mark and #ready >= 3 then
+    if worth(ready) >= mark and #ready >= 3 and army.emergency == nil then
         if send_wave(ready) then
             return
         end
@@ -1076,6 +1217,13 @@ function army.on_damaged(unit, attacker)
     if entry ~= nil and (entry.structure or (base ~= nil and util.dist(at, base) < 1200)) then
         world.alarm = {x = at.x, z = at.z, tick = me.tick}
         factories.raise_alarm(60)
+    end
+    -- The commander hit by something that is no aircraft.
+    if entry ~= nil and entry.commander and attacker ~= nil then
+        local kind = catalog.of(attacker)
+        if kind ~= nil and not kind.air then
+            raise_emergency("commander attacked", at)
+        end
     end
     if attacker ~= nil and util.alive(attacker) then
         world.remember(attacker)

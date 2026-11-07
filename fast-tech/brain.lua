@@ -208,6 +208,9 @@ end
 
 function hooks.onUnitDestroyed(unit, _, wreck)
     last_hit[unit.id] = nil
+    if world.own[unit.id] ~= nil then
+        util.guard("lost", army.on_lost, unit, catalog.of(unit))
+    end
     util.guard("wreck", world.note_wreck, catalog.of(unit), wreck)
     world.own[unit.id] = nil
     world.forget(unit)

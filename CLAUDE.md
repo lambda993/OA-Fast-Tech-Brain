@@ -472,6 +472,30 @@ error is logged once and the seat keeps playing).
   no stops, no errors; `enemy by land false`, first goal Shipyard, map line
   after 33-35 s. 4-seat games still not tested. All stayed at tier 2 to the
   end: the 18×18 labs find `no site` on this map's islands.
+- User's 8-seat game on 8Islands (all Fast Tech, 57 min, no stop): a lag
+  of about ten seconds at the start, bases not defended, poor speed
+  overall. Measured headless (`/usr/bin/time`, 900 ticks): each Fast Tech
+  seat adds ~2.3 s, nearly all long sea routes of the survey. Ships, hover
+  and sea-floor classes past 3 000 units are now judged on the coarse map
+  alone on oversized maps (`far_water` in terrain.lua): map line at tick 252
+  instead of 984, 40 s of game in 7.98 s instead of 10.95 s for two seats.
+  Speed over a whole match is mostly the engine: 30 min on Two Continents,
+  two seats, built-in 86 s (no fighting), Fast Tech 102 s, the brain before
+  the table 113 s. The user's log shows anti-aliasing 8×8 (64 samples a
+  pixel, 535 MiB) and frames of 211 810 vertices: worth a try lower.
+  Defence: waves never came back (only `home` units answered the alarm).
+  User's rule, `watch_emergency` in army.lua: three own facilities lost
+  within 1 600 of the base in two minutes, or the commander hit by a non-air
+  unit; waves come home, bombers and gunships too, fighters only against
+  enemy aircraft; no waves until no armed enemy in sight within 1 600 of the
+  base or commander for 20 s. Facility positions are kept while they stand
+  (`army.facility_at`), a dead unit has no position. Seats 1 and 6 started
+  42 units apart (18 704/18 746, 4 176) and had no builder or building after
+  a minute: 9 commanders on the map, likely more players than starts; asked
+  the user. One test then stopped at tick 42 600 in `scouts.step`: scouts
+  asked map:reachable with up to 6 points each, several classes in a turn
+  (regions rebuilt per class past four); now util.reachable (cached), 3
+  points, two sends a tick.
 - The brain plays by the table (2026-11-07): `catalog.lua` reads
   `entry.tags`, `threat`, `first_targets`, `ignored`, `only`; `world.can_hit`
   applies the lists (memoised per pair), `world.rank` orders targets (bomber
