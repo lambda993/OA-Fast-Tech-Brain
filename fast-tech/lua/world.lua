@@ -159,7 +159,7 @@ function world.remember(unit)
     if entry ~= nil and entry.structure then
         world.enemy_buildings[unit.id] = {
             x = at.x, z = at.z, tier = entry.tier, cost = entry.cost, tick = me.tick,
-            unit = unit, factory = entry.factory, commander = false,
+            unit = unit, factory = entry.factory, commander = false, entry = entry,
             anti_air = world.anti_air(entry),
         }
     end
@@ -252,9 +252,10 @@ function world.visible_enemies()
     return found
 end
 
--- How much an enemy is worth shooting first: commanders and decoys (they
--- look alike, so both count as commanders), then tier 4 and 5, tier 3,
--- anti-air (it keeps the seat's aircraft away), the economy, and the rest.
+-- How much an enemy is worth shooting first, whoever shoots: commanders and
+-- decoys (they look alike, so both count as commanders), then threat level
+-- 4 and 5, threat level 3, anti-air (it keeps the seat's aircraft away), the
+-- economy, and the rest. A shooter's own list comes first (world.rank).
 world.commander_priority = 6
 
 function world.anti_air(entry)
@@ -268,10 +269,10 @@ function world.priority(entry)
     if entry.commander or entry.decoy then
         return 6
     end
-    if entry.tier >= 4 then
+    if entry.threat >= 4 then
         return 5
     end
-    if entry.tier == 3 then
+    if entry.threat == 3 then
         return 4
     end
     if world.anti_air(entry) then
@@ -285,9 +286,99 @@ function world.priority(entry)
     return 1
 end
 
+-- Where `target` stands in the shooter's own list of priority targets: the
+-- index of the first of its tags on the list, or false.
+local function list_place(shooter, target)
+    local places = shooter.list_places
+    if places == nil then
+        places = {}
+        shooter.list_places = places
+    end
+    local place = places[target.unit_name]
+    if place == nil then
+        place = false
+        for index, token in ipairs(shooter.first_targets) do
+            if target.tags[token] then
+                place = index
+                break
+            end
+        end
+        places[target.unit_name] = place
+    end
+    return place
+end
+
+local tier_tokens = {t1 = true, t2 = true, t3 = true, t4 = true, t5 = true}
+
+-- The table's rules for one pair of types. `attack_only` is a closed list.
+-- `underwater` among the ignored always wins; otherwise being on the
+-- priority list wins over being ignored (a tier on the list does not: it
+-- orders targets and picks none out).
+local function table_allows(shooter, target)
+    local tags = target.tags
+    for _, token in ipairs(shooter.ignored) do
+        if token == "underwater" and tags.underwater then
+            return false
+        end
+    end
+    if #shooter.only > 0 then
+        local listed = false
+        for _, token in ipairs(shooter.only) do
+            listed = listed or tags[token] == true
+        end
+        if not listed then
+            return false
+        end
+    end
+    for _, token in ipairs(shooter.first_targets) do
+        if tags[token] and not tier_tokens[token] then
+            return true
+        end
+    end
+    for _, token in ipairs(shooter.ignored) do
+        if tags[token] then
+            return false
+        end
+    end
+    return true
+end
+
+local function allowed(shooter, target)
+    local answers = shooter.allowed_targets
+    if answers == nil then
+        answers = {}
+        shooter.allowed_targets = answers
+    end
+    local answer = answers[target.unit_name]
+    if answer == nil then
+        answer = table_allows(shooter, target)
+        answers[target.unit_name] = answer
+    end
+    return answer
+end
+
+-- What `target` is worth to this shooter: a bomber takes anti-air first
+-- (the user's rule, above the table), then the shooter's own list in order,
+-- then world.priority.
+function world.rank(shooter, target)
+    if target == nil then
+        return 1
+    end
+    if shooter ~= nil then
+        if shooter.bomber and world.anti_air(target) then
+            return 40
+        end
+        local place = list_place(shooter, target)
+        if place then
+            return 30 - place
+        end
+    end
+    return world.priority(target)
+end
+
 -- Whether `shooter` (a catalog entry, or nil for any) can fire at `target`:
--- only anti-air weapons hit aircraft, and only other weapons hit the rest.
--- Paralyzers skip units immune to them; Bastion never fires at aircraft.
+-- only anti-air weapons hit aircraft, and only other weapons hit the rest,
+-- within what the user's table lets it shoot.
 function world.can_hit(shooter, target)
     if shooter == nil or target == nil then
         return true
@@ -297,13 +388,31 @@ function world.can_hit(shooter, target)
     if shooter.paralyzer and (target.immune or (target.air and not shooter.anti_air)) then
         return false
     end
-    if shooter.blast ~= nil and shooter.blast > 0 and target.air then
+    if not allowed(shooter, target) then
         return false
     end
     if target.air then
         return shooter.anti_air == true
     end
     return shooter.hits_ground == true
+end
+
+-- Amphibious units under water count as `underwater`: a shooter that ignores
+-- those cannot hit them there (a non-water weapon never hits a submerged
+-- unit).
+local function out_of_reach_below(shooter, row)
+    if shooter == nil or row.entry == nil or not row.entry.tags.amphibious or row.entry.air then
+        return false
+    end
+    local below = false
+    for _, token in ipairs(shooter.ignored) do
+        below = below or token == "underwater"
+    end
+    if not below then
+        return false
+    end
+    local ok, ground = pcall(function() return game.map:ground(util.whole(row.x), util.whole(row.z)) end)
+    return ok and ground ~= nil and util.num(ground) >= 0 and util.num(ground) < util.num(game.map.sea_level)
 end
 
 -- Enemies and friends in sight, as records {unit, x, z, entry} in a grid
@@ -456,9 +565,9 @@ end
 -- The visible enemy to shoot from `from` within `reach`: the highest
 -- priority, the nearest among equals. A commander is chased twice as far,
 -- so everything near one turns on it. With `shooter` (the catalog entry of
--- the unit that fires) only what it can hit counts, and a bomber goes for
--- anti-air first (mobile anti-air too). Bastion leaves out targets with an
--- own or allied unit within its blast.
+-- the unit that fires) only what it can hit counts, in its own order
+-- (world.rank). An area weapon leaves out ground targets with an own or
+-- allied unit within its blast.
 function world.best_target(from, reach, shooter)
     world.enemy_rows()
     local best, best_key
@@ -466,27 +575,15 @@ function world.best_target(from, reach, shooter)
     each_near(enemy_cells, from, reach * 2, function(row)
         local entry = row.entry
         if world.can_hit(shooter, entry) then
-            local priority = world.priority(entry)
-            if shooter ~= nil and shooter.bomber and world.anti_air(entry) then
-                priority = 7
-            end
-            -- Submarine hunters (Piranha, Shark) go for submarines,
-            -- commanders and decoys above all else.
-            if shooter ~= nil and shooter.sub_hunter and entry ~= nil
-                and (entry.sub or entry.commander or entry.decoy) then
-                priority = 8
-            end
-            -- Fighters go for aircraft first.
-            if shooter ~= nil and shooter.fighter and entry ~= nil and entry.air then
-                priority = 8
-            end
-            local limit = priority == world.commander_priority and reach * 2 or reach
+            local priority = world.rank(shooter, entry)
+            local limit = world.priority(entry) == world.commander_priority and reach * 2 or reach
             local dx, dz = row.x - from.x, row.z - from.z
             local d2 = dx * dx + dz * dz
             if d2 <= limit * limit then
                 local key = priority * 100000 - math.sqrt(d2)
                 if (best_key == nil or key > best_key)
-                    and (blast <= 0 or not world.friends_near(row, blast)) then
+                    and (blast <= 0 or (entry ~= nil and entry.air) or not world.friends_near(row, blast))
+                    and not out_of_reach_below(shooter, row) then
                     best, best_key = row.unit, key
                 end
             end

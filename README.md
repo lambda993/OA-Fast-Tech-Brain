@@ -11,8 +11,9 @@ only its own files, and because the same folder can be copied as is into
 the project's brains repository.
 
 [`data/units.json`](data/units.json) is a table of all Escalation units with
-their builders, threat level, target lists and tags. It stays outside the
-package and the brain does not read it yet.
+their builders, threat level, target lists and tags. The brain plays by it:
+after a change run `python3 data/make_unit_table.py` from this folder, which
+writes the fields the brain uses to `fast-tech/lua/unit_table.lua`.
 
 ## Pack and check
 

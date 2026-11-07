@@ -292,29 +292,55 @@ small guard stays home, and when the base is hit, every factory builds and
 the home army answers. Torpedo-only units (torpedo bombers too) are built
 only when ships reach the enemy.
 
-**Range.** Units whose weapons reach 700 or more keep to the edge of
-their reach: when an armed enemy comes within half of it they step back
-from it by four tenths of their range and leave the close fight to the
-units with shorter weapons.
+**The unit table.** What each unit shoots and how it keeps its distance
+comes from `lua/unit_table.lua`, generated from the table `data/units.json`
+at the top of the repository: threat level, priority targets, ignored
+units, attack-only targets and tags for all 549 types.
 
-**Targets.** Submarine hunters (Escalation's submarines, selection group
-`CTRL_U`, with sniping torpedoes: Piranha, Shark) shoot submarines,
-commanders and decoys before anything else. Each unit shoots what its weapons can hit: only anti-air
-weapons fire at aircraft, so the rest ignore them, and pure anti-air
-units ignore the ground. Paralyzers (first weapon a paralyzer: Spider,
-Medusa, Warden, Mirage, Scorpion) ignore units immune to paralysis
-(`immunetoparalyzer`) and aircraft. Bastion (Core's hardened battery)
-never fires at aircraft nor at a target with an own or allied ground unit
-within its weapon's blast (352). Both hold fire and are given their
-targets by the brain (a unit on hold fire picks nothing itself but
-obeys an attack order). Fighters go for aircraft first. Commanders and decoys come first, then tier 4
-and 5, tier 3, anti-air, the economy and the rest; bombers go for
-anti-air before anything else, and look further for it. Aircraft
-attacking a base pull back to the front of their own base when the
-anti-air around them outweighs half their number (tiers counted), and
-sit out the next minute; bombers stay. While the seat has strike
-aircraft (scouts do not count), its long-range guns fire at anti-air in
-range first, seen or remembered.
+**Range.** A skirmisher (`skirmisher`) steps back when an armed ground enemy
+comes within half its ground reach, by four tenths of that reach. Mobile
+artillery (`artillery`) walks out of the reach of any such enemy's weapons
+that it could shell, and goes on firing at will. Frontliners close in. A
+unit with an area weapon (`aoe`) moves away from own and allied ground units
+in its blast (at most 400 units of it), waits to the side of the rally point
+and goes on its own.
+
+**Targets.** Each unit shoots only what its weapons can hit: anti-air
+weapons at aircraft, other weapons at the rest, and the table narrows that
+down. `attack_only` is a closed list (Lurker, Snake, Piranha, Shark,
+Maelstrom and Megalodon only shoot `water` units). `underwater` among the
+ignored always wins, so does an amphibious unit standing under water.
+Otherwise a target on the unit's priority list is fair even if ignored, and
+a tier on that list only orders targets. Paralyzers ignore immune units with
+all their weapons. An area weapon never fires at a ground target with an own
+or allied ground unit within its blast, half of the weapon's
+`areaofeffect`. Paralyzers and area weapons hold fire and are given their
+targets by the brain (a unit on hold fire picks nothing itself but obeys an
+attack order).
+
+A unit shoots first what its priority list names, in that order: hunters
+(`hunter`: Piranha, Shark, Zephyr, Cormorant) start with `submarine`, static
+artillery with commanders, decoys and the economy. Bombers go for anti-air
+before their list, and look further for it. Without a list, commanders and
+decoys come first, then threat level 4 and 5, level 3, anti-air, the economy
+and the rest. Aircraft attacking a base pull back to the front of their own
+base when the anti-air around them outweighs half their number (threat levels
+counted), and sit out the next minute; bombers stay. While the seat has
+strike aircraft (scouts do not count), its long-range guns fire at anti-air
+in range first, seen or remembered, then follow their list.
+
+**Cloak.** Units that can cloak by order (`invisible` with a cost at rest:
+decoys, Infiltrator, Parasite, Catalyst, Aquifer, Forge, Vault, heavy
+reactors, Panopticon, Shaper) cloak one at a time while the energy store is
+over 60 % and income pays for it, and all drop it under 20 %.
+
+`kamikaze` units (crawling bombs, Tick, mines) are in no AI build list, so
+the brain cannot make them.
+
+**Paths.** A soldier whose path failed waits thirty seconds before its next
+attack-move: ships sent to a point they cannot reach asked for the path again
+every step. Each minute the seat log counts the step-backs and the cloaked
+units (`distance: ...`).
 
 **Air raids.** Four or more enemy aircraft that hit the ground, within
 600 units of each other and of own or allied ground units, are a swarm.
@@ -397,12 +423,12 @@ running from danger and defends what remains (`base lost, no ally`).
 
 **Units fire at will.** Units take the stance of the factory that made
 them, and armed factories hold fire (below): every armed mobile unit
-but the careful ones (paralyzers, Bastion) is set to fire at will when
+but the careful ones (paralyzers, area weapons) is set to fire at will when
 finished (ships stood under fire without answering).
 
 **Targets are kept.** A unit keeps the target it shoots while it stays in
 sight within half again the reach, unless something of higher priority
-shows up. A target of priority 3 or more (anti-air, tier 3 and up,
+shows up. A target of priority 3 or more (anti-air, threat level 3 and up,
 commanders) that slips into the fog is chased to where it was last seen,
 on an attack-move, for up to forty seconds, unless something of higher
 priority is in sight.
@@ -554,6 +580,7 @@ seen and how; whether it is a fault is for the engine's author to judge.
 | `oabrain.yaml` | Manifest: Escalation only, three levels, no full awareness. |
 | `brain.lua` | Hooks and the once-a-second turn. |
 | `lua/catalog.lua` | Unit types sorted into roles, tiers and build lists. |
+| `lua/unit_table.lua` | Threat, target lists and tags per type, generated from `data/units.json`. |
 | `lua/world.lua` | The seat's units, base, tier and memory of the enemy. |
 | `lua/economy.lua` | Income goals, what is short, metal spots, maker switching. |
 | `lua/terrain.lua` | Water, reach of the enemy, and the order of the lines. |

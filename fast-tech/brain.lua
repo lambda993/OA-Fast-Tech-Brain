@@ -58,6 +58,8 @@ local function status()
         #world.select(function(_, e) return e.defense and e.anti_air end),
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
+    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d; cloaked %d",
+        army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, util.count(army.cloaked)))
     print(string.format(
         "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
@@ -221,6 +223,7 @@ end
 
 function hooks.onPathFailed(unit)
     util.guard("path", builders.on_path_failed, unit)
+    army.on_path_failed(unit)
 end
 
 function hooks.onUnitSeen(unit)

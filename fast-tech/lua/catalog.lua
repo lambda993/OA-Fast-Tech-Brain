@@ -7,6 +7,7 @@
 -- and LEV5 the largest experimentals. Upgrades and stockpiled rounds are
 -- left out.
 
+local unit_table = require("unit_table")
 local util = require("util")
 
 local catalog = {}
@@ -53,6 +54,7 @@ end
 local function weapon_info(record)
     local anti_air, any, water, range, shot = false, false, true, 0, 0
     local ground, bomb, stockpile, other = false, false, false, false
+    local ground_range, ground_blast = 0, 0
     for slot = 1, 3 do
         local weapon_name = record["weapon" .. slot]
         if type(weapon_name) == "string" and weapon_name ~= "" then
@@ -65,6 +67,13 @@ local function weapon_info(record)
                     anti_air = true
                 else
                     ground = true
+                end
+                -- What it can do on the ground: anti-air and stockpile
+                -- weapons say nothing about how close it fights.
+                if not flag(weapon.toairweapon) and string.find(upper, "_AA_", 1, true) == nil
+                    and not flag(weapon.stockpile) then
+                    ground_range = math.max(ground_range, num(weapon.range))
+                    ground_blast = math.max(ground_blast, num(weapon.areaofeffect))
                 end
                 if flag(weapon.dropped) then
                     bomb = true
@@ -82,7 +91,27 @@ local function weapon_info(record)
             end
         end
     end
-    return anti_air, any and water, range, shot, ground, bomb, stockpile, stockpile and not other
+    return anti_air, any and water, range, shot, ground, bomb, stockpile, stockpile and not other,
+        ground_range, ground_blast
+end
+
+-- The user's table (data/units.json) for one type: threat level, target
+-- lists and tags as a set. A type missing from it (a newer mod) has no
+-- lists, and its threat is its tier if armed.
+local function read_table(entry)
+    local row = unit_table[entry.unit_name]
+    entry.in_table = row ~= nil
+    entry.tags = {}
+    if row == nil then
+        entry.threat = entry.armed and entry.tier or 0
+        entry.first_targets, entry.ignored, entry.only = {}, {}, {}
+        return
+    end
+    entry.threat = row[1]
+    entry.first_targets, entry.ignored, entry.only = row[2], row[3], row[4]
+    for _, tag in ipairs(row[5]) do
+        entry.tags[tag] = true
+    end
 end
 
 local function text(value)
@@ -166,12 +195,15 @@ local function classify(index, record, inferred_tier)
     entry.decoy = string.find(unit_name, "DECOM", 1, true) ~= nil
     entry.commander = entry.commander and not entry.decoy
     -- shot_energy: what one shot of the hungriest weapon draws from the store.
-    local ground, bomb
-    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb, entry.stockpile, entry.stockpile_only = weapon_info(record)
+    local ground, bomb, ground_blast
+    entry.anti_air, entry.torpedo_only, entry.range, entry.shot_energy, ground, bomb, entry.stockpile, entry.stockpile_only,
+        entry.ground_range, ground_blast = weapon_info(record)
+    read_table(entry)
+    entry.anti_air = entry.anti_air or entry.tags["anti-air"] == true
     -- Whether its weapons can hit ground targets: units with only
     -- anti-air weapons cannot, units without them cannot hit aircraft.
     entry.hits_ground = ground
-    entry.bomber = entry.air and bomb
+    entry.bomber = entry.air and (bomb or entry.tags.bomber == true)
     -- Paralyzers (Spider, Medusa, Warden, Mirage, Scorpion: the first
     -- weapon stuns) waste their shots on units immune to them and cannot
     -- touch aircraft. Units immune to paralyzers (`immunetoparalyzer`).
@@ -179,15 +211,19 @@ local function classify(index, record, inferred_tier)
     local first = record.weapon1
     local first_weapon = type(first) == "string" and first ~= "" and weapons[first] or nil
     entry.paralyzer = first_weapon ~= nil and flag(first_weapon.paralyzer)
-    -- Bastion (Core's hardened battery): its shells hit everything within
-    -- their blast, so it fires only where no own or allied unit stands
-    -- that close, and never at aircraft. It and the paralyzers hold fire
-    -- and are given their targets (`careful`).
+    -- Area weapons (tag `aoe`: Bastion, Gorgon, Gargant, Tsar, Zenith,
+    -- Decimator...) hit everything within their blast, so they fire only
+    -- where no own or allied unit stands that close. They and the
+    -- paralyzers hold fire and are given their targets (`careful`). The
+    -- blast is half of `areaofeffect` (engine `detonate_area`).
     entry.blast = 0
-    if unit_name == "CORSPUN" and first_weapon ~= nil then
-        entry.blast = math.max(1, num(first_weapon.areaofeffect))
+    if entry.tags.aoe then
+        entry.blast = math.max(1, ground_blast / 2)
     end
     entry.careful = entry.paralyzer or entry.blast > 0
+    -- Whether an order can switch its cloak (the engine asks for a cost at
+    -- rest; Mirage, Revenant and the like only start cloaked).
+    entry.cloakable = entry.tags.invisible == true and num(record.cloakcost) > 0
     -- Repair pads, carriers: aircraft land on them to be repaired.
     entry.air_base = record.isairbase == true or num(record.isairbase) > 0
     -- The building that makes the commander tougher (Arm's Research
@@ -196,24 +232,18 @@ local function classify(index, record, inferred_tier)
     entry.mobile = not entry.structure
     entry.factory = entry.structure and entry.builder
     entry.mobile_builder = entry.mobile and entry.builder and num(record.workertime) > 0
-    entry.scout = entry.mobile and not entry.builder and entry.metal <= 80
-        and entry.speed >= 2.5 and entry.sight >= 300
+    if entry.in_table then
+        entry.scout = entry.mobile and entry.tags.scout == true
+    else
+        entry.scout = entry.mobile and not entry.builder and entry.metal <= 80
+            and entry.speed >= 2.5 and entry.sight >= 300
+    end
     -- Stockpile weapons fire only rounds built in the unit (MAKENUKE,
     -- MAKEANTI), and no AI build list holds them: a unit armed with
     -- nothing else (Scarab, Hedgehog: mobile anti-nukes) never fires.
-    -- Submarines (Escalation's selection group CTRL_U), and among them the
-    -- hunters (Piranha, Shark) whose sniping torpedoes are made for
-    -- other submarines. Resurrecting units raise units from wrecks.
+    -- Submarines (Escalation's selection group CTRL_U). Resurrecting units
+    -- raise units from wrecks.
     entry.sub = entry.mobile and words.CTRL_U == true
-    entry.sub_hunter = false
-    if entry.sub then
-        for slot = 1, 3 do
-            local weapon = record["weapon" .. slot]
-            if type(weapon) == "string" and string.find(string.upper(weapon), "SNIPE", 1, true) then
-                entry.sub_hunter = true
-            end
-        end
-    end
     entry.resurrector = record.canresurrect == true
     entry.combat = entry.mobile and not entry.builder and entry.armed and not entry.scout
         and not entry.stockpile_only

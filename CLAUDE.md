@@ -191,6 +191,7 @@ error is logged once and the seat keeps playing).
 | File | Role |
 | --- | --- |
 | `brain.lua` | Hooks; one turn a second (`think`): world, map survey, tech goal, then builders, factories (2 s), army (3 s), scouts and pruning (5 s), status (60 s), city dump (600 s). |
+| `lua/unit_table.lua` | Generated from `data/units.json`: threat, target lists, tags per type. |
 | `lua/catalog.lua` | Every unit type sorted into roles: tier, line, builder/factory, combat, defence, anti-air, artillery, radar/sonar/jammer, economy, storage, decoy, upgrade, water-only, shot energy; wind/tide judged against solar. |
 | `lua/world.lua` | Own units, base and start, tier, enemy memory (buildings, contacts, wrecks, enemy air), target priority and `best_target`, radar contacts. |
 | `lua/terrain.lua` | Water share, water point (route-checked) and shore for water buildings, enemy starts, reach per movement class, which lines reach the enemy, line ranking. |
@@ -298,9 +299,11 @@ error is logged once and the seat keeps playing).
     fights; targets forgotten as soon as they enter the fog; scout ships
     stuck going for land points (try timer).
 25. A table of all Escalation units with targets, threat level and tags
-    (`data/units.json`, see state below), to fix the brain from it next
-    with criteria to agree. **Not done yet**: the brain does not read it.
-    Do not change the brain until the user says the table is finished.
+    (`data/units.json`, see state below), and the brain playing by it.
+    User's choices for the brain: bombers and guns take anti-air first when
+    the seat has strike aircraft, then the table; `aoe` units do not fire
+    with friends in their blast and stay apart; a skirmisher steps back at
+    half its reach; every cloakable unit cloaks with spare energy.
 
 ## State and open points
 
@@ -451,11 +454,39 @@ error is logged once and the seat keeps playing).
   needed: `brain check` ok (Fast Tech and Classic), six test matches vs
   built-in hard on rich: 4 wins, 2 draws on time (Core Prime seed 7,
   Luschaven seed 7), no script errors. 4-seat games not tested.
+- The brain plays by the table (2026-11-07): `catalog.lua` reads
+  `entry.tags`, `threat`, `first_targets`, `ignored`, `only`; `world.can_hit`
+  applies the lists (memoised per pair), `world.rank` orders targets (bomber
+  on anti-air 40, list place 30 - index, else `world.priority`, now by threat
+  level); `entry.scout` is the `scout` tag, so A.K., Peewee, Jeffy, Freaker
+  and Zipper no longer count as army. `keep_range` in army.lua holds the
+  skirmisher, artillery and `aoe` rules, `manage_cloak` the cloak. Engine: a
+  blast's radius is `areaofeffect` / 2 (`detonate_area`), Bastion used to
+  count all of it. **No `kamikaze` unit is in any AI list**, nor Pounder,
+  Defiler, Matriarch: the brain cannot build them. Orders are limits on what
+  the brain tells a unit: a unit on fire at will still picks by itself in
+  the engine, only `careful` units hold fire.
+  A soldier whose path failed waits 30 s before its next attack-move: with
+  the new lists idle ships asked for one unreachable point over and over
+  (Luschaven seed 7: 9 302 patrols and 7 675 stops, 1 078 and 381 after;
+  the old brain had 1 818 and 1 222). Log line `distance: ...` each minute.
+  Tests, 8 matches vs built-in hard on rich: 6 wins (Painted Desert Arm and
+  Core, Ashap seed 99 Core, Crater Islands seed 99 Arm, Luschaven seeds 7 and
+  99), 2 draws on time (Core Prime seeds 7 and 99), no script errors. Same
+  six setups as the 0.9.0 check: 4 wins and 2 draws before. A probe of 21
+  target rules passes. Seen in matches: skirmishers and artillery stepping
+  back, cloak. Not seen: `aoe` moving apart (no such unit in these games),
+  4-seat games. Core Prime seed 7: metal produced 506 k vs 823 k before
+  (seed 99: 437 k vs 433 k), cause not looked into; cloak switched 67 times
+  there.
 - `data/units.json` (tracked; the user renamed `examples/` to `data/`):
   the user's table, all 549 unit types with `id`, `name`, `description`,
   `faction`, `built_by`, `threat_level`, `priority_targets`, `ignore_units`,
   `attack_only`, `tags`. It is the source now: the scripts that generated
-  it were scratch files and are not kept, so change the file itself. All
+  it were scratch files and are not kept, so change the file itself, then
+  run `python3 data/make_unit_table.py` from the repo's top folder: it writes
+  `fast-tech/lua/unit_table.lua`, which is what the brain reads (the package
+  format allows `data/` files but the docs give no way to read them). All
   tags with their units, for reading (a snapshot, republish after changes):
   https://claude.ai/artifact/BzimK4tatcJJV3UZXJDUj2 (private).
   Read from the FBI files of the mod and checked against `units[]` in a
@@ -475,13 +506,10 @@ error is logged once and the seat keeps playing).
   `commander, decoy, economy, facility, defense`; mobile artillery
   has the target lists of other mobile units; only its movement differs
   (user's rule: stays at range, retreats out of the reach of enemy weapons
-  when they close in; not in this table, not in the brain as stated:
-  `keep_range` covers range ≥ 700 and enemies within half the range; the
-  user wants the table finished first, then the brain fixed from it with
-  criteria to agree: do not change the brain before that); a unit without anti-sub weapons ignores
+  when they close in; `keep_range` in army.lua); a unit without anti-sub weapons ignores
   `underwater`; any anti-air weapon gives the `anti-air` tag (also
-  Torrent; so does any anti-sub weapon for `anti-sub`). Mine, not yet
-  confirmed: `economy` = static energy/metal/storage; `facility` = static
+  Torrent; so does any anti-sub weapon for `anti-sub`). Mine, confirmed by
+  the user: `economy` = static energy/metal/storage; `facility` = static
   factory, teleporter, radar, sonar, jammer, repair, shield, charge field,
   ARMTECH/CORTECH; `threat_level` = tier if armed, else 0 (crawling bombs
   by tier); `attack_only` only when all weapons are nukes (confirmed by
@@ -538,7 +566,7 @@ error is logged once and the seat keeps playing).
   and water: no `BOATD*` submarine has it (those classes have a minimum water
   depth), Ark `ARMTSUB` does (`TANKDH6`, no minimum depth). In the
   `priority_targets` of 12 armed subs `amphibious` names a target, as in the
-  user's ARMAABOAT row. The brain does not read this table. Weapon facts (engine `ballistic.cpp`):
+  user's ARMAABOAT row. Weapon facts (engine `ballistic.cpp`):
   a non-water weapon never hits a submerged target; a water weapon hits
   only floating or submerged targets, not hovercraft, unless it has
   `surfacefire`; `nottounderwater` rules out submerged targets. Facts:

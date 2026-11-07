@@ -10,6 +10,7 @@
 
 local builders = require("builders")
 local catalog = require("catalog")
+local economy = require("economy")
 local factories = require("factories")
 local terrain = require("terrain")
 local util = require("util")
@@ -49,46 +50,92 @@ local function nearest_enemy(from, reach, unit)
     return world.best_target(from, reach, unit and catalog.of(unit))
 end
 
--- Long-range units (weapons reaching 700 or more) keep to the edge of
--- their reach: when an armed enemy comes within half of it they step back
--- away from it, a good part of their range, and leave the close fight to
--- the units with shorter weapons. Returns whether it stepped back.
-local long_range = 700
-army.backed = {} -- unit id -> tick it last stepped back
+-- How units keep their distance, by the user's tags. Frontliners close in.
+-- A skirmisher steps back when an armed enemy comes within half its reach.
+-- Mobile artillery leaves when it stands in reach of an enemy's weapons, and
+-- walks out of that reach (only enemies it could shell count: the search
+-- stops at its own reach, at most 1 500). An `aoe` unit moves away from
+-- friends standing in its blast, whatever is near. Returns whether it
+-- stepped away. Each costs a path search, hence the clock.
+local artillery_margin = 64
+local apart_limit = 400
+army.backed = {} -- unit id -> tick it last stepped away
+army.stepped = {skirmisher = 0, artillery = 0, apart = 0} -- counted for the seat log
+
+local function away_from(unit, at, from, step, wait)
+    -- Stepped away a moment ago: still on its way.
+    local backed = army.backed[unit.id]
+    if backed ~= nil and me.tick - backed < wait and not util.free(unit) then
+        return true
+    end
+    army.backed[unit.id] = me.tick
+    local dx, dz = at.x - from.x, at.z - from.z
+    local length = math.max(1, math.sqrt(dx * dx + dz * dz))
+    local back = util.clamp({x = util.whole(at.x + dx / length * step), z = util.whole(at.z + dz / length * step)}, 64)
+    return unit:move(back) == true
+end
+
+local function armed_on_ground(kind)
+    return kind ~= nil and kind.armed and not kind.air and kind.hits_ground
+end
+
+local function keep_apart(unit, entry, at)
+    local radius = math.min(entry.blast, apart_limit)
+    local x, z, count = 0, 0, 0
+    for _, row in ipairs(world.friends_in(at, radius)) do
+        if row.unit.id ~= unit.id and not (row.entry ~= nil and row.entry.air) then
+            x, z, count = x + row.x, z + row.z, count + 1
+        end
+    end
+    if count == 0 then
+        return false
+    end
+    local moved = away_from(unit, at, {x = x / count, z = z / count}, radius + 64, 30 * 10)
+    army.stepped.apart = army.stepped.apart + (moved and 1 or 0)
+    return moved
+end
 
 local function keep_range(unit)
     local entry = catalog.of(unit)
-    if entry == nil or entry.air or entry.range < long_range then
+    if entry == nil or entry.air or entry.structure then
         return false
     end
     local at = util.pos(unit)
     if at == nil then
         return false
     end
-    local near, near_d
-    for _, row in ipairs(world.enemies_near(at, entry.range * 0.5)) do
-        local kind = row.entry
-        if kind ~= nil and kind.armed and not kind.air and kind.hits_ground then
-            local d = util.dist(at, row)
-            if near_d == nil or d < near_d then
-                near, near_d = {x = row.x, z = row.z}, d
+    if entry.blast > 0 then
+        return keep_apart(unit, entry, at)
+    end
+    if entry.tags.artillery then
+        local worst, worst_step
+        for _, row in ipairs(world.enemies_near(at, math.min(entry.ground_range, 1500))) do
+            if armed_on_ground(row.entry) then
+                local step = row.entry.ground_range + artillery_margin - util.dist(at, row)
+                if step > 0 and (worst == nil or step > worst_step) then
+                    worst, worst_step = row, step
+                end
             end
         end
+        local moved = worst ~= nil and away_from(unit, at, worst, worst_step + 100, 30 * 5)
+        army.stepped.artillery = army.stepped.artillery + (moved and 1 or 0)
+        return moved
     end
-    if near == nil then
-        return false
+    if entry.tags.skirmisher then
+        local near, near_d
+        for _, row in ipairs(world.enemies_near(at, entry.ground_range * 0.5)) do
+            if armed_on_ground(row.entry) then
+                local d = util.dist(at, row)
+                if near_d == nil or d < near_d then
+                    near, near_d = row, d
+                end
+            end
+        end
+        local moved = near ~= nil and away_from(unit, at, near, entry.ground_range * 0.4, 30 * 5)
+        army.stepped.skirmisher = army.stepped.skirmisher + (moved and 1 or 0)
+        return moved
     end
-    -- Stepped back a moment ago: still on its way.
-    local backed = army.backed[unit.id]
-    if backed ~= nil and me.tick - backed < 30 * 5 and not util.free(unit) then
-        return true
-    end
-    army.backed[unit.id] = me.tick
-    local step = entry.range * 0.4
-    local dx, dz = at.x - near.x, at.z - near.z
-    local length = math.max(1, math.sqrt(dx * dx + dz * dz))
-    local back = util.clamp({x = util.whole(at.x + dx / length * step), z = util.whole(at.z + dz / length * step)}, 64)
-    return unit:move(back) == true
+    return false
 end
 
 -- An attack order, given again only for a new target, or when the unit
@@ -102,7 +149,9 @@ local function attack(unit, target)
     if last ~= nil and last.id == target.id and me.tick - last.tick < 30 * 12 and not util.free(unit) then
         return true
     end
-    army.aimed[unit.id] = {id = target.id, tick = me.tick, priority = world.priority(catalog.of(target))}
+    local kind = catalog.of(target)
+    army.aimed[unit.id] = {id = target.id, tick = me.tick, priority = world.rank(catalog.of(unit), kind),
+        worth = world.priority(kind)}
     return unit:attack(target)
 end
 
@@ -119,7 +168,7 @@ local chase_time = 30 * 40
 local function pick(unit, from, reach)
     local entry = catalog.of(unit)
     local best = world.best_target(from, reach, entry)
-    local best_priority = best and world.priority(catalog.of(best)) or 0
+    local best_priority = best and world.rank(entry, catalog.of(best)) or 0
     local last = army.aimed[unit.id]
     if last == nil then
         return best
@@ -133,7 +182,7 @@ local function pick(unit, from, reach)
         return best
     end
     local seen = world.sightings[last.id]
-    if seen ~= nil and me.tick - seen.tick < chase_time and (last.priority or 0) >= 3
+    if seen ~= nil and me.tick - seen.tick < chase_time and (last.worth or 0) >= 3
         and best_priority <= (last.priority or 0) then
         return nil, seen
     end
@@ -141,9 +190,27 @@ local function pick(unit, from, reach)
     return best
 end
 
+-- A unit whose path failed waits thirty seconds before the next attack-move:
+-- ships sent to a point they cannot reach asked for the path again every
+-- step, thousands of searches in a match.
+army.no_path = {} -- unit id -> tick its path failed
+local no_path_wait = 30 * 30
+
+local function no_way(unit)
+    local failed = army.no_path[unit.id]
+    return failed ~= nil and me.tick - failed < no_path_wait
+end
+
+function army.on_path_failed(unit)
+    army.no_path[unit.id] = me.tick
+end
+
 -- An attack-move toward a target's last known place, keeping the target
 -- in mind (dedup like patrol).
 local function chase(unit, point)
+    if no_way(unit) then
+        return true
+    end
     point = util.clamp(point, 64)
     local last = army.patrolled[unit.id]
     if last ~= nil and me.tick - last.tick < 30 * 10 and util.dist2(last, point) < 200 * 200
@@ -159,6 +226,9 @@ end
 army.patrolled = {} -- unit id -> {x, z, tick}
 
 local function patrol(unit, point)
+    if no_way(unit) then
+        return true
+    end
     point = util.clamp(point, 64)
     local last = army.patrolled[unit.id]
     if last ~= nil and me.tick - last.tick < 30 * 15 and util.dist2(last, point) < 300 * 300
@@ -248,7 +318,7 @@ local function push(attackers)
     for _, unit in ipairs(attackers) do
         local at = util.pos(unit)
         local entry = catalog.of(unit)
-        -- Bombers look further for anti-air to take out.
+        -- Bombers look further for anti-air to take out, then their list.
         local enemy, lost
         if at ~= nil then
             enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
@@ -264,7 +334,7 @@ local function push(attackers)
             -- Seen only on radar or sonar: close in, fighting on the way.
             patrol(unit, contact)
         elseif target ~= nil and util.free(unit) then
-            unit:patrol(util.clamp(target, 64))
+            patrol(unit, target)
         end
     end
 end
@@ -272,9 +342,9 @@ end
 -- Aircraft attacking a base pull back when the anti-air around them is
 -- too strong for their number: they wait at home a minute and leave with
 -- the next wave. Bombers stay (they go for the anti-air), and scouts are
--- not soldiers. Strength counts tiers: a tier-3 gun is worth three.
+-- not soldiers. Strength is the threat level: a level-3 gun is worth three.
 local function strength(entry)
-    return math.max(1, entry.tier)
+    return math.max(1, entry.threat)
 end
 
 local function pull_back_aircraft(attackers)
@@ -584,8 +654,8 @@ local function aim_guns()
                     local best, best_key
                     for _, building in pairs(world.enemy_buildings) do
                         local d = util.dist(at, building)
-                        if d <= reach then
-                            local key = (building.factory and 6 or building.tier) * 100000 + building.cost - d
+                        if d <= reach and world.can_hit(entry, building.entry) then
+                            local key = world.rank(entry, building.entry) * 100000 + building.cost - d
                             if best_key == nil or key > best_key then
                                 best, best_key = building, key
                             end
@@ -601,6 +671,45 @@ local function aim_guns()
                         print(string.format("%s shells %.0f,%.0f", entry.name, best.x, best.z))
                     end
                 end
+            end
+        end
+    end
+end
+
+-- Units that can cloak by order (tag `invisible` with a cost at rest), but
+-- for the commander (builders.lua): one more cloaks each step while the
+-- energy store is over 60 % and income pays for it, all drop it under 20 %.
+army.cloaked = {} -- unit id -> true
+
+local function manage_cloak()
+    local e = economy.now
+    if e == nil then
+        return
+    end
+    for id in pairs(army.cloaked) do
+        if world.own[id] == nil then
+            army.cloaked[id] = nil
+        end
+    end
+    if e.energy_share < 0.2 then
+        for id in pairs(army.cloaked) do
+            world.own[id]:cloak(false)
+            army.cloaked[id] = nil
+        end
+        return
+    end
+    if e.energy_share <= 0.6 then
+        return
+    end
+    local spare = e.energy_income - e.energy_demand
+    for _, unit in ipairs(world.select(function(u, k) return k.cloakable and not k.commander and world.finished(u) end)) do
+        if not army.cloaked[unit.id] then
+            local record = catalog.of(unit).record
+            local cost = math.max(util.num(record.cloakcost), util.num(record.cloakcostmoving))
+            if spare > cost then
+                unit:cloak(true)
+                army.cloaked[unit.id] = true
+                return
             end
         end
     end
@@ -772,6 +881,7 @@ function army.step()
     end
     util.guard("mending", keep_mending)
     util.guard("careful", aim_careful)
+    util.guard("cloak", manage_cloak)
     util.guard("air cover", air_cover, soldiers())
     for _, unit in ipairs(soldiers()) do
         if army.mending[unit.id] or army.air_mending[unit.id] or busy(unit) then
@@ -785,6 +895,11 @@ function army.step()
     for id in pairs(army.attacking) do
         if world.own[id] == nil then
             army.attacking[id] = nil
+        end
+    end
+    for id, failed in pairs(army.no_path) do
+        if me.tick - failed >= no_path_wait then
+            army.no_path[id] = nil
         end
     end
     push(pull_back_aircraft(attackers))
@@ -832,8 +947,14 @@ function army.step()
     end
     for _, unit in ipairs(home) do
         local at = util.pos(unit)
-        if at ~= nil and util.free(unit) and util.dist(at, rally) > 250 then
-            unit:move(util.clamp(util.around(rally, brain.random(1000) / 1000, 120), 64))
+        if at ~= nil and util.free(unit) then
+            -- An area weapon waits to the side of the others.
+            local aside = math.min(catalog.of(unit).blast, apart_limit) * 1.5
+            if util.dist(at, rally) > 250 + aside then
+                unit:move(util.clamp(util.around(rally, brain.random(1000) / 1000, 120 + aside), 64))
+            elseif aside > 0 then
+                keep_range(unit)
+            end
         end
     end
 end
