@@ -579,6 +579,12 @@ seen and how; whether it is a fault is for the engine's author to judge.
     than `map:route` for the same pairs; four seats made the game stall
     at the start. The brain now asks routes only and caches its
     `map:reachable` answers.
+13. **`map:route` answers nil at its cap as for no way.** Past 1 048 576
+    expanded cells it gives up with the same nil as two places that cannot
+    meet, so on a larger map (8Islands, 1 638 400 cells) a nil means little
+    across open ground or sea. There the brain asks `map:reachable`, whose no
+    settles it, and after its yes a coarse map of land and water decides. A
+    separate answer for "search gave up" would remove the guess.
 
 ## Files
 

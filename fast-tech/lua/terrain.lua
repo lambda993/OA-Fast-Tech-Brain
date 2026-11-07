@@ -54,30 +54,6 @@ local function enemy_starts()
     return found
 end
 
--- Whether `class` gets from `a` to `b`. Without full awareness
--- map:reachable counts ground the seat has never seen as open, so it is
--- only trusted when it says no; a yes is checked with map:route, which
--- reads the real movement map. A route is costly (tens of milliseconds on
--- a large map), so the survey asks one a turn. Maps past the route's cap
--- of 1 048 576 cells keep reachable's answer.
-local route_cap = 1048576
-
--- map:reachable is no cheap first test: on a large map it cost more than
--- the route itself (Icy Bergs: about 2 s of the first 15 seconds per
--- seat, a lag every player saw), so only maps past the route's cap use it.
-local function meets(a, b, class)
-    local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
-    if cells > route_cap then
-        local ok, near = pcall(function() return game.map:reachable(a, b, class) end)
-        return ok and near == true, false
-    end
-    local found, route = pcall(function() return game.map:route(a, b, class) end)
-    return found and route ~= nil, true
-end
-
--- Whether a movement class gets from the base to the enemy: to every
--- enemy start, or to most of them when the starts are only guesses.
--- The survey fills this in, a class at a time.
 -- A class that keeps to the water. Core's amphibious tier-3 ships
 -- (Monitor, Inferno, Rancor: BOATA classes) also cross land, so they are
 -- judged like ground units, by a route from base to base.
@@ -86,6 +62,116 @@ local function is_boat(class)
     return string.find(upper, "BOAT", 1, true) ~= nil and string.find(upper, "BOATA", 1, true) == nil
 end
 
+-- Whether `class` gets from `a` to `b`. Without full awareness
+-- map:reachable counts ground the seat has never seen as open, so it is
+-- only trusted when it says no; map:route reads the real movement map. A
+-- route is costly (tens of milliseconds on a large map), so the survey asks
+-- one a turn. map:reachable is no cheap first test: on a large map it cost
+-- more than the route itself (Icy Bergs: about 2 s of the first 15 seconds
+-- per seat, a lag every player saw).
+--
+-- A route gives up after 1 048 576 cells and answers nil, as for two places
+-- that cannot meet. On a map with more cells than that (8Islands) a nil is
+-- reliable from an island, whose cells run out first, but not across open
+-- ground or sea. There reachable's no settles it, and after its yes a coarse
+-- map of land and water decides. All of this asked at once took a first
+-- turn past 250 ms, and the engine gave all four seats to its own player.
+local route_cap = 1048576
+local coarse_size = 64
+local coarse_land, coarse_water = nil, nil
+
+-- Labels each coarse cell that holds its kind with its connected group.
+local function coarse_groups(grid, wet)
+    local labels, group = {}, 0
+    for start = 0, coarse_size * coarse_size - 1 do
+        if labels[start] == nil and (util.num(grid:get(start + 1)) >= 0.5) == wet then
+            group = group + 1
+            labels[start] = group
+            local stack = {start}
+            while #stack > 0 do
+                local cell = table.remove(stack)
+                local cx, cz = cell % coarse_size, cell // coarse_size
+                for dz = -1, 1 do
+                    for dx = -1, 1 do
+                        local nx, nz = cx + dx, cz + dz
+                        if nx >= 0 and nz >= 0 and nx < coarse_size and nz < coarse_size then
+                            local next_cell = nz * coarse_size + nx
+                            if labels[next_cell] == nil and (util.num(grid:get(next_cell + 1)) >= 0.5) == wet then
+                                labels[next_cell] = group
+                                stack[#stack + 1] = next_cell
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return labels
+end
+
+-- The groups a point touches, its own coarse cell and those round it (a base
+-- stands by the shore, a shipyard on the water's edge).
+local function groups_at(labels, point)
+    local cx = point.x * coarse_size // util.whole(game.map.world_width)
+    local cz = point.z * coarse_size // util.whole(game.map.world_height)
+    local found = {}
+    for dz = -1, 1 do
+        for dx = -1, 1 do
+            local nx, nz = cx + dx, cz + dz
+            if nx >= 0 and nz >= 0 and nx < coarse_size and nz < coarse_size then
+                local label = labels[nz * coarse_size + nx]
+                if label ~= nil then
+                    found[label] = true
+                end
+            end
+        end
+    end
+    return found
+end
+
+-- After a route gave up and reachable said yes. Hovercraft and walkers of the
+-- sea floor cross both land and water; shallow-water land units need land
+-- all the way, ships water all the way.
+local function coarse_meets(a, b, class)
+    local upper = string.upper(class)
+    local land_only = string.sub(upper, 1, 5) == "TANKS" or string.sub(upper, 1, 4) == "KBOT"
+    local ship = is_boat(class)
+    if not land_only and not ship then
+        return true
+    end
+    if coarse_land == nil then
+        local grid = brain.grid({"water"}, coarse_size)
+        if grid == nil then
+            return true
+        end
+        coarse_land, coarse_water = coarse_groups(grid, false), coarse_groups(grid, true)
+    end
+    local labels = ship and coarse_water or coarse_land
+    local from, to = groups_at(labels, a), groups_at(labels, b)
+    for label in pairs(from) do
+        if to[label] then
+            return true
+        end
+    end
+    return false
+end
+
+local function meets(a, b, class)
+    local found, route = pcall(function() return game.map:route(a, b, class) end)
+    if found and route ~= nil then
+        return true, true
+    end
+    local cells = (util.whole(game.map.world_width) // 16) * (util.whole(game.map.world_height) // 16)
+    if cells <= route_cap then
+        return false, true
+    end
+    local ok, near = pcall(function() return game.map:reachable(a, b, class) end)
+    return ok and near == true and coarse_meets(a, b, class), true
+end
+
+-- Whether a movement class gets from the base to the enemy: to every
+-- enemy start, or to most of them when the starts are only guesses.
+-- The survey fills this in, a class at a time.
 local class_reach = {}
 local class_hits = {}  -- class -> {asked, reached}
 -- Boat class -> enemy number -> how close to that enemy's start the

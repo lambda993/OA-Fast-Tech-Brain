@@ -454,6 +454,24 @@ error is logged once and the seat keeps playing).
   needed: `brain check` ok (Fast Tech and Classic), six test matches vs
   built-in hard on rich: 4 wins, 2 draws on time (Core Prime seed 7,
   Luschaven seed 7), no script errors. 4-seat games not tested.
+- User's 4-seat game on 8Islands (91 % water, 20 480 × 20 480, map pack
+  `8islands`, "bots building vehicles and kbots"): all four seats stopped at
+  tick 3-6 (`tick ran for more than 250 milliseconds`), so the engine played
+  them with its built-in player, and that is what built those units; the seat
+  log holds only the stop. Any such game: read the log for `stopped:` first.
+  Cause: the map has 1 638 400 cells, past route's cap of 1 048 576, and
+  `meets` then asked `map:reachable` without ending the turn: 383 checks at
+  once, regions rebuilt for each class (four are cached in a tick), and
+  reachable's yes was optimistic anyway. Now `meets` always routes first and
+  each check takes its own turn. A nil past the cap is ambiguous (the search
+  gives up after 1 048 576 cells and answers nil too): reachable's no settles
+  it; after its yes a 64 × 64 land/water grid decides for shallow land classes
+  and ships, others count as through (`coarse_meets`). Maps under the cap take
+  the same path as before. Tests on 8Islands, 4 matches at once for the load,
+  30 minutes: 3 wins vs built-in hard (Arm twice, Core once), 1 mirror draw,
+  no stops, no errors; `enemy by land false`, first goal Shipyard, map line
+  after 33-35 s. 4-seat games still not tested. All stayed at tier 2 to the
+  end: the 18×18 labs find `no site` on this map's islands.
 - The brain plays by the table (2026-11-07): `catalog.lua` reads
   `entry.tags`, `threat`, `first_targets`, `ignored`, `only`; `world.can_hit`
   applies the lists (memoised per pair), `world.rank` orders targets (bomber
