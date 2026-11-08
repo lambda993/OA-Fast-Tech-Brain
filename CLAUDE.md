@@ -381,7 +381,26 @@ error is logged once and the seat keeps playing).
     5 000+ metal below 25 % go home whatever the distance and wait for
     100 %. See state below.
 
+36. User's Caldera's Rim game (2026-11-08, the user with 4 Fast Tech
+    seats): the bots did not give half their army to defend the player.
+    See state below.
+
 ## State and open points
+
+- User's Caldera's Rim game (2026-11-08, 99 % water, the user plus 4
+  Fast Tech seats on easy, ~27 min, no script errors): Arm seats 1 and 3
+  answered three attacks on the user's base at 8992,8080 (threat 8-10)
+  with half their pool each time (13 of 25, 17 of 33, 23 of 46; 8 of 15,
+  7 of 13, 10 of 19), but `safe` came 24-54 s later: the quiet clock (20 s
+  with no armed enemy seen within 1 600 of the ally's start) ran while the
+  rescuers were still ~9 000 units away, so they turned back unseen
+  there. Core seat 2 did the same for seat 4. Now the quiet (30 s) counts
+  only once a rescuer is within 1 600 of the ally's start
+  (`alarm.arrived`); with none there they keep going up to 4 minutes from
+  staffing (`rescue_travel`), log `safe, rescuers never got there`. Not
+  testable headless (two seats, no allies); one Painted Desert match after
+  it: no errors, a draw on time far ahead (226 units vs 69). Not changed:
+  waves still leave while rescuers are out (the other half).
 
 - User's 4-seat Assault on Suburbia game (2026-11-08, all Fast Tech, easy,
   46 min, 45 % water, Arm seats 1/3 vs Core 2/4, no script errors). Arm

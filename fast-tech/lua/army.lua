@@ -1108,6 +1108,8 @@ end
 -- waves in the enemy base, and only with the units left at home.
 local rescue_threat = 8
 local rescue_reach = 1600
+local rescue_quiet = 30 * 30   -- quiet by the ally's base before the rescuers go back
+local rescue_travel = 30 * 240 -- longest the rescuers walk to it with nothing seen there
 army.rescuing = {} -- unit id -> true while it defends an ally's base
 army.ally_alarm = nil -- {player, x, z, quiet, staffed}
 
@@ -1183,9 +1185,31 @@ local function watch_allies(pool)
         alarm.quiet = nil
         alarm.threat = threat
     elseif alarm ~= nil then
-        alarm.quiet = alarm.quiet or me.tick
-        if me.tick - alarm.quiet >= 30 * 20 then
+        -- Quiet counts only once a rescuer stands by the ally's base: in
+        -- the user's Caldera's Rim game the rescuers were called back
+        -- after 24-54 s, 9 000 units short of it, three times, and never
+        -- fought there. With none there, they keep going for up to four
+        -- minutes from when they were sent.
+        local arrived = false
+        for id in pairs(army.rescuing) do
+            local unit = world.own[id]
+            local at = unit and util.pos(unit)
+            if at ~= nil and util.dist(at, alarm) <= rescue_reach then
+                arrived = true
+                break
+            end
+        end
+        if arrived then
+            alarm.arrived = alarm.arrived or me.tick
+            alarm.quiet = alarm.quiet or me.tick
+        end
+        local travelling = alarm.staffed ~= nil and me.tick - alarm.staffed < rescue_travel
+            and util.count(army.rescuing) > 0
+        if arrived and me.tick - alarm.quiet >= rescue_quiet then
             release_rescuers("safe")
+            return
+        elseif not arrived and not travelling then
+            release_rescuers(util.count(army.rescuing) > 0 and "safe, rescuers never got there" or "safe")
             return
         end
     else

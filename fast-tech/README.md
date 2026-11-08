@@ -544,9 +544,14 @@ it: the units nearest that base, from home and from the waves, that can
 get there (`ally base attacked at x,z (threat N): M of K units go to
 defend it`). They fight what is near them there, else attack-move to the
 nearest enemy by the ally's base; the other half goes on with the waves.
-They come back once no such enemy has been seen there for 20 seconds, the
-ally died, or the seat's own base is in danger (`ally base at x,z: safe,
-N units back`); new rescuers go at most once a minute when all of them
+They come back once a rescuer has reached the ally's base (within 1 600
+units) and no such enemy has been seen there for 30 seconds, the ally
+died, or the seat's own base is in danger (`ally base at x,z: safe, N units
+back`). The quiet counts only from their arrival: in the user's Caldera's
+Rim game they were called back after 24-54 seconds, 9 000 units short of
+the player's base, and never fought there. With none arrived they keep
+going for up to four minutes from when they were sent (`safe, rescuers
+never got there`); new rescuers go at most once a minute when all of them
 fell. The rule before it looked for enemies among any allied units, so in
 the user's 4-seat game it mostly answered the ally's own waves in the
 enemy base, and only with the units left at home, while the ally's base
