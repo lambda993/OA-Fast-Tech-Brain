@@ -53,16 +53,17 @@ local function status()
         shot = math.max(shot, catalog.of(unit).shot_energy)
     end
     print(string.format("artillery shot needs %.0f energy, store holds %.0f", shot, e.energy_cap))
-    print(string.format("defence: decoys %d, anti-air %d, ground %d, artillery %d, commander cloaked %s",
+    print(string.format("defence: decoys %d, anti-air %d, ground %d (on water %d), artillery %d, commander cloaked %s",
         #world.select(function(_, e) return e.decoy end),
         #world.select(function(_, e) return e.defense and e.anti_air end),
         #world.select(function(_, e) return builders.ground_defence(e) end),
+        #world.select(function(_, e) return builders.ground_defence(e) and e.water_only end),
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
-    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; scattered %d; air chases dropped %d; cloaked %d; targets kept %d, searched %d; moved out of factory lanes %d",
+    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; scattered %d; air chases dropped %d; cloaked %d; targets kept %d, searched %d; moved out of factory lanes %d; artillery kept behind the front %d",
         army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort,
         army.stepped.scattered or 0, army.air_dropped or 0, util.count(army.cloaked),
-        army.targets_kept, army.searched, army.lanes_cleared or 0))
+        army.targets_kept, army.searched, army.lanes_cleared or 0, army.trails or 0))
     local escorts, made = 0, {}
     for _, unit in ipairs(world.select(function(_, e) return e.combat end)) do
         local entry = catalog.of(unit)
@@ -85,10 +86,12 @@ local function status()
     for index = 1, math.min(8, #names) do
         top[#top + 1] = string.format("%s %d", names[index], made[names[index]])
     end
-    print(string.format("army: %s | escorts %d, fighter escorts %d (backed off %d), enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d (decoys %d), free repairs by builders %d, by medics %d",
-        table.concat(top, ", "), escorts, army.fighter_escorts or 0, army.stepped.fighters_back or 0,
+    print(string.format("army: %s | escorts %d, radar/jammer escorts %d, fighter escorts %d (backed off %d), enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d, retreats under 25%% %d), builders home %d, medics %d (decoys %d), free repairs by builders %d, by medics %d",
+        table.concat(top, ", "), escorts, #world.select(function(_, k) return k.intel_escort end),
+        army.fighter_escorts or 0, army.stepped.fighters_back or 0,
         tostring(world.enemy_air == true), util.count(army.mending),
-        army.mended_count or 0, army.field_count or 0, army.fought_on or 0, util.count(builders.self_mend),
+        army.mended_count or 0, army.field_count or 0, army.fought_on or 0, army.retreats or 0,
+        util.count(builders.self_mend),
         #world.select(function(_, e) return e.medic end), #world.select(function(_, e) return e.decoy_medic end),
         builders.fixed or 0, army.fixes or 0))
     print(string.format(

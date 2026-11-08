@@ -760,6 +760,7 @@
     "tags": [
       "ground",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -3181,7 +3182,7 @@
       "ground",
       "water",
       "anti-air",
-      "skirmisher",
+      "artillery",
       "t4"
     ]
   },
@@ -3238,6 +3239,7 @@
       "ground",
       "water",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -3309,6 +3311,7 @@
       "radar",
       "jammer",
       "stealth",
+      "escort",
       "t3"
     ]
   },
@@ -3473,6 +3476,7 @@
     "tags": [
       "ground",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -3852,6 +3856,7 @@
     "tags": [
       "ground",
       "radar",
+      "escort",
       "t1"
     ]
   },
@@ -4948,6 +4953,7 @@
       "underwater",
       "water",
       "jammer",
+      "escort",
       "t3"
     ]
   },
@@ -4993,6 +4999,7 @@
     "tags": [
       "ground",
       "radar",
+      "escort",
       "t2"
     ]
   },
@@ -5288,7 +5295,7 @@
     "attack_only": [],
     "tags": [
       "ground",
-      "skirmisher",
+      "artillery",
       "t3"
     ]
   },
@@ -5342,6 +5349,7 @@
       "ship",
       "water",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -8585,6 +8593,7 @@
     "tags": [
       "ground",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -9688,7 +9697,7 @@
       "ground",
       "water",
       "anti-air",
-      "skirmisher",
+      "artillery",
       "t4"
     ]
   },
@@ -9745,6 +9754,7 @@
       "ground",
       "water",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -9842,6 +9852,7 @@
       "radar",
       "jammer",
       "stealth",
+      "escort",
       "t3"
     ]
   },
@@ -10305,8 +10316,8 @@
     "attack_only": [],
     "tags": [
       "ground",
-      "skirmisher",
       "paralyzer-immune",
+      "artillery",
       "t4"
     ]
   },
@@ -11941,6 +11952,7 @@
       "ship",
       "water",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -12168,6 +12180,7 @@
     "tags": [
       "ground",
       "jammer",
+      "escort",
       "t2"
     ]
   },
@@ -13363,6 +13376,7 @@
     "tags": [
       "ground",
       "radar",
+      "escort",
       "t1"
     ]
   },
@@ -13421,6 +13435,7 @@
     "tags": [
       "ground",
       "radar",
+      "escort",
       "t2"
     ]
   },

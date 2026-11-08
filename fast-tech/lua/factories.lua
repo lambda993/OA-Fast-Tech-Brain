@@ -122,6 +122,47 @@ local function pick_scout(entry)
     return best
 end
 
+local intel_cap = 6
+local intel_per = 10
+
+function factories.pick_intel(entry)
+    local ground, radars, jammers = 0, 0, 0
+    for _, unit in ipairs(world.select(function(_, e) return (e.combat and not e.air) or e.intel_escort end)) do
+        local kind = catalog.of(unit)
+        if kind.intel_escort then
+            if kind.tags.jammer then
+                jammers = jammers + 1
+            else
+                radars = radars + 1
+            end
+        else
+            ground = ground + 1
+        end
+    end
+    if radars + jammers >= math.min(intel_cap, ground // intel_per) then
+        return nil
+    end
+    local best, best_key
+    for _, option in ipairs(catalog.buildable(entry, function(e) return e.intel_escort end, true)) do
+        -- Unarmed ships have no reach to judge: they go where ships reach.
+        local useful
+        if option.tags.ship or option.tags.submarine then
+            useful = terrain.ship_reaches == true
+        else
+            useful = terrain.useful(option)
+        end
+        if useful and economy.affords(option, 60, 0.5) then
+            -- The kind with fewer standing first, then the higher tier.
+            local count = option.tags.jammer and jammers or radars
+            local key = count * 100 - option.tier
+            if best_key == nil or key < best_key then
+                best, best_key = option, key
+            end
+        end
+    end
+    return best
+end
+
 local function pick_combat(entry)
     -- Torpedo-only units (torpedo bombers too) are no use unless ships
     -- reach the enemy: water by the base alone is not enough.
@@ -273,8 +314,17 @@ local function pick_builder(entry, tier)
     -- who then help the factories.
     local wanted = builders_wanted[math.min(5, tier)] or 2
     local e = economy.now or economy.read()
+    -- Only with two top-tier factories at least: in the user's Assault on
+    -- Suburbia game a Core seat whose one Advanced Shipyard was its only
+    -- top-tier factory made twelve Advanced Construction Subs and an army
+    -- of three, and died.
     if e.metal_share > 0.8 and e.energy_share > 0.5 then
-        wanted = wanted * 2
+        local top_factories = #world.select(function(u, k)
+            return k.factory and world.finished(u) and catalog.factory_tier(k) >= world.tier
+        end)
+        if top_factories >= 2 then
+            wanted = wanted * 2
+        end
     end
     if count_builders(tier) >= wanted then
         return nil
@@ -365,6 +415,17 @@ local function one_factory(unit)
         factories.medic_type = nil
         print("medic: " .. medic.name)
         return
+    end
+    -- Mobile radar and jammers to go with the waves (user's rule): one
+    -- for every ten ground soldiers, at most six, radar and jammer by
+    -- turns (the kind the seat has fewer of first).
+    if tier >= top - 1 and util.chance(0.3) then
+        local intel = factories.pick_intel(entry)
+        if intel ~= nil then
+            unit:queue(intel.record, 1)
+            print("intel escort: " .. intel.name)
+            return
+        end
     end
     -- Carriers once the seat flies many aircraft: a mobile repair base for
     -- every sixteen, counted with the pads.

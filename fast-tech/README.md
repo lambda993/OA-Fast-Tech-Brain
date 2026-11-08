@@ -137,7 +137,9 @@ grid, a building goes anywhere near the base instead.
 vehicle has no metal extractor, a construction kbot has. Factories make the
 builder that brings what the seat lacks first (extractors, the next lab,
 radar, metal makers, power), then more of the best kind, twice as many while metal piles up (they help
-the factories). A builder of three kinds of building or fewer is made at
+the factories) and the seat has two top-tier factories at least (user's
+game: a Core seat whose only top-tier factory was an Advanced Shipyard made
+twelve Advanced Construction Subs and an army of three). A builder of three kinds of building or fewer is made at
 most twice: Arm's Exp. Construction Vehicle builds only the Panopticon
 (Core's also the B.F.G.), and the Exp. Unit Fabricator made eight of them
 in the user's game before any tier-4 unit. Two stay worth it: each adds
@@ -352,7 +354,19 @@ units, attack-only targets and tags for all 549 types.
 **Range.** A skirmisher (`skirmisher`) steps back when an armed ground enemy
 comes within half its ground reach, by four tenths of that reach. Mobile
 artillery (`artillery`) walks out of the reach of any such enemy's weapons
-that it could shell, and goes on firing at will. Frontliners close in. A
+that it could shell, and goes on firing at will. In a wave it does not walk
+on with the wave's attack-move (user's game: Merls, Diplomats, Hydras and
+the like fought in the front line): it fires at what its guns reach (up to
+2 500 units) and otherwise keeps behind the front of its wave, the member
+nearest the wave's target it can follow (ships follow ships), half its
+reach behind it (200 to 700 units), moved at most every four seconds
+(`artillery kept behind the front N` in the `distance:` line). A wave with
+no such member goes on as before. The `artillery` tag covers the
+rocket and missile launchers (Merl/Diplomat, Ranger/Hydra), Arbitrator,
+Juggernaut, Demolisher, Overlord, Olympus, the missile submarines
+(Deluge/Hammerhead, Abyssal/Vortex), the tier-4 ships and hovercraft
+(Triumph/Sovereign, Armada/Anchorage, Liberator/Despot) and the tier-4
+tanks (Avalon/Imperator). Frontliners close in. A
 unit with an area weapon (`aoe`) moves away from own and allied ground units
 in its blast (at most 400 units of it), waits to the side of the rally point
 and goes on its own.
@@ -388,6 +402,14 @@ wave out it keeps behind the nearest own fighter of its kind, and with none
 within 1 500 units it goes back to the rally point (there it still walks out
 of the reach of ground guns). Units with anti-air on top of another role keep
 that role.
+
+Mobile radar and jammer units (tag `escort` on the unarmed ones: Marky,
+Voyeur, Seer, Informer, Eraser, Spectre, Jammer, Deleter, Concealer,
+Blotter, Oracle, Mystic, Escort, Phantom, Fibber; user's rule) escort the
+waves the same way, seeing ahead of them and hiding them. Factories of the
+top tier or the one below make one for every ten ground soldiers, at most
+six, radar and jammer by turns (`intel escort: <name>`; the `army:` line
+counts them, `radar/jammer escorts N`). Submarines follow ships.
 
 **Fighters escort the waves** (user's rule). A fighter sent out with a
 wave stays with it; one at home joins the wave with the fewest fighters
@@ -599,13 +621,16 @@ the most hurt own unit within 700 units, whatever its health (below 98 %),
 at most two builders on one. A medic with no patient mends a hurt unit
 within 800 units, and near the base (1 500 units) also a damaged facility,
 static defence or economy building it sees within 800. The `army:` line
-counts them (`free repairs by builders N, by medics M`).
+counts them (`free repairs by builders N, by medics M`). These repairs
+come before the spare-time tasks, and while metal is in excess before the
+new factories, the metal storage and helping the factories (user's rule:
+first mend, then spend).
 
 **Repairs of units** (user's rule). Every veteran (its kills reach the
 first veteran level of its type: the mod's `VeterancyThresholds`, kept in
 the table as `veteran_kills`, else the engine's 5) and every unit worth
 5 000 metal or more falls back below half health and waits until mended
-to full health (99 %) before it fights again. Aircraft go to repair pads
+to full health (100 %) before it fights again. Aircraft go to repair pads
 instead. Where it goes:
 
 1. To a **field medic** when one is free (fewer than three patients, not
@@ -616,6 +641,13 @@ instead. Where it goes:
    medic could come to mend it (`repair: <unit> home from N units`).
 3. Else it **fights on** (`repair: <unit> fights on`) and is weighed again
    on each hit and every army step, until a medic comes or it dies.
+
+A unit worth 5 000 metal or more below a quarter of its health (user's
+rule: expensive units died far out with no medic near) never fights on: it
+leaves its wave and goes home whatever the distance (a free medic nearer
+than home still takes it), and waits there until fully mended, with no
+three-minute limit (`repair: <unit> retreats home from N units`; the
+`army:` line counts them, `retreats under 25% N`).
 
 At home, within 900 units of the base, two free builders (idle or
 parked, not at work on a frame or a walk) mend each. Ships, and any unit
@@ -709,11 +741,17 @@ tiers 1-5, one more for every four economy buildings and facilities within
 2 500 units of the base, up to twice the tier's number. Before, every armed
 building counted (the many anti-air towers filled the count) and at most four
 were wanted, so hardly any went up. The kind owned least is built first, the
-cheapest among those, out of what a minute of income pays for; the light
-L.L.T. only when nothing heavier is affordable. Each goes by the economy
+heaviest among those (threat level, then the dearest), out of what a
+minute of income pays for; the light L.L.T. only when nothing heavier is
+affordable. Before, the cheapest came first and filled the count, so the
+Annihilator, Doomsday Machine, Bastion and Warden were never built (user's
+game). Towers on the water (Harpoon/Urchin, Moray/Lamprey, the floating
+guns) have their own count when the base has water by it: 2/3/4/6/8 at
+tiers 1-5, by the shore; with both short, the one further behind its count
+goes first. Each goes by the economy
 building or facility with the most worth of such buildings within 500 units
 for each tower already guarding them (`defence: <name> by x,z`). The
-`defence:` line each minute counts them (`ground N`).
+`defence:` line each minute counts them (`ground N (on water M)`).
 
 **More factories.** With metal and energy to spare and the next lab not
 going up, builders add factories of the top tier or the one below, up to

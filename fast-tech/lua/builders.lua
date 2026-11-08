@@ -1376,35 +1376,48 @@ local function defence_spot(valued, towers)
     return best
 end
 
+-- Towers on the water (user's rule: Harpoon/Urchin, Moray/Lamprey and
+-- the floating guns) have their own count when the base has water by it,
+-- so the land towers no longer crowd them out: by tier, up to half the
+-- land number.
+local water_defence_wanted = {[0] = 0, 2, 3, 4, 6, 8}
+
 local function try_defence(unit, entry)
     if world.tier == 0 or recently("defence", 30) then
         return false
     end
     local valued = valued_buildings()
-    local wanted = defences_wanted(#valued)
-    local towers, owned = {}, {}
+    local towers, wet_towers, owned = {}, {}, {}
     for _, tower in ipairs(world.select(function(_, e) return ground_defence(e) end)) do
         local at = util.pos(tower)
+        local kind = catalog.of(tower)
         if at ~= nil then
-            towers[#towers + 1] = at
+            local list = kind.water_only and wet_towers or towers
+            list[#list + 1] = at
         end
-        local index = catalog.of(tower).index
-        owned[index] = (owned[index] or 0) + 1
+        owned[kind.index] = (owned[kind.index] or 0) + 1
     end
-    if #towers >= wanted then
+    local want_land = #towers < defences_wanted(#valued)
+    local want_wet = terrain.ship_ok and #wet_towers < water_defence_wanted[math.min(5, world.tier)]
+    if not want_land and not want_wet then
         return false
     end
     -- Every kind gets built, as for the long-range guns: the kind owned
-    -- least first, the cheapest among those; light towers (threat level
-    -- 1, the L.L.T.) only when no heavier one is affordable.
+    -- least first, and among those the heaviest (threat level, then the
+    -- dearest the economy pays for in a minute): the cheap towers came
+    -- first before and filled the count, so the Annihilator, Doomsday
+    -- Machine, Bastion and Warden were never built (user's game). Light
+    -- land towers (threat level 1, the L.L.T.) only when no heavier one is
+    -- affordable; on the water the light Torpedo Launcher counts as any.
     local function pick(wet)
         local best, best_key
         for _, option in ipairs(catalog.buildable(entry, function(o)
             return ground_defence(o) and o.water_only == wet
         end, wet)) do
             if economy.affords(option, 60) then
-                local light = (option.threat or 0) < 2 and 1 or 0
-                local key = light * 1000000 + (owned[option.index] or 0) * 10000 + option.metal / 10
+                local light = (not wet and (option.threat or 0) < 2) and 1 or 0
+                local key = light * 1000000 + (owned[option.index] or 0) * 10000
+                    - (option.threat or 0) * 1000 - math.min(option.metal, 9990) / 10
                 if best_key == nil or key < best_key then
                     best, best_key = option, key
                 end
@@ -1412,15 +1425,33 @@ local function try_defence(unit, entry)
         end
         return best
     end
-    local land = pick(false)
-    local wet = terrain.ship_ok and pick(true) or nil
+    local land = want_land and pick(false) or nil
+    local wet = want_wet and pick(true) or nil
     if land == nil and wet == nil then
         return false
     end
-    local spot = defence_spot(valued, towers) or world.front(300)
-    if build_land_or_water(unit, land, wet, spot) then
+    local all = {}
+    for _, at in ipairs(towers) do
+        all[#all + 1] = at
+    end
+    for _, at in ipairs(wet_towers) do
+        all[#all + 1] = at
+    end
+    local spot = defence_spot(valued, land ~= nil and towers or all) or world.front(300)
+    -- With both wanted, the one further behind its count goes first.
+    if land ~= nil and wet ~= nil then
+        local land_short = 1 - #towers / math.max(1, defences_wanted(#valued))
+        local wet_short = 1 - #wet_towers / math.max(1, water_defence_wanted[math.min(5, world.tier)])
+        if wet_short > land_short then
+            land = nil
+        else
+            wet = nil
+        end
+    end
+    local choice = land or wet
+    if build_in_city(unit, choice, spot) then
         mark("defence")
-        print(string.format("defence: %s by %.0f,%.0f", (land or wet).name, spot.x, spot.z))
+        print(string.format("defence: %s by %.0f,%.0f", choice.name, spot.x, spot.z))
         return true
     end
     return false
@@ -2266,7 +2297,7 @@ end
 -- half health) are repaired by free builders only: idle or parked ones,
 -- not one at work on a frame or a walk. They are mended to full health.
 builders.mend = {}      -- unit id -> tick it was sent home for repair
-builders.mend_done = 99
+builders.mend_done = 100 -- full health (user's rule)
 builders.self_mend = {} -- builder id -> tick it went home to be mended
 local unit_repairers = 2
 builders.repairing = {} -- builder id -> id of what it repairs
@@ -3020,12 +3051,15 @@ local function builder_turn(unit, entry)
     end
     -- Metal in excess (user's rule): new factories come before the economy
     -- tasks, not among the spare-time ones after them.
+    -- Repairs of what is hurt nearby come before them (user's rule): first
+    -- mend, then spend the metal.
     if not starving and economy.metal_excess() then
         for index, name in ipairs(order) do
             if name == "economy" then
                 table.insert(order, index, "excess-assist")
                 table.insert(order, index, "excess-storage")
                 table.insert(order, index, "factory")
+                table.insert(order, index, "mend")
                 break
             end
         end
@@ -3034,6 +3068,7 @@ local function builder_turn(unit, entry)
         factory = try_more_factories,
         ["excess-storage"] = try_excess_storage,
         ["excess-assist"] = try_excess_assist,
+        mend = try_mend_near,
         ["commander-upgrade"] = try_commander_upgrade,
         ["shot-storage"] = try_shot_storage,
         ["anti-air"] = try_anti_air,
@@ -3072,8 +3107,17 @@ local function builder_turn(unit, entry)
         local others = {}
         first[1] = {"frame", function(u) return try_help_frame(u) end}
         for _, task in ipairs(rest) do
-            if task[1] == "factory" then
-                table.insert(first, 2, task)
+            if task[1] == "mend" then
+                -- Repairs before the factories and helping them.
+                table.insert(first, 1, task)
+            elseif task[1] == "factory" then
+                -- Right after the frames.
+                for index, other in ipairs(first) do
+                    if other[1] == "frame" then
+                        table.insert(first, index + 1, task)
+                        break
+                    end
+                end
             elseif task[1] == "assist" then
                 first[#first + 1] = task
             else

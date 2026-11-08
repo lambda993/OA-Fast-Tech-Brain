@@ -370,7 +370,66 @@ error is logged once and the seat keeps playing).
 34. Metal that sits full must be spent: new facilities are then the goal
     (user, 2026-11-08). See state below.
 
+35. User's 4-seat Assault on Suburbia game (2026-11-08): torpedo
+    launchers (Harpoon/Urchin, Moray/Lamprey) among the static defences;
+    mobile radar and jammers as escorts; Annihilator/Doomsday, Bastion
+    and Warden never built; long-range rocket/missile units (Merl,
+    Diplomat, Hydra, Ranger, Arbitrator, Juggernaut, Demolisher, Overlord,
+    Olympus, Deluge, Vortex, tier-4 ships and hovercraft, Core
+    equivalents) are artillery and must not fight in the front line;
+    repairs before helping factories with excess metal; units worth
+    5 000+ metal below 25 % go home whatever the distance and wait for
+    100 %. See state below.
+
 ## State and open points
+
+- User's 4-seat Assault on Suburbia game (2026-11-08, all Fast Tech, easy,
+  46 min, 45 % water, Arm seats 1/3 vs Core 2/4, no script errors). Arm
+  won; Core seat 4 was wiped out at ~41 min, seat 2 had an army of 0-21 all
+  game. Seat 2's only top-tier factory (Advanced Shipyard) made twelve
+  Advanced Construction Subs (builders doubled while metal sat full), the
+  18×18 tier-3 labs had `no site` all game, and the commander's
+  excess-metal Aircraft Plant was dropped by the leash (1 420 from base)
+  every 30 s (not fixed: the factory site search can land past the
+  leash). Changes (item 35):
+  - Builders doubled with metal full only with ≥ 2 finished top-tier
+    factories (`pick_builder`).
+  - Probe of the AI lists: Annihilator from ARMACH/ARMACV, Doomsday from
+    CORACH/CORACV, Warden ARMECV, Bastion CORECV (tier 4), Harpoon/Urchin
+    from commanders, decoys, CH, CS, CSA; Moray/Lamprey from ACH, ACSA,
+    ACSUB. Annihilator 6 640 metal 150 150 energy, Bastion range 1 792
+    (no long-range gun). They were affordable but never came: the cheapest
+    least-owned kind went first and filled the count. Now the heaviest
+    (threat, then dearest) of the least owned; water towers
+    (`water_only` ground defences) have their own count
+    (`water_defence_wanted` 2/3/4/6/8) when `terrain.ship_ok`; log
+    `ground N (on water M)`.
+  - Tag `escort` on 15 unarmed mobile radar/jammer units (not spies, not
+    aircraft); catalog `entry.intel_escort`; `factories.pick_intel` (one per
+    10 ground soldiers, at most 6, radar/jammer by turns, unarmed ships
+    only when `terrain.ship_reaches`); army.lua adds them to the escorts;
+    `can_lead` lets subs follow ships.
+  - Tag `artillery` (was `skirmisher`) on Demolisher ARMSIEGE, Liberator
+    ARMHFLAG, Despot CORHFLAG, Imperator CORLFLAG; the others the user
+    named had it already. In `push`, artillery picks targets up to its
+    reach (≤ 2 500) and otherwise `trail`s half its reach (200-700) behind
+    its wave's front member (`wave_fronts`); log `artillery kept behind
+    the front N`.
+  - `mend` (try_mend_near) before the excess-metal tasks and first in the
+    reordered spare tasks.
+  - `retreat_below = 25` in army.lua: units ≥ 5 000 metal go home from
+    any distance (medic if nearer), no `mend_wait` release
+    (`mend_to.retreat`); `builders.mend_done` 100 (was 99). Log
+    `retreats under 25% N`.
+  - Tests, 8 matches (30 min, easy vs built-in hard): vs built-in 4 of 4
+    won (Assault on Suburbia as Core at 32 776, Painted Desert Arm 31 006,
+    Luschaven 33 565 vs 39 284 before, Ashap Core 19 473), Core Prime
+    seed 99 a draw far ahead (271 units vs 208); mirrors Assault on
+    Suburbia and Seven Islands draws, Atlantian States won by seat 1. No
+    errors, no stops. Seen: radar/jammer escorts 0-6 a seat, artillery
+    trail moves 8-906, Doomsday Machine built (Suburbia, Seven Islands),
+    Urchin/Lamprey on the water. Not seen: Annihilator, Bastion, Warden
+    (tier 4 builders), a retreat under 25 % (0 in every test).
 
 - Metal in excess (item 34): `economy.metal_excess()` (store > 85 % for
   30 s, `excess_since` in `economy.read`); `try_more_factories` then runs

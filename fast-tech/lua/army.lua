@@ -304,7 +304,8 @@ local function can_lead(escort, kind)
     if escort.tags.hovercraft then
         return true
     end
-    return (escort.tags.ship == true) == (kind.tags.ship == true or kind.tags.submarine == true)
+    return (escort.tags.ship == true or escort.tags.submarine == true)
+        == (kind.tags.ship == true or kind.tags.submarine == true)
 end
 
 -- The point `behind` units behind `leader`, away from `enemy` (or the
@@ -912,6 +913,75 @@ end
 
 -- Keeps the attackers moving: they fight what they see, and move on to the
 -- next target once the current one is cleared.
+-- Mobile artillery in a wave (user's rule: Merl, Diplomat, Ranger, Hydra,
+-- Arbitrator, Juggernaut, Demolisher, Overlord, Olympus, Deluge, Vortex,
+-- the tier-4 ships and hovercraft; tag `artillery`): they were seen
+-- fighting in the front line, walking on with the wave's attack-move. Now
+-- one fires at what its guns reach (up to 2 500) and otherwise keeps behind
+-- the front of its wave: the member nearest the wave's target that it can
+-- follow (ships follow ships), half its reach behind it (200 to 700),
+-- moved again every four seconds at most. A wave of artillery alone, or
+-- one with no member it can follow, goes on as before.
+local trail_min, trail_max = 200, 700
+local trail_slack = 150
+local trail_wait = 30 * 4
+local trail_reach = 2500
+army.trail_moved = {} -- unit id -> tick it was last sent behind its front
+army.trails = 0       -- trail moves, for the seat log
+
+local function is_artillery(entry)
+    return entry ~= nil and entry.tags.artillery == true and not entry.air and not entry.structure
+end
+
+-- The wave members artillery can keep behind, by wave number.
+local function wave_fronts(attackers)
+    local rows = {}
+    for _, unit in ipairs(attackers) do
+        local wave = army.wave_of[unit.id]
+        local kind = catalog.of(unit)
+        if wave ~= nil and kind ~= nil and not is_artillery(kind) and not kind.air and not kind.tags.escort then
+            local at = util.pos(unit)
+            if at ~= nil then
+                local list = rows[wave] or {}
+                list[#list + 1] = {x = at.x, z = at.z, entry = kind}
+                rows[wave] = list
+            end
+        end
+    end
+    return rows
+end
+
+local function trail(unit, entry, at, fronts, target)
+    local wave = army.wave_of[unit.id]
+    local list = wave ~= nil and fronts[wave] or nil
+    if list == nil or target == nil then
+        return false
+    end
+    local front, front_d
+    for _, row in ipairs(list) do
+        if can_lead(entry, row.entry) then
+            local d = util.dist(row, target)
+            if front_d == nil or d < front_d then
+                front, front_d = row, d
+            end
+        end
+    end
+    if front == nil then
+        return false
+    end
+    local behind = math.max(trail_min, math.min(trail_max, entry.ground_range * 0.5))
+    local point = behind_of(front, target, behind)
+    if util.dist(at, point) > trail_slack then
+        local last = army.trail_moved[unit.id]
+        if last == nil or me.tick - last >= trail_wait or util.free(unit) then
+            army.trail_moved[unit.id] = me.tick
+            army.trails = army.trails + 1
+            unit:move(util.clamp(util.around(point, (unit.id % 16) / 16, 60), 64))
+        end
+    end
+    return true
+end
+
 local function push(attackers)
     if #attackers == 0 then
         army.target = nil
@@ -927,6 +997,12 @@ local function push(attackers)
         army.target = target
     end
     util.guard("regroup", regroup, attackers)
+    local fronts = wave_fronts(attackers)
+    for id in pairs(army.trail_moved) do
+        if world.own[id] == nil then
+            army.trail_moved[id] = nil
+        end
+    end
     for _, unit in ipairs(attackers) do
         local at = util.pos(unit)
         local entry = catalog.of(unit)
@@ -949,14 +1025,21 @@ local function push(attackers)
         else
             -- Bombers look further for anti-air to take out, then their list.
             local enemy, lost
+            local artillery = is_artillery(entry)
+            local reach = entry.bomber and 1400 or 800
+            if artillery then
+                reach = math.max(reach, math.min(entry.ground_range, trail_reach))
+            end
             if at ~= nil then
-                enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
+                enemy, lost = pick(unit, at, reach)
             end
             local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200, entry)
             if keep_range(unit) then
                 -- Stepped back from a close enemy.
             elseif enemy ~= nil then
                 attack(unit, enemy)
+            elseif artillery and at ~= nil and trail(unit, entry, at, fronts, target) then
+                -- Behind the front of its wave.
             elseif lost ~= nil then
                 chase(unit, lost)
             elseif contact then
@@ -1229,6 +1312,11 @@ local mend_below = 50
 local mend_full = 98 -- below this a unit or building counts as hurt for a free mender
 local mend_wait = 30 * 180
 local near_home = 2500
+-- Units worth 5 000 metal or more below a quarter of their health go home
+-- whatever the distance (user's rule: expensive units died far out with no
+-- medic near), leave their wave and wait there until fully mended, with no
+-- three-minute limit. A free medic nearer than home still takes them.
+local retreat_below = 25
 
 local function veteran(unit, entry)
     return util.num(unit.kills) >= (entry.veteran_kills or 5)
@@ -1340,7 +1428,8 @@ local function send_to_mend(unit)
             entry.name, catalog.of(medic).name, medic_d, home_d, util.num(unit.health_percent), util.num(unit.kills)))
         return
     end
-    if home_d > near_home then
+    local retreat = entry.metal >= mend_value and health < retreat_below
+    if home_d > near_home and not retreat then
         if not fight_noted[unit.id] then
             fight_noted[unit.id] = true
             army.fought_on = army.fought_on + 1
@@ -1350,17 +1439,21 @@ local function send_to_mend(unit)
         return
     end
     local point = army.mend_point(unit)
-    if point == nil or not any_mender(unit) then
+    if point == nil or not (retreat or any_mender(unit)) then
         return
     end
     army.mended_count = (army.mended_count or 0) + 1
+    if retreat then
+        army.retreats = (army.retreats or 0) + 1
+    end
     army.mending[unit.id] = me.tick
-    army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1, name = entry.name}
+    army.mend_to[unit.id] = {x = point.x, z = point.z, tries = 1, name = entry.name, retreat = retreat}
     army.attacking[unit.id] = nil
     unit:move(point)
     builders.mend_unit(unit)
-    print(string.format("repair: %s home from %.0f units (%d%% health, %d kills)", entry.name,
-        util.dist(at, point), util.num(unit.health_percent), util.num(unit.kills)))
+    print(string.format("repair: %s %s from %.0f units (%d%% health, %d kills)", entry.name,
+        retreat and "retreats home" or "home", util.dist(at, point), util.num(unit.health_percent),
+        util.num(unit.kills)))
 end
 
 -- Where a hurt unit waits for repair: by the base, or for a ship (and
@@ -2191,7 +2284,7 @@ function army.step()
         end
         local idle_since = math.max(since, to and to.gained or since)
         local waited = unit ~= nil and not mended and me.tick - idle_since > mend_wait
-            and (field or builders.crew_for(unit) == 0)
+            and (field or builders.crew_for(unit) == 0) and not (to ~= nil and to.retreat)
         if unit == nil or mended or waited then
             -- Mended in the field: back to the wave it left.
             if field and mended and army.target ~= nil then
@@ -2250,6 +2343,12 @@ function army.step()
             attackers[#attackers + 1] = unit
         else
             home[#home + 1] = unit
+        end
+    end
+    -- Mobile radar and jammers (no weapons, so no soldiers) escort too.
+    for _, unit in ipairs(world.select(function(u, e) return e.intel_escort and world.finished(u) end)) do
+        if not busy(unit) then
+            escorts[#escorts + 1] = unit
         end
     end
     for id in pairs(army.attacking) do

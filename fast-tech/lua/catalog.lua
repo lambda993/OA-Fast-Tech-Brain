@@ -259,6 +259,11 @@ local function classify(index, record, inferred_tier)
     if entry.medic then
         entry.mobile_builder = false
     end
+    -- Mobile radar and jammer units (user's rule, tag `escort` on the
+    -- unarmed ones): they follow the waves like the anti-air escorts,
+    -- seeing ahead and hiding them. Not combat units, not scouts.
+    entry.intel_escort = entry.mobile and not entry.air and not entry.armed and not entry.builder
+        and entry.tags.escort == true and (entry.tags.radar == true or entry.tags.jammer == true)
     if entry.in_table then
         entry.scout = entry.mobile and entry.tags.scout == true
     else
