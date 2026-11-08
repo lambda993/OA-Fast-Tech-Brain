@@ -1226,6 +1226,7 @@ army.fought_on = 0 -- hurt units that fought on, far from home with no medic
 local fight_noted = {} -- unit id -> true once its fighting on was logged
 local mend_value = 5000
 local mend_below = 50
+local mend_full = 98 -- below this a unit or building counts as hurt for a free mender
 local mend_wait = 30 * 180
 local near_home = 2500
 
@@ -1259,13 +1260,27 @@ local medic_reach = 2500
 local medic_patients = 3
 local field_behind = 900
 
-local function medics()
-    return world.select(function(u, e) return e.medic and world.finished(u) end)
+-- Medics, and with `decoys` the decoy commanders too (tag `repair`, user's
+-- rule): they stay builders, and take patients only when free of an
+-- emergency repair, their own mending and running.
+local function medics(decoys)
+    return world.select(function(u, e)
+        if not world.finished(u) then
+            return false
+        end
+        if e.medic then
+            return true
+        end
+        return decoys == true and e.decoy_medic == true and builders.repairing[u.id] == nil
+            and builders.self_mend[u.id] == nil and builders.running[u.id] == nil
+    end)
 end
+
+builders.medic_job = army.medic_job -- a decoy with patients is left to army.lua
 
 local function free_medic(unit, at)
     local best, best_d
-    for _, medic in ipairs(medics()) do
+    for _, medic in ipairs(medics(true)) do
         local job = army.medic_job[medic.id]
         if army.medic_home[medic.id] == nil and (job == nil or #job < medic_patients) then
             local from = util.pos(medic)
@@ -1473,15 +1488,91 @@ local function field_zone(attackers)
     army.field = world.clear_spot(util.clamp(point, 64))
 end
 
+-- Own units hurt at all (user's rule: free builders and medics mend
+-- whatever is damaged near them, whatever its health), as rows {unit,
+-- health} within `reach` of `at`, the most hurt first; aircraft only on
+-- the ground is not known, so they are left to the pads.
+function army.hurt_near(at, reach, skip)
+    local best, best_health
+    for _, row in ipairs(world.friends_in(at, reach)) do
+        local unit = row.unit
+        local kind = row.entry
+        if unit ~= nil and kind ~= nil and kind.mobile and not kind.air and world.own[unit.id] ~= nil
+            and unit.id ~= skip and world.finished(unit) then
+            local health = util.num(unit.health_percent)
+            if health > 0 and health < mend_full and (best_health == nil or health < best_health) then
+                best, best_health = unit, health
+            end
+        end
+    end
+    return best
+end
+
+-- Own facilities, static defences and economy buildings that are damaged
+-- within `reach` of `at` (user's rule: medics near the base mend them),
+-- the most hurt first.
+local function hurt_building(at, reach)
+    local best, best_health
+    local limit = reach * reach
+    for _, building in ipairs(world.select(function(u, e)
+        return e.structure and world.finished(u)
+            and (e.tags.facility or e.tags.economy or e.defense)
+    end)) do
+        local where = util.pos(building)
+        local health = util.num(building.health_percent)
+        if where ~= nil and util.dist2(at, where) <= limit and health > 0 and health < mend_full
+            and (best_health == nil or health < best_health) then
+            best, best_health = building, health
+        end
+    end
+    return best
+end
+
+army.medic_fix = {} -- medic id -> id of what it mends on its own
+army.fixes = 0      -- repairs medics took up on their own, for the seat log
+local fix_reach = 800
+local base_near = 1500
+
+-- A medic with no patient mends what it sees hurt: a unit near it, or,
+-- near the base, a damaged facility, defence or economy building. Returns
+-- whether it is at that.
+local function medic_fix(medic, at, home)
+    local id = medic.id
+    local doing = army.medic_fix[id]
+    local target = doing and world.own[doing]
+    if target ~= nil and util.num(target.health_percent) < mend_full then
+        if util.free(medic) then
+            medic:repair(target)
+        end
+        return true
+    end
+    army.medic_fix[id] = nil
+    target = army.hurt_near(at, fix_reach, id)
+    if target == nil and home ~= nil and util.dist(at, home) <= base_near then
+        target = hurt_building(at, fix_reach)
+    end
+    if target ~= nil and builders.reaches_work(medic, target) and medic:repair(target) then
+        army.medic_fix[id] = target.id
+        army.medic_order[id] = me.tick
+        army.fixes = army.fixes + 1
+        return true
+    end
+    return false
+end
+
 local function step_medics()
     local home = world.base or world.start
     local rally = rally_point()
-    for _, medic in ipairs(medics()) do
+    for _, medic in ipairs(medics(true)) do
         local id = medic.id
         local at = util.pos(medic)
         local health = util.num(medic.health_percent)
         local last = army.medic_order[id] or 0
-        if army.medic_home[id] ~= nil then
+        local decoy = catalog.of(medic).decoy_medic == true
+        if decoy then
+            -- A decoy only mends its patients here; the rest is its own
+            -- work as a builder.
+        elseif army.medic_home[id] ~= nil then
             if health >= builders.mend_done then
                 army.medic_home[id] = nil
             elseif at ~= nil and home ~= nil and util.free(medic) and util.dist(at, home) > 500 then
@@ -1517,10 +1608,14 @@ local function step_medics()
             end
             army.medic_job[id] = #keep > 0 and keep or nil
             if patient ~= nil then
+                army.medic_fix[id] = nil
                 if util.free(medic) or me.tick - last > 30 * 10 then
                     medic:repair(patient)
                     army.medic_order[id] = me.tick
                 end
+            elseif decoy or medic_fix(medic, at, home) then
+                -- A decoy goes back to its building; a medic mends what
+                -- it saw hurt.
             else
                 local spot = army.field or rally
                 if spot ~= nil then
@@ -1543,7 +1638,7 @@ local function step_medics()
             end
         end
     end
-    for _, table_ in ipairs({army.medic_job, army.medic_order, army.medic_home, army.medic_to}) do
+    for _, table_ in ipairs({army.medic_job, army.medic_order, army.medic_home, army.medic_to, army.medic_fix}) do
         for id in pairs(table_) do
             if world.own[id] == nil then
                 table_[id] = nil

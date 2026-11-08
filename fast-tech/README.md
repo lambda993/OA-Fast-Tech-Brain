@@ -13,9 +13,13 @@ times the base income, medium twice, hard once. The levels use them.
 
 | Level | Difficulty | Income |
 | --- | --- | --- |
-| Fair | hard | 1× |
-| Boosted | medium | 2× |
-| Rich | easy | 4× |
+| Easy | easy | 4× |
+| Medium | medium | 2× |
+| Hard | hard | 1× |
+
+The names and ids are those of Classic, the engine's own player (they were
+Rich, Boosted and Fair: players were confused). On Hard the guard at home
+and the factories' share of income are a little lower.
 
 ## How it plays
 
@@ -95,7 +99,7 @@ bridge into the preferred line that leads higher, and climbs that. For
 every factory it works out the highest tier its line leads to (factory →
 builder → factory …). A factory still on the way up is never reclaimed. A
 lab is started once the income would pay for it in about four minutes
-(five on the boosted and rich levels).
+(five on the Medium and Easy levels).
 
 **The city.** The base is a grid of square blocks, as wide as the side's
 largest factory (24 cells in Escalation), with streets as wide as its
@@ -584,7 +588,18 @@ come out; every armed factory is set to hold fire once it is finished.
 
 **Emergency repairs.** While the base is under attack (an alarm within
 the last minute), buildings worth 5 000 metal or more below half health
-get three builders each, who drop what they do.
+get three builders each, who drop what they do. Builders and decoys on an
+emergency repair never run, under fire or not (user's rule). The commander
+takes part too, for what lies within 900 units of the base, when it is not
+running nor waiting to be mended; hit while at it, it drops the repair and
+runs (`commander leaves an emergency repair under fire`).
+
+**Free repairs** (user's rule). A builder with nothing else to do mends
+the most hurt own unit within 700 units, whatever its health (below 98 %),
+at most two builders on one. A medic with no patient mends a hurt unit
+within 800 units, and near the base (1 500 units) also a damaged facility,
+static defence or economy building it sees within 800. The `army:` line
+counts them (`free repairs by builders N, by medics M`).
 
 **Repairs of units** (user's rule). Every veteran (its kills reach the
 first veteran level of its type: the mod's `VeterancyThresholds`, kept in
@@ -622,7 +637,10 @@ but are no construction units: scavengers Flea, Mite, Wisp, Toad;
 resurrectors Rector, Necro, Siren, Kraken (Shaman and Heretic have no
 builder in the AI lists); S.P.O.T. and Mechanic; the carriers Angler,
 Refuge, Colossus, Hive, Expedition, Halcyon, Atlantis, Nexus, Armada,
-Anchorage. Aircraft carriers (Condor, Singularity) are no medics: they
+Anchorage. Decoy commanders carry the `repair` tag too (user's rule): they
+stay builders, and take patients as medics do when they are free of an
+emergency repair, their own mending and running; while they have patients
+the builders' tasks leave them be, and they do not run. Aircraft carriers (Condor, Singularity) are no medics: they
 cannot keep pace with a ground wave, and the engine lets only units with
 `canreclamate` repair (Singularity has none). Medics are no builders for
 the builders' tasks. With 8 ground soldiers a seat wants one medic, one
@@ -699,7 +717,7 @@ for each tower already guarding them (`defence: <name> by x,z`). The
 
 **More factories.** With metal and energy to spare and the next lab not
 going up, builders add factories of the top tier or the one below, up to
-three (fair) or four of each, never while energy is short and never past
+three (Hard) or four of each, never while energy is short and never past
 three times that in all. From tier 2, if the seat has no air factory, the first extra
 factory is one (user's rule: aircraft are useful on any map, and with the
 enemy across water the line order never chose one): the highest tier the
@@ -707,6 +725,21 @@ builder can put up, a seaplane platform on a map that is mostly water
 (`air factory: <name>`). The seat's best air factory goes on making
 aircraft (60 % of its turns) when it falls a tier behind, and is never
 reclaimed for room.
+
+**Metal in excess** (user's rule: metal that sits full must be spent, and
+new facilities are then the goal). With the metal store over 85 % for 30
+seconds, new factories come before the economy tasks for every builder
+(`another factory: <name> (metal in excess)`), one every 20 seconds
+instead of 60, while the next lab goes up too (its frame keeps its own
+crew), with the energy store over a quarter, and up to six factories past
+the usual caps (per tier and in all). No new extractors then, nor
+underwater ones but by the decoys. Then metal storage of the seat's tier (else the
+highest there is), one every 30 seconds, while the stores hold less than
+four minutes of income (20 000 at least) (`storage: <name> (metal in
+excess)`). Then the builders help the factories, spread over them: the
+busy factory of the top tier (else any) with the fewest helpers, at most
+four on one, never while energy is short. The `status` line ends with
+`metal in excess true|false, helping factories N`.
 
 ## Engine limitations
 
@@ -844,7 +877,7 @@ oa-tool brain check fast-tech --game-dir /path/to/totala \
   --mod "/path/to/Open Annihilation/Mods/escalation"
 open-annihilation --headless-check --game-dir /path/to/totala \
   --mod-dir "/path/to/Open Annihilation/Mods/escalation" \
-  --brain-match ./fast-tech,builtin --brain-levels rich,hard \
+  --brain-match ./fast-tech,builtin --brain-levels easy,hard \
   --brain-map "Painted Desert" --seed 4242 --match-ticks 54000
 ```
 

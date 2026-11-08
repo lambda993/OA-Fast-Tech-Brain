@@ -41,7 +41,7 @@ end
 -- True while the home army is below the guard the tier calls for.
 function factories.guard_short()
     local wanted = guard_worth[math.min(5, world.tier)] or 0
-    if me.level == "fair" then
+    if me.difficulty == "hard" then
         wanted = wanted * 0.7
     end
     return army_worth() < wanted
@@ -87,7 +87,7 @@ local function production_share(tier, top)
 end
 
 local function level_share()
-    if me.level == "fair" then
+    if me.difficulty == "hard" then
         return 0.85
     end
     return 1

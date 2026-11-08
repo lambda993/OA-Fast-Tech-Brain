@@ -7,20 +7,20 @@ name: "Fast Tech"
 version: "0.1"
 author:
   name: "Lambda993"
-description: "Escalation computer player that races up the tech tiers.\nEach new tier winds down the lower factories, reclaims the old labs and builds the strongest units it can. It scouts with radar and expendable scouts, and keeps the commander at home."
+description: "Escalation computer player that races up the tech tiers and plays without seeing the whole map.\nGoal: reach the highest tier as fast as the economy allows, then win with the strongest units it can build. Each new tier winds down the lower factories and reclaims the old labs; the base grows as a city grid with wide streets, power behind and factories in front.\nIt scouts with radar, sonar and expendable scouts instead of full awareness, keeps the commander at home (cloaked, fleeing danger), and has decoy commanders build and mend.\nThe army leaves in waves with anti-air escorts and fighters, scatters under artillery, keeps its distance by unit role, and falls back to field medics for repair. Ground towers guard the economy, many anti-air towers the sky, and long-range guns are aimed by the brain.\nLevels: Easy earns four times the base income, Medium twice, Hard once (Escalation's own rules for computer players)."
 tags: ["rush", "economy", "experimental"]
 works-with: ["escalation >= 10"]
 requires:
   engine: ">= 0.8.7"
 levels:
-  - id: fair
-    name: "Fair"
-    difficulty: hard
-  - id: boosted
-    name: "Boosted"
-    difficulty: medium
-  - id: rich
-    name: "Rich"
+  - id: easy
+    name: Easy
     difficulty: easy
+  - id: medium
+    name: Medium
+    difficulty: medium
+  - id: hard
+    name: Hard
+    difficulty: hard
 fullAwareness: false
 entry: brain.lua

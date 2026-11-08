@@ -1544,7 +1544,8 @@
       "decoy",
       "invisible",
       "paralyzer-immune",
-      "t2"
+      "t2",
+      "repair"
     ]
   },
   {
@@ -8171,7 +8172,8 @@
       "decoy",
       "invisible",
       "paralyzer-immune",
-      "t2"
+      "t2",
+      "repair"
     ]
   },
   {

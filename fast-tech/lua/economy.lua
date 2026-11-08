@@ -18,6 +18,9 @@ local num = util.num
 local metal_goal = {[0] = 6, 12, 35, 110, 220, 320}
 local energy_goal = {[0] = 120, 300, 1400, 5500, 11000, 16000}
 
+local excess_share = 0.85
+local excess_wait = 30 * 30
+
 function economy.read()
     local e = {
         metal = num(me.metal),
@@ -49,8 +52,22 @@ function economy.read()
         e.energy_income_avg = before.energy_income_avg + (e.energy_income - before.energy_income_avg) * weight
         e.energy_demand_avg = before.energy_demand_avg + (e.energy_demand - before.energy_demand_avg) * weight
     end
+    -- Metal in excess: the store over 85 % for thirty seconds or more.
+    e.excess_since = nil
+    if e.metal_share > excess_share then
+        e.excess_since = before ~= nil and before.excess_since or me.tick
+    end
     economy.now = e
     return e
+end
+
+-- Whether the metal store has stood over 85 % for thirty seconds: metal
+-- the seat cannot spend (user's rule: then new facilities are the goal,
+-- factories first, so that it is spent). Stores sat full most of the
+-- game in every seat of the user's Above Ariza game.
+function economy.metal_excess()
+    local e = economy.now or economy.read()
+    return e.excess_since ~= nil and me.tick - e.excess_since >= excess_wait
 end
 
 -- Whether the seat can pay for `entry` out of `seconds` of the given

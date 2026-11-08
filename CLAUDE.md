@@ -68,7 +68,7 @@ Only two seats; the brain plays seat 1 (Arm) or, listed second, seat 2
 S=/tmp/ft-run; rm -rf $S; mkdir -p $S
 $OA/open-annihilation --skip-intro --mute --headless-check --game-dir "$TA" --mod-dir "$ESC" \
   --data-dir $S/data --log-dir $S/log \
-  --brain-match /usr/prg/OABrains/fast-tech/fast-tech,builtin --brain-levels rich,hard \
+  --brain-match /usr/prg/OABrains/fast-tech/fast-tech,builtin --brain-levels easy,hard \
   --brain-map "Painted Desert" --seed 4242 --match-ticks 54000
 grep -h 'brain match' $S/log/*
 ```
@@ -82,8 +82,10 @@ grep -h 'brain match' $S/log/*
   (map pack, far deposits), `Coremageddon`, `Core Prime Industrial Area`
   (metal map, surface metal 255, no deposits), `Luschaven` (65 % water),
   `Crater Islands` (islands, enemy not reachable on land).
-- Levels: `fair` (difficulty hard, 1x income), `boosted` (medium, 2x),
-  `rich` (easy, 4x) — Escalation's `ai.income-multipliers` are 4/2/1.
+- Levels: `easy` (difficulty easy, 4x income), `medium` (2x), `hard`
+  (1x) — Escalation's `ai.income-multipliers` are 4/2/1. They were named
+  `rich`, `boosted`, `fair` until 2026-11-08 (the notes below use the old
+  names: rich = easy, fair = hard); the user renamed them as in Classic.
 - A probe brain (a folder with `oabrain.yaml` + `brain.lua` that `print`s
   what it reads in `onTick`) is the quickest way to check an API field or a
   build list; put it in a scratch folder (extra files in a brain folder make
@@ -356,7 +358,71 @@ error is logged once and the seat keeps playing).
     anti-air.
     See state below.
 
+33. User's 4-seat Above Ariza game (2026-11-08): level names as in the
+    base brain (Classic: Easy/Medium/Hard); a longer manifest description
+    with the brain's goal; medics near the base also mend damaged
+    facilities, static defences and economy they see; emergency repairs
+    stay for units over 5 000 metal, but free builders and medics near a
+    damaged unit mend it whatever its health; decoys tagged `repair`
+    (medics); on emergency repairs builders and medics ignore running,
+    the commander runs when hit while on one. See state below.
+
+34. Metal that sits full must be spent: new facilities are then the goal
+    (user, 2026-11-08). See state below.
+
 ## State and open points
+
+- Metal in excess (item 34): `economy.metal_excess()` (store > 85 % for
+  30 s, `excess_since` in `economy.read`); `try_more_factories` then runs
+  every 20 s, before "economy" in the builder order, ignores the lab frame
+  and adds `excess_factories` (6) to the per-tier and total caps;
+  `try_underwater` (but decoys) and the near-deposit extractors stop.
+  Compared with the committed version on 7 setups: more factories (e.g.
+  Atlantian States mirror seat 1: 17 vs 8, built 459 vs 291; Core Prime
+  18 vs 13, 405 vs 347), but the minutes with metal over 90 % barely
+  moved (12/28 vs 6/19 Painted Desert, 19/29 vs 16/29 Core Prime, 13/29
+  both on Above Ariza; Luschaven 19/25 vs 24/29). Factories are not what
+  holds the spending back; open: lower-tier factories produce while in
+  excess (against the wind-down rule, ask the user), builders assisting
+  factories, energy. Results: all decided games vs built-in won, mirrors
+  as before, no errors.
+  - Then (user's choice of option 2, plus metal storage of the current
+    tier): `try_excess_storage` and `try_excess_assist` (spread over the
+    busy factories, at most 4 helpers, `builders.assisting`) after
+    "factory" in the excess order. Minutes with metal over 90 % vs the
+    committed version: Luschaven 10/21 vs 24/29, Above Ariza 7/29 and 14/29
+    vs 13/29 and 10/29, Seven Islands 11 and 13/29 vs 15 and 14/29,
+    Atlantian States 14 and 13/29 vs 19 and 10/25, Core Prime 18/29 vs
+    16/29; wins vs built-in sooner (Painted Desert Core 27 518 vs 35 791
+    ticks, Luschaven 39 284 vs 52 811, Ashap 18 241 vs 22 701); 7-22 excess
+    stores and up to 25 helpers a seat; no errors.
+
+- User's 4-seat Above Ariza game (2026-11-08, all Fast Tech, rich, 41
+  min, no script errors; engine `runtime type has no FBI definition` at
+  tick 48 902, known). Seen: metal stores full most of the game in every
+  seat; seat 1 kept the Ultra Vehicle Plant goal 22 minutes (18 630 to
+  41 070) with no `building` line and no frame before `no site`: not looked
+  into yet. Changes (item 33):
+  - Levels `easy`/`medium`/`hard` (Easy/Medium/Hard), as Classic;
+    factories.lua reads `me.difficulty == "hard"` (was `me.level ==
+    "fair"`). Saved games with the old ids fall back by difficulty
+    (standard 10.2). Test script: `--brain-levels easy,hard`.
+  - Manifest description: five lines (goal, scouting, army, levels),
+    935 bytes, first line 95.
+  - `repair` tag on ARMDECOM/CORDECOM in `data/units.json`; catalog
+    `entry.decoy_medic` (they stay builders); `medics(true)` in army.lua
+    includes them when free; `builders.medic_job` (= `army.medic_job`)
+    keeps the builders' tasks and running off a decoy with patients.
+  - `medic_fix`/`hurt_near`/`hurt_building` in army.lua, `try_mend_near`
+    (first of the spare tasks) in builders.lua; threshold 98 %.
+  - `guard_builder` returns at once for `builders.repairing`; the commander
+    joins `send_repairs` within 900 of the base; `builders.on_damaged`
+    makes it drop the repair and run; `flee` clears its repair.
+  - Tests, 8 matches on easy: 4 of 4 decided vs built-in won, Core Prime
+    seed 99 a draw far ahead, mirrors (Seven Islands, Atlantian States,
+    Above Ariza) draws; no errors. Free repairs by builders 0-21, by medics
+    0-39 a match; no patient went to a decoy (few units fell back, home was
+    nearer); the commander never left a repair under fire.
 
 - User's 5-seat Core Contingency game (2026-11-08, all Fast Tech, rich,
   ~33 min, map 2 000 × 2 000 cells = 32 000 units a side, 4 M cells; no

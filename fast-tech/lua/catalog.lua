@@ -249,6 +249,13 @@ local function classify(index, record, inferred_tier)
     -- cannot keep pace with a wave on the ground.
     entry.medic = entry.mobile_builder and not entry.air and entry.tags.repair == true
         and (record.canreclamate == true or num(record.canreclamate) > 0)
+    -- Decoy commanders (tagged `repair` by the user) stay builders and
+    -- take patients too (`decoy_medic`): army.lua hands them patients,
+    -- builders.lua leaves them be while they have one.
+    entry.decoy_medic = entry.medic and entry.decoy
+    if entry.decoy_medic then
+        entry.medic = false
+    end
     if entry.medic then
         entry.mobile_builder = false
     end

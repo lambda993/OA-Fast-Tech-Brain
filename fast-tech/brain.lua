@@ -85,19 +85,21 @@ local function status()
     for index = 1, math.min(8, #names) do
         top[#top + 1] = string.format("%s %d", names[index], made[names[index]])
     end
-    print(string.format("army: %s | escorts %d, fighter escorts %d (backed off %d), enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d",
+    print(string.format("army: %s | escorts %d, fighter escorts %d (backed off %d), enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d (decoys %d), free repairs by builders %d, by medics %d",
         table.concat(top, ", "), escorts, army.fighter_escorts or 0, army.stepped.fighters_back or 0,
         tostring(world.enemy_air == true), util.count(army.mending),
         army.mended_count or 0, army.field_count or 0, army.fought_on or 0, util.count(builders.self_mend),
-        #world.select(function(_, e) return e.medic end)))
+        #world.select(function(_, e) return e.medic end), #world.select(function(_, e) return e.decoy_medic end),
+        builders.fixed or 0, army.fixes or 0))
     print(string.format(
-        "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d",
+        "status tier %d goal %s (builders %d, affordable %s) frame %s | metal %.0f/%.0f +%.1f -%.1f | energy %.0f/%.0f +%.0f -%.0f | bld %d fac %d army %d scout %d mex %d (%d/%d/%d) pow %d radar %d def %d water %d | foes known %d | metal in excess %s, helping factories %d",
         world.tier, tech.goal and tech.goal.name or "-", #tech.goal_builders(), tostring(tech.affordable()),
         tech.frame_alive() and "up" or "-",
         e.metal, e.metal_cap, e.metal_income, e.metal_demand, e.energy, e.energy_cap, e.energy_income, e.energy_demand,
         counts.builders, counts.factories, counts.combat, counts.scouts, counts.extractors,
         by_tier[1], by_tier[2], by_tier[3], counts.power,
-        counts.radar, counts.defense, counts.water, util.count(world.enemy_buildings)))
+        counts.radar, counts.defense, counts.water, util.count(world.enemy_buildings),
+        tostring(require("economy").metal_excess()), util.count(builders.assisting)))
 end
 
 -- The work of a second is spread over six turns, a sixth of a second apart:

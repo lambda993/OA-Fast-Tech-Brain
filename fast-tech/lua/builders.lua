@@ -1016,6 +1016,10 @@ local function try_underwater(unit, entry)
     if terrain.water_share <= 0 or recently("underwater " .. unit.id, 20) then
         return false
     end
+    -- Metal the seat cannot spend: more extractors only for the decoys.
+    if economy.metal_excess() and not entry.decoy then
+        return false
+    end
     local wet = economy.best_extractor(entry, true)
     if wet == nil or not wet.water_only then
         return false
@@ -1153,7 +1157,8 @@ local function try_economy(unit, entry, near_base)
             if try_extractor(unit, entry, reach) then
                 return true
             end
-        elseif not economy.metal_map() and try_extractor(unit, entry, math.min(near_base and commander_reach or 1200, 1200)) then
+        elseif not economy.metal_map() and not economy.metal_excess()
+            and try_extractor(unit, entry, math.min(near_base and commander_reach or 1200, 1200)) then
             -- Income above the goal: free deposits near the base are
             -- still taken, they are cheap (user's game: a seat raised an
             -- Ultra Aircraft Hangar on five extractors with free deposits
@@ -1425,14 +1430,25 @@ end
 -- lacks comes first, so the army mixes kbots, vehicles, aircraft and
 -- hovercraft; then more of what it has. The top tier first, else the one
 -- below. Water-only factories are left out.
+-- Factories past the usual caps while metal is in excess, per tier and
+-- in all.
+local excess_factories = 6
+
 local function try_more_factories(unit, entry)
     local tier = world.tier
-    if tier < 1 or recently("factory", 60) then
+    -- Metal in excess (user's rule): factories are the goal, one every
+    -- twenty seconds, past the usual caps and while the next lab goes up
+    -- (its frame keeps its own crew, see lab_crew_cap).
+    local excess = economy.metal_excess()
+    if tier < 1 or recently("factory", excess and 20 or 60) then
         return false
     end
     local e = economy.now
     local metal_goal = economy.goals(tier)
-    if e.metal_share < 0.4 or e.metal_income < metal_goal * 0.6 or e.energy_share < 0.4 then
+    if not excess and (e.metal_share < 0.4 or e.metal_income < metal_goal * 0.6) then
+        return false
+    end
+    if e.energy_share < (excess and 0.25 or 0.4) then
         return false
     end
     -- More factories only burn more energy when it is already short.
@@ -1440,7 +1456,7 @@ local function try_more_factories(unit, entry)
         return false
     end
     -- While the next lab goes up, every builder is better spent on it.
-    if tech.frame_alive() then
+    if tech.frame_alive() and not excess then
         return false
     end
     local owned, count = {}, {}
@@ -1451,6 +1467,11 @@ local function try_more_factories(unit, entry)
         count[level] = (count[level] or 0) + 1
     end
     local limit = me.difficulty == "hard" and 3 or 4
+    local total_limit = limit * 3
+    if excess then
+        limit = limit + excess_factories
+        total_limit = total_limit + excess_factories
+    end
     -- From tier 2 an air factory first, if the seat has none (user's rule:
     -- aircraft are useful whatever the map; with the enemy across water the
     -- line order put air behind ships and hover, and none was ever built):
@@ -1469,7 +1490,7 @@ local function try_more_factories(unit, entry)
         end
         if air ~= nil and build_in_city(unit, air) then
             mark("factory")
-            print("air factory: " .. air.name)
+            print("air factory: " .. air.name .. (excess and " (metal in excess)" or ""))
             return true
         end
     end
@@ -1479,7 +1500,7 @@ local function try_more_factories(unit, entry)
     for _, n in pairs(count) do
         total = total + n
     end
-    if total >= limit * 3 then
+    if total >= total_limit then
         return false
     end
     local best, best_score
@@ -1509,7 +1530,7 @@ local function try_more_factories(unit, entry)
     end
     if build_in_city(unit, best) then
         mark("factory")
-        print("another factory: " .. best.name)
+        print("another factory: " .. best.name .. (excess and " (metal in excess)" or ""))
         return true
     end
     return false
@@ -1789,6 +1810,97 @@ local function try_scout_lab(unit, entry)
 end
 
 -- Helps the top factory with what it is making.
+-- Metal in excess (user's rule): builders help the factories, spread
+-- over them: the busy factory of the top tier (else any tier) with the
+-- fewest helpers, at most four on one, the nearest among equals.
+local assist_most = 4
+builders.assisting = {} -- builder id -> {id of the factory it helps, tick}
+
+local function helpers_of(factory_id)
+    local count = 0
+    for builder_id, job in pairs(builders.assisting) do
+        if world.own[builder_id] == nil or me.tick - job.tick > 30 * 30 then
+            builders.assisting[builder_id] = nil
+        elseif job.id == factory_id then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function try_excess_assist(unit, entry)
+    if entry.commander or not economy.metal_excess() or economy.need() == "energy" then
+        return false
+    end
+    local job = builders.assisting[unit.id]
+    local current = job and world.own[job.id]
+    if current ~= nil and not util.free(current) and not util.free(unit) then
+        job.tick = me.tick
+        builders.parked[unit.id] = me.tick
+        return true
+    end
+    builders.assisting[unit.id] = nil
+    local at = util.pos(unit)
+    local tier = world.tier
+    local best, best_key
+    for pass = 1, 2 do
+        for _, factory in ipairs(world.select(function(u, f)
+            return f.factory and world.finished(u) and not util.free(u)
+                and (pass == 2 or catalog.factory_tier(f) == tier)
+        end)) do
+            local helpers = helpers_of(factory.id)
+            local where = util.pos(factory)
+            if helpers < assist_most and where ~= nil and at ~= nil and reaches_work(unit, factory) then
+                local key = helpers * 100000 + util.dist(at, where)
+                if best_key == nil or key < best_key then
+                    best, best_key = factory, key
+                end
+            end
+        end
+        if best ~= nil then
+            break
+        end
+    end
+    if best ~= nil and unit:guard(best) then
+        builders.assisting[unit.id] = {id = best.id, tick = me.tick}
+        builders.parked[unit.id] = me.tick
+        builders.excess_helpers = (builders.excess_helpers or 0) + 1
+        return true
+    end
+    return false
+end
+
+-- Metal in excess (user's rule): metal storage of the seat's tier soaks it
+-- up, one every thirty seconds, up to four minutes of income (20 000 at
+-- least) in the stores; else the highest tier there is.
+local function try_excess_storage(unit, entry)
+    if not economy.metal_excess() or recently("excess storage", 30) then
+        return false
+    end
+    local e = economy.now
+    if e.metal_cap >= math.max(20000, e.metal_income * 240) then
+        return false
+    end
+    local best, best_key
+    for _, option in ipairs(catalog.buildable(entry, function(o) return o.metal_storage and not o.water_only end)) do
+        local tier = math.max(1, option.tier)
+        local key = (tier == world.tier and 1000000 or tier * 1000)
+            + option.metal_capacity / math.max(1, option.cost)
+        if economy.affords(option, 60) and (best_key == nil or key > best_key) then
+            best, best_key = option, key
+        end
+    end
+    if best == nil then
+        return false
+    end
+    if build_in_city(unit, best) then
+        mark("excess storage")
+        print("storage: " .. best.name .. " (metal in excess)")
+        return true
+    end
+    return false
+end
+
 local function try_assist(unit, reach)
     local tier = world.tier
     local at = util.pos(unit)
@@ -2162,6 +2274,7 @@ builders.repair_tick = {}   -- builder id -> tick it was sent to repair
 builders.repair_failed = {} -- "builder>target" -> tick the repair came to nothing
 local repair_value = 5000
 local repairers_each = 3
+local commander_repair_reach = 900
 -- The commander is mended from below 75 % health, by more builders: it
 -- walks back to the base and waits there until mended
 -- (builders.commander_mending).
@@ -2230,10 +2343,21 @@ local function send_repairs()
             builders.repairing[builder_id] = nil
         end
     end
+    -- The commander too (user's rule), for what lies by the base, when it
+    -- is not running nor waiting to be mended itself; hit while at it, it
+    -- runs (builders.on_damaged).
+    local home = base()
+    local function commander_free(u)
+        local at = util.pos(u)
+        return builders.fleeing == nil and not builders.commander_mending and builders.evacuating == nil
+            and at ~= nil and home ~= nil and util.dist(at, home) <= commander_repair_reach
+    end
     local free = world.select(function(u, e)
-        return e.mobile_builder and not e.commander and world.finished(u) and builders.repairing[u.id] == nil
-            and (e.decoy or builders.running[u.id] == nil) and alone_on_frame(u) == nil
+        return e.mobile_builder and (not e.commander or commander_free(u)) and world.finished(u)
+            and builders.repairing[u.id] == nil
+            and (e.decoy or e.commander or builders.running[u.id] == nil) and alone_on_frame(u) == nil
             and builders.self_mend[u.id] == nil
+            and (builders.medic_job == nil or builders.medic_job[u.id] == nil)
     end)
     for _, target in ipairs(targets) do
         local where = util.pos(target)
@@ -2249,6 +2373,9 @@ local function send_repairs()
                 if (failed ~= nil and me.tick - failed < 30 * 60) or unit.id == target.id
                     or (mobile and not util.free(unit) and builders.parked[unit.id] == nil)
                     or not reaches_work(unit, target) then
+                    d = 1e9
+                end
+                if catalog.of(unit).commander and (home == nil or util.dist(where, home) > commander_repair_reach) then
                     d = 1e9
                 end
                 -- Decoys go first: they never leave an emergency repair.
@@ -2343,6 +2470,7 @@ local function run_from(unit, threat, distance)
 end
 
 local function flee(unit, threat)
+    builders.repairing[unit.id] = nil
     run_from(unit, threat, 1800)
     if builders.fleeing == nil then
         print(string.format("commander flees from %.0f,%.0f", threat.x, threat.z))
@@ -2472,7 +2600,8 @@ end
 -- same dangers and from enemy commanders and decoys, but aircraft do not
 -- move them. A decoy on an emergency repair never runs.
 local function guard_decoy(unit, entry)
-    if builders.repairing[unit.id] ~= nil then
+    if builders.repairing[unit.id] ~= nil
+        or (builders.medic_job ~= nil and builders.medic_job[unit.id] ~= nil) then
         builders.running[unit.id] = nil
         return false
     end
@@ -2543,6 +2672,12 @@ local function builder_threat(unit, entry)
 end
 
 local function guard_builder(unit, entry)
+    -- On an emergency repair a builder does not run, under fire or not
+    -- (user's rule).
+    if builders.repairing[unit.id] ~= nil then
+        builders.running[unit.id] = nil
+        return false
+    end
     local threat = builder_threat(unit, entry)
     if threat ~= nil and not may_leave_frame(unit) then
         threat = nil
@@ -2746,6 +2881,54 @@ local function commander_turn(unit, entry)
     return leashed("assist", unit, try_assist, 800)
 end
 
+-- A builder with nothing else to do mends any own unit hurt near it,
+-- whatever its health (user's rule): the most hurt within 700 units, at
+-- most two builders on one.
+local mend_near_reach = 700
+builders.fixed = 0 -- such repairs, for the seat log
+local fixing = {} -- builder id -> {id of the unit it mends, tick}
+
+local function fixers(target_id)
+    local count = 0
+    for builder_id, job in pairs(fixing) do
+        if world.own[builder_id] == nil or me.tick - job.tick > 30 * 20 then
+            fixing[builder_id] = nil
+        elseif job.id == target_id then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function try_mend_near(unit, entry)
+    if entry.commander then
+        return false
+    end
+    local at = util.pos(unit)
+    if at == nil then
+        return false
+    end
+    local best, best_health
+    for _, row in ipairs(world.friends_in(at, mend_near_reach)) do
+        local other, kind = row.unit, row.entry
+        if other ~= nil and kind ~= nil and world.own[other.id] ~= nil and other.id ~= unit.id
+            and kind.mobile and not kind.air and world.finished(other) then
+            local health = util.num(other.health_percent)
+            if health > 0 and health < 98 and (best_health == nil or health < best_health)
+                and builders.crew_for(other) + fixers(other.id) < 2 then
+                best, best_health = other, health
+            end
+        end
+    end
+    if best ~= nil and reaches_work(unit, best) and unit:repair(best) then
+        builders.parked[unit.id] = me.tick
+        fixing[unit.id] = {id = best.id, tick = me.tick}
+        builders.fixed = builders.fixed + 1
+        return true
+    end
+    return false
+end
+
 -- Dispatch ------------------------------------------------------------------
 
 local function builder_turn(unit, entry)
@@ -2835,7 +3018,22 @@ local function builder_turn(unit, entry)
             end
         end
     end
+    -- Metal in excess (user's rule): new factories come before the economy
+    -- tasks, not among the spare-time ones after them.
+    if not starving and economy.metal_excess() then
+        for index, name in ipairs(order) do
+            if name == "economy" then
+                table.insert(order, index, "excess-assist")
+                table.insert(order, index, "excess-storage")
+                table.insert(order, index, "factory")
+                break
+            end
+        end
+    end
     local tasks = {
+        factory = try_more_factories,
+        ["excess-storage"] = try_excess_storage,
+        ["excess-assist"] = try_excess_assist,
         ["commander-upgrade"] = try_commander_upgrade,
         ["shot-storage"] = try_shot_storage,
         ["anti-air"] = try_anti_air,
@@ -2858,6 +3056,7 @@ local function builder_turn(unit, entry)
         end
     end
     local rest = {
+        {"mend", try_mend_near},
         {"air base", try_air_base},
         {"defence", try_defence}, {"jammer", try_jammer},
         {"factory", try_more_factories}, {"upgrade", try_upgrade_extractor},
@@ -2886,7 +3085,7 @@ local function builder_turn(unit, entry)
         end
         rest = first
     end
-    local spare = {wreck = true, help = true, sweep = true, assist = true}
+    local spare = {wreck = true, help = true, sweep = true, assist = true, mend = true}
     for _, task in ipairs(rest) do
         if (not starving or spare[task[1]]) and task[2](unit, entry) then
             return true
@@ -3118,7 +3317,10 @@ function builders.step()
                 builders.mend_walk = nil
             end
         elseif entry.decoy then
-            busy = guard_decoy(unit, entry) or mend_builder(unit, entry)
+            -- A decoy mending patients (a medic, army.lua) is left to it.
+            busy = guard_decoy(unit, entry)
+                or (builders.medic_job ~= nil and builders.medic_job[unit.id] ~= nil)
+                or mend_builder(unit, entry)
         else
             busy = guard_builder(unit, entry) or mend_builder(unit, entry)
         end
@@ -3254,6 +3456,18 @@ function builders.on_damaged(unit, entry, attacker)
     end
     local from = attacker ~= nil and util.pos(attacker) or nil
     builders.hit[unit.id] = {tick = me.tick, x = from and from.x, z = from and from.z}
+    -- The commander hit on an emergency repair drops it and runs (user's
+    -- rule; builders and decoys stay on theirs).
+    if entry.commander and builders.repairing[unit.id] ~= nil then
+        builders.repairing[unit.id] = nil
+        if from ~= nil and builders.evacuating ~= "stand" then
+            flee(unit, from)
+        else
+            send_home(unit)
+        end
+        print("commander leaves an emergency repair under fire")
+        return
+    end
     if entry.commander and util.num(unit.health_percent) < 50 then
         local last = builders.retreat[unit.id]
         if last == nil or me.tick - last > 30 * 10 then
