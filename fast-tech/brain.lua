@@ -85,8 +85,9 @@ local function status()
     for index = 1, math.min(8, #names) do
         top[#top + 1] = string.format("%s %d", names[index], made[names[index]])
     end
-    print(string.format("army: %s | escorts %d, enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d",
-        table.concat(top, ", "), escorts, tostring(world.enemy_air == true), util.count(army.mending),
+    print(string.format("army: %s | escorts %d, fighter escorts %d (backed off %d), enemy aircraft seen %s | repair: units falling back %d (sent %d, to medics %d, fought on %d), builders home %d, medics %d",
+        table.concat(top, ", "), escorts, army.fighter_escorts or 0, army.stepped.fighters_back or 0,
+        tostring(world.enemy_air == true), util.count(army.mending),
         army.mended_count or 0, army.field_count or 0, army.fought_on or 0, util.count(builders.self_mend),
         #world.select(function(_, e) return e.medic end)))
     print(string.format(

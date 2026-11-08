@@ -39,6 +39,16 @@ local function soldiers()
     return world.select(function(u, e) return e.combat and world.finished(u) end)
 end
 
+-- What a unit weighs against others: its threat level, at least 1 (a
+-- level-3 gun is worth three).
+local function strength(entry)
+    return math.max(1, entry.threat)
+end
+
+local function is_fighter(kind)
+    return kind ~= nil and kind.air and (kind.fighter or kind.tags.fighter == true)
+end
+
 local function worth(list)
     local total = 0
     for _, unit in ipairs(list) do
@@ -385,10 +395,9 @@ local function step_escort(unit, entry, leaders, wave_leaders)
     end
 end
 
-local function step_escorts(escorts)
-    if #escorts == 0 then
-        return
-    end
+-- The ground units of the seat as rows {x, z, entry}, and those out in
+-- waves by wave number (`by_wave`, the numbers sorted in `members`).
+local function ground_waves()
     local leaders, by_wave, members = {}, {}, {}
     for _, unit in ipairs(soldiers()) do
         local at = util.pos(unit)
@@ -408,6 +417,13 @@ local function step_escorts(escorts)
         end
     end
     table.sort(members)
+    return leaders, by_wave, members
+end
+
+local function step_escorts(escorts, leaders, by_wave, members)
+    if #escorts == 0 then
+        return
+    end
     -- Escorts already given to a wave that still stands.
     local count = {}
     for _, unit in ipairs(escorts) do
@@ -449,6 +465,131 @@ local function step_escorts(escorts)
             army.escort_wave[id] = nil
         end
     end
+end
+
+-- Fighters escort the waves too (user's rule): anti-air over the units
+-- where it is needed. A fighter sent out with a wave stays with it; one
+-- at home joins the wave with the fewest fighters while it has fewer than
+-- one for every six of its units (two at least). It patrols 150 units
+-- behind the wave's middle and goes for enemy aircraft within 1 500 of it.
+-- Enemy anti-air on the ground that outweighs half the fighters there
+-- (threat levels counted) sends it 700 units back behind the wave, away
+-- from those guns. With no wave out, fighters stay with the home army.
+local fighter_behind = 150
+local fighter_reach = 1500
+local fighter_back = 700
+army.fighter_escorts = 0 -- fighters with a wave, for the seat log
+
+local function middle(rows)
+    local x, z = 0, 0
+    for _, row in ipairs(rows) do
+        x, z = x + row.x, z + row.z
+    end
+    return {x = x / #rows, z = z / #rows}
+end
+
+local function step_fighter(unit, entry, rows, fighters_at)
+    local at = util.pos(unit)
+    if at == nil then
+        return
+    end
+    local mid = middle(rows)
+    local guns, nearest, nearest_d = 0, nil, nil
+    for _, row in ipairs(world.enemies_near(at, 1100)) do
+        local kind = row.entry
+        if kind ~= nil and not kind.air and world.anti_air(kind) then
+            guns = guns + strength(kind)
+            local d = util.dist(at, row)
+            if nearest_d == nil or d < nearest_d then
+                nearest, nearest_d = row, d
+            end
+        end
+    end
+    if guns > 0 then
+        local own = 0
+        for _, row in ipairs(fighters_at) do
+            if util.dist(at, row) <= 1100 then
+                own = own + strength(row.entry)
+            end
+        end
+        if guns * 2 > own then
+            local back = util.clamp(behind_of(mid, nearest, fighter_back), 64)
+            local last = army.escort_moved[unit.id]
+            if last == nil or me.tick - last >= 30 * 4 or util.free(unit) then
+                army.escort_moved[unit.id] = me.tick
+                army.patrolled[unit.id] = nil
+                army.aimed[unit.id] = nil
+                unit:move(back)
+                army.stepped.fighters_back = (army.stepped.fighters_back or 0) + 1
+            end
+            return
+        end
+    end
+    local target = world.best_target(mid, fighter_reach, entry)
+    if target ~= nil then
+        attack(unit, target)
+        return
+    end
+    patrol(unit, behind_of(mid, nil, fighter_behind))
+end
+
+-- Returns the fighters that do not escort a wave.
+local function step_fighters(fighters, by_wave, members)
+    local rest = {}
+    army.fighter_escorts = 0
+    if #fighters == 0 then
+        return rest
+    end
+    if army.emergency ~= nil or #members == 0 then
+        for _, unit in ipairs(fighters) do
+            army.escort_wave[unit.id] = nil
+            rest[#rest + 1] = unit
+        end
+        return rest
+    end
+    local count, fighters_at = {}, {}
+    for _, unit in ipairs(fighters) do
+        local at = util.pos(unit)
+        if at ~= nil then
+            fighters_at[#fighters_at + 1] = {x = at.x, z = at.z, entry = catalog.of(unit)}
+        end
+        local wave = army.escort_wave[unit.id]
+        if wave == nil and army.attacking[unit.id] then
+            wave = army.wave_of[unit.id]
+        end
+        if wave ~= nil and by_wave[wave] == nil then
+            wave = nil
+        end
+        army.escort_wave[unit.id] = wave
+        if wave ~= nil then
+            count[wave] = (count[wave] or 0) + 1
+        end
+    end
+    for _, unit in ipairs(fighters) do
+        if army.escort_wave[unit.id] == nil and not army.attacking[unit.id] then
+            local best, best_share
+            for _, wave in ipairs(members) do
+                local units = #by_wave[wave]
+                local wanted = math.max(2, (units + 5) // 6)
+                local have = count[wave] or 0
+                if have < wanted and (best_share == nil or have / units < best_share) then
+                    best, best_share = wave, have / units
+                end
+            end
+            if best ~= nil then
+                army.escort_wave[unit.id] = best
+                count[best] = (count[best] or 0) + 1
+            end
+        end
+        local wave = army.escort_wave[unit.id]
+        if wave ~= nil then
+            army.fighter_escorts = army.fighter_escorts + 1
+            step_fighter(unit, catalog.of(unit), by_wave[wave], fighters_at)
+        else
+            rest[#rest + 1] = unit
+        end
+    end
+    return rest
 end
 
 -- Each unit at `from` turns on the best target it can hit near `centre`;
@@ -831,10 +972,7 @@ end
 -- Aircraft attacking a base pull back when the anti-air around them is
 -- too strong for their number: they wait at home a minute and leave with
 -- the next wave. Bombers stay (they go for the anti-air), and scouts are
--- not soldiers. Strength is the threat level: a level-3 gun is worth three.
-local function strength(entry)
-    return math.max(1, entry.threat)
-end
+-- not soldiers. Strength is the threat level (`strength`, above).
 
 local function pull_back_aircraft(attackers)
     local keep = {}
@@ -1709,9 +1847,6 @@ end
 -- fighters within 1 400 than own fighters there, by threat level, they
 -- fly to the nearest own or allied anti-air within 5 000 (else home) and
 -- sit out the next minute, like aircraft pulling back from anti-air.
-local function is_fighter(kind)
-    return kind ~= nil and kind.air and (kind.fighter or kind.tags.fighter == true)
-end
 
 local function flee_fighters()
     local strikers = world.select(function(u, e)
@@ -1947,7 +2082,7 @@ function army.step()
     util.guard("air repair", send_aircraft_to_pads)
     util.guard("facilities", note_facilities)
     util.guard("emergency", watch_emergency)
-    local home, attackers, escorts, rescuers = {}, {}, {}, {}
+    local home, attackers, escorts, rescuers, fighters = {}, {}, {}, {}, {}
     for id, since in pairs(army.mending) do
         local unit = world.own[id]
         local to = army.mend_to[id]
@@ -2014,6 +2149,8 @@ function army.step()
             rescuers[#rescuers + 1] = unit
         elseif catalog.of(unit).tags.escort then
             escorts[#escorts + 1] = unit
+        elseif is_fighter(catalog.of(unit)) then
+            fighters[#fighters + 1] = unit
         elseif army.attacking[unit.id] then
             attackers[#attackers + 1] = unit
         else
@@ -2039,7 +2176,19 @@ function army.step()
     util.guard("rescuers", step_rescuers, rescuers)
     util.guard("field", field_zone, attackers)
     util.guard("medics", step_medics)
-    util.guard("escorts", step_escorts, escorts)
+    local leaders, by_wave, members = ground_waves()
+    util.guard("escorts", step_escorts, escorts, leaders, by_wave, members)
+    local rest = fighters
+    util.guard("fighters", function()
+        rest = step_fighters(fighters, by_wave, members)
+    end)
+    for _, unit in ipairs(rest) do
+        if army.attacking[unit.id] then
+            attackers[#attackers + 1] = unit
+        else
+            home[#home + 1] = unit
+        end
+    end
     for id in pairs(army.escort_moved) do
         if world.own[id] == nil then
             army.escort_moved[id] = nil

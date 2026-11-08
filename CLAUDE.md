@@ -349,8 +349,33 @@ error is logged once and the seat keeps playing).
     builders); a Big Bertha shelled empty ground; more ground defences
     (Sentinel/Gaat, Guardian/Punisher, Annihilator/Doomsday) by the
     economy and facilities. See state below.
+32. User's 5-seat Core Contingency game (2026-11-08, 32 000 units a
+    side): a slide show (the user only proposed excluding huge maps;
+    done, then removed at the user's word: the brain plays every map);
+    fighters must escort the waves as anti-air and back off from enemy
+    anti-air.
+    See state below.
 
 ## State and open points
+
+- User's 5-seat Core Contingency game (2026-11-08, all Fast Tech, rich,
+  ~33 min, map 2 000 × 2 000 cells = 32 000 units a side, 4 M cells; no
+  script errors): a slide show. Measured headless, 9 000 ticks on that
+  map: built-in vs built-in 17.2 s, Fast Tech + built-in 18.4 s, two Fast
+  Tech 19.7 s: the brain adds ~7 % a seat at the start, the rest is the
+  engine (the user's log: 180 606 vertices, anti-aliasing 8×8). A
+  refusal of huge maps in `hooks.fits` was added and removed again: the
+  user only proposed it. (A `fits` refusal hands the seat to the built-in
+  player; a headless `--brain-match` with such a seat does not start.) In the game: ground towers 16-17 a seat, scattered
+  80-396 units, `air chases dropped` still 0, no contact shelling.
+  - Fighters escort waves (item 32): `step_fighters`/`step_fighter` in
+    army.lua, `ground_waves` shared with the ground escorts,
+    `army.escort_wave` for both; `is_fighter` and `strength` moved to the
+    top of army.lua (Lua locals must be declared before use). Tests, 8
+    matches: 5 of 5 decided vs built-in won, Core Prime seed 99 a draw far
+    ahead (277 units vs 171), mirrors Seven Islands draw, Atlantian States
+    won by seat 1; fighter escorts up to 10 a seat, backed off up to 8; no
+    errors.
 
 - User's 8-seat Atlantian States game (2026-11-08, all Fast Tech, rich,
   ~37 min, 4 Arm vs 4 Core, no script errors; seats 2 and 8 dead by 30

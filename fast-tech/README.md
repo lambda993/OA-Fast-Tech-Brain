@@ -385,6 +385,16 @@ within 1 500 units it goes back to the rally point (there it still walks out
 of the reach of ground guns). Units with anti-air on top of another role keep
 that role.
 
+**Fighters escort the waves** (user's rule). A fighter sent out with a
+wave stays with it; one at home joins the wave with the fewest fighters
+while that wave has fewer than one for every six of its ground units (two
+at least). It patrols 150 units behind the wave's middle and goes for enemy
+aircraft within 1 500 units of it. Enemy anti-air on the ground within 1 100
+units that outweighs half the fighters there (threat levels counted) sends
+it 700 units back behind the wave, away from those guns. With no wave out,
+or with the base in danger, fighters stay with the home army. The `army:`
+line counts them (`fighter escorts N (backed off M)`).
+
 **Scatter.** Under shells and bombs (a shooter with the `artillery` or `aoe`
 tag, a bomber, any weapon with a blast of 40 or more; a hit by an unseen
 shooter counts when two units within 200 units are hit within three ticks)
