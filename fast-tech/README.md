@@ -124,8 +124,9 @@ to edge with one, never only corner to corner; the families are a table in
 `lua/city.lua`, matched by name, because Escalation gives the bonus in unit
 scripts. No building but an extractor stands on metal, and none but a
 geothermal plant on or within two cells of a geothermal vent (a lab on
-a vent once took a seat's geothermal plant away). Radar and defences
-take the blocks nearest the front. When the ground is too rough for the
+a vent once took a seat's geothermal plant away). Radar takes the blocks
+nearest the front; ground defences go by the economy and the facilities
+(below). When the ground is too rough for the
 grid, a building goes anywhere near the base instead.
 
 **Builders.** In the AI table Escalation's builders differ: a construction
@@ -147,7 +148,13 @@ and artillery. Builders walk out to ground the seat has never seen before
 they build there, and give up a walk after 40 seconds plus one for every
 20 world units of the way (far deposits) or when the engine reports no
 path. With metal piling up, builders help the next lab's frame first,
-then add factories, then help the factories, before smaller work. A
+then add factories, then help the factories, before smaller work. The
+next lab's frame takes at most four builders, two while the economy is
+short of anything or a store is under half; the others see to the economy
+(user's game: eight builders on an Ultra Aircraft Hangar, the energy
+stalling, free deposits left around it). Free deposits within 1 200 units
+are taken even when the metal income is above the tier's goal (not on
+metal maps): extractors are cheap. A
 builder parked by the engine (hovercraft "park", aircraft land)
 counts as free, and so does one left on a guard or a move the brain did
 not order. Frames are finished before new ones are started: a builder
@@ -365,11 +372,26 @@ among the attackers. No wave leaves until no armed enemy is in sight within
 after N s`).
 
 **Escorts.** Mobile anti-air (`escort`) stays out of the waves and gets no
-attack orders: it fires at will at aircraft in reach from where it stands. It
-keeps behind the nearest own fighter of its kind, on the side away from the
-army's target, and walks out of the reach of any ground enemy's weapons. With
-no fighter within 1 500 units it goes back to the rally point. Units with
-anti-air on top of another role keep that role.
+attack orders: it fires at will at aircraft in reach from where it stands.
+Each escort is given to a wave out, the one with the fewest escorts for the
+units of it the escort can follow (user's game: escorts stayed with the units
+at home, or walked out of every ground gun's reach, far behind the
+skirmishers, and enemy gunships tore the waves apart). It keeps 140 units
+behind the nearest of them, 90 with enemy aircraft within 1 500, on the side
+away from the army's target; with an armed ground enemy in reach it stands
+260 units behind that unit, away from the enemy, and no further. With no
+wave out it keeps behind the nearest own fighter of its kind, and with none
+within 1 500 units it goes back to the rally point (there it still walks out
+of the reach of ground guns). Units with anti-air on top of another role keep
+that role.
+
+**Scatter.** Under shells and bombs (a shooter with the `artillery` or `aoe`
+tag, a bomber, any weapon with a blast of 40 or more; a hit by an unseen
+shooter counts when two units within 200 units are hit within three ticks)
+the soldiers within 450 units of the hit move 180-300 units out from their
+middle, each its own way with some chance in it, then fight on after five
+seconds (user's rule). At most once in eight seconds round one place
+(`scattered N` in the `distance:` line).
 
 **Targets.** Each unit shoots only what its weapons can hit: anti-air
 weapons at aircraft, other weapons at the rest, and the table narrows that
@@ -381,7 +403,16 @@ water weapon cannot fire from under the sea, so it takes a target out on
 the water only when there is dry ground within its reach of it, on its
 side.
 Otherwise a target on the unit's priority list is fair even if ignored, and
-a tier on that list only orders targets. Paralyzers ignore immune units with
+a tier on that list only orders targets. The same rules apply to radar and
+sonar contacts, which have no type: a contact well above the ground is an
+aircraft, one under the sea over sea floor is underwater (Hurricanes circled
+a sonar contact, an underwater extractor, they could never bomb). Waves are
+not sent to remembered underwater buildings, nor to where aircraft or
+underwater units were seen. The engine's own target pick on an attack-move
+lets ground weapons take low-flying aircraft (construction aircraft at
+work), which they hardly hit: a unit without anti-air whose attack is on an
+aircraft in the air gets the best ground target near it, else steps on
+(`air chases dropped N` in the `distance:` line). Paralyzers ignore immune units with
 all their weapons, and economy buildings (tag `economy`, user's rule: a
 stunned generator or store loses nothing worth it). An area weapon never fires at a ground target with an own
 or allied ground unit within its blast, half of the weapon's
@@ -398,7 +429,17 @@ and the rest. Aircraft attacking a base pull back to the front of their own
 base when the anti-air around them outweighs half their number (threat levels
 counted), and sit out the next minute; bombers stay. While the seat has
 strike aircraft (scouts do not count), its long-range guns fire at anti-air
-in range first, seen or remembered, then follow their list.
+in range first, seen or remembered, then follow their list. With nothing
+seen or remembered in range a gun shells a radar or sonar contact only if
+it is on the ground and has stood still for fifteen seconds (sampled every
+three seconds, 96-unit squares): a Big Bertha shelled where moving blips
+had been, empty ground by the time the shell came down. Log: `<gun> shells
+<building>|remembered building|still contact at x,z`.
+
+Gunships and bombers flee enemy fighters (user's rule): with more enemy
+fighters within 1 400 units than own fighters there (threat levels
+counted), they fly to the nearest own or allied anti-air within 5 000 units,
+else home, and sit out the next minute (`aircraft flee enemy fighters: N`).
 
 **Cloak.** Units that can cloak by order (`invisible` with a cost at rest:
 decoys, Infiltrator, Parasite, Catalyst, Aquifer, Forge, Vault, heavy
@@ -631,6 +672,20 @@ within a minute or so, builders add metal storage (first) or energy
 storage, until the stores hold about two minutes of income; for metal
 at most 2 000 plus twenty seconds of income, so a large late income is
 spent rather than stored.
+
+**Ground defences.** Towers that hit ground units (Sentinel/Gaat,
+Guardian/Punisher, Annihilator/Doomsday Machine, Orion/Viper, Toaster,
+Immolator, Warden, Bastion and their kin; not anti-air, long-range
+artillery, nukes, mines or upgrades). The seat wants 2/4/8/12/16 of them at
+tiers 1-5, one more for every four economy buildings and facilities within
+2 500 units of the base, up to twice the tier's number. Before, every armed
+building counted (the many anti-air towers filled the count) and at most four
+were wanted, so hardly any went up. The kind owned least is built first, the
+cheapest among those, out of what a minute of income pays for; the light
+L.L.T. only when nothing heavier is affordable. Each goes by the economy
+building or facility with the most worth of such buildings within 500 units
+for each tower already guarding them (`defence: <name> by x,z`). The
+`defence:` line each minute counts them (`ground N`).
 
 **More factories.** With metal and energy to spare and the next lab not
 going up, builders add factories of the top tier or the one below, up to

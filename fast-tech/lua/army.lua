@@ -65,7 +65,8 @@ local artillery_margin = 64
 local apart_limit = 400
 army.backed = {} -- unit id -> tick it last stepped away
 army.escort_moved = {} -- escort id -> tick it was last sent behind its leader
-army.stepped = {skirmisher = 0, artillery = 0, apart = 0, escort = 0} -- counted for the seat log
+army.stepped = {skirmisher = 0, artillery = 0, apart = 0, escort = 0, scattered = 0} -- counted for the seat log
+local scatter_busy = 30 * 5 -- a scattered unit is left to its move this long
 army.targets_kept, army.searched = 0, 0 -- targets kept and searched, for the seat log
 
 local function away_from(unit, at, from, step, wait)
@@ -265,15 +266,24 @@ end
 
 -- Escorts (tag `escort`: mobile anti-air) stay out of the waves and get no
 -- attack orders: they fire at will at aircraft in reach, from where they
--- stand. Under the guns of a ground enemy they walk out of that reach, as
--- artillery does. Otherwise each stays behind the nearest own fighter of its
--- kind, on the side away from the army's target, and goes back to the rally
--- point when none is within 1 500.
+-- stand. Each escort is given to a wave (user's game: waves fought with no
+-- anti-air near them, the escorts staying with the units at home or far
+-- behind, and enemy gunships tore the skirmishers apart): the wave with
+-- the fewest escorts for its size that has units it can follow. It keeps
+-- close behind the nearest of them, on the side away from the enemy:
+-- 140 units, 90 with enemy aircraft near. Under the guns of a ground enemy
+-- it steps back, but no further than 260 units behind that unit, out of
+-- the fight but still covering it. With no wave it stays behind the
+-- nearest own fighter of its kind, or goes back to the rally point when
+-- none is within 1 500.
 local escort_search = 1200
 local escort_group = 1500
-local escort_behind = 220
-local escort_slack = 200
-local escort_wait = 30 * 8
+local escort_behind = 140
+local escort_close = 90
+local escort_cover = 260
+local escort_slack = 120
+local escort_wait = 30 * 4
+army.escort_wave = {} -- escort id -> wave number it covers
 
 local function can_lead(escort, kind)
     if kind.tags.escort or kind.air or not kind.combat then
@@ -287,10 +297,46 @@ local function can_lead(escort, kind)
     return (escort.tags.ship == true) == (kind.tags.ship == true or kind.tags.submarine == true)
 end
 
-local function step_escort(unit, entry, leaders)
+-- The point `behind` units behind `leader`, away from `enemy` (or the
+-- army's target).
+local function behind_of(leader, enemy, behind)
+    local dx, dz = 0, 0
+    local from = enemy or army.target
+    if from ~= nil then
+        dx, dz = leader.x - from.x, leader.z - from.z
+    end
+    local length = math.max(1, math.sqrt(dx * dx + dz * dz))
+    return {x = leader.x + dx / length * behind, z = leader.z + dz / length * behind}
+end
+
+local function nearest_leader(entry, at, leaders)
+    local leader, leader_d
+    for _, row in ipairs(leaders) do
+        if can_lead(entry, row.entry) then
+            local d = util.dist(at, row)
+            if leader_d == nil or d < leader_d then
+                leader, leader_d = row, d
+            end
+        end
+    end
+    return leader, leader_d
+end
+
+local function step_escort(unit, entry, leaders, wave_leaders)
     local at = util.pos(unit)
     if at == nil then
         return
+    end
+    local leader, leader_d
+    if wave_leaders ~= nil then
+        leader, leader_d = nearest_leader(entry, at, wave_leaders)
+    end
+    local with_wave = leader ~= nil
+    if leader == nil then
+        leader, leader_d = nearest_leader(entry, at, leaders)
+        if leader ~= nil and leader_d > escort_group then
+            leader = nil
+        end
     end
     local worst, worst_step
     for _, row in ipairs(world.enemies_near(at, escort_search)) do
@@ -301,33 +347,32 @@ local function step_escort(unit, entry, leaders)
             end
         end
     end
-    if worst ~= nil then
+    if worst ~= nil and leader == nil then
         if away_from(unit, at, worst, worst_step + 100, 30 * 5) then
             army.stepped.escort = army.stepped.escort + 1
         end
         return
     end
     local backed = army.backed[unit.id]
-    if no_way(unit) or (backed ~= nil and me.tick - backed < escort_wait) then
+    if no_way(unit) or (backed ~= nil and me.tick - backed < 30 * 5 and not util.free(unit)) then
         return
     end
-    local leader, leader_d
-    for _, row in ipairs(leaders) do
-        if can_lead(entry, row.entry) then
-            local d = util.dist(at, row)
-            if leader_d == nil or d < leader_d then
-                leader, leader_d = row, d
+    local point
+    if worst ~= nil then
+        -- Back behind the unit it covers, not out of reach of it.
+        point = behind_of(leader, worst, escort_cover)
+        if util.dist(at, point) > escort_slack and util.dist(at, worst) < util.dist(point, worst) then
+            army.stepped.escort = army.stepped.escort + 1
+        end
+    elseif leader ~= nil then
+        local air_near = false
+        for _, row in ipairs(world.enemies_near(leader, 1500)) do
+            if row.entry ~= nil and row.entry.air and row.entry.armed then
+                air_near = true
+                break
             end
         end
-    end
-    local point
-    if leader ~= nil and leader_d <= escort_group then
-        local dx, dz = 0, 0
-        if army.target ~= nil then
-            dx, dz = leader.x - army.target.x, leader.z - army.target.z
-        end
-        local length = math.max(1, math.sqrt(dx * dx + dz * dz))
-        point = {x = leader.x + dx / length * escort_behind, z = leader.z + dz / length * escort_behind}
+        point = behind_of(leader, nil, (with_wave and air_near) and escort_close or escort_behind)
     else
         point = rally_point()
     end
@@ -335,7 +380,7 @@ local function step_escort(unit, entry, leaders)
         local last = army.escort_moved[unit.id]
         if last == nil or me.tick - last >= escort_wait or util.free(unit) then
             army.escort_moved[unit.id] = me.tick
-            unit:move(util.clamp(util.around(point, (unit.id % 16) / 16, 80), 64))
+            unit:move(util.clamp(util.around(point, (unit.id % 16) / 16, 50), 64))
         end
     end
 end
@@ -344,16 +389,65 @@ local function step_escorts(escorts)
     if #escorts == 0 then
         return
     end
-    local leaders = {}
+    local leaders, by_wave, members = {}, {}, {}
     for _, unit in ipairs(soldiers()) do
         local at = util.pos(unit)
         local kind = catalog.of(unit)
         if at ~= nil and not kind.tags.escort and not kind.air then
-            leaders[#leaders + 1] = {x = at.x, z = at.z, entry = kind}
+            local row = {x = at.x, z = at.z, entry = kind}
+            leaders[#leaders + 1] = row
+            local wave = army.attacking[unit.id] and army.wave_of[unit.id] or nil
+            if wave ~= nil then
+                if by_wave[wave] == nil then
+                    by_wave[wave] = {}
+                    members[#members + 1] = wave
+                end
+                local list = by_wave[wave]
+                list[#list + 1] = row
+            end
+        end
+    end
+    table.sort(members)
+    -- Escorts already given to a wave that still stands.
+    local count = {}
+    for _, unit in ipairs(escorts) do
+        local wave = army.escort_wave[unit.id]
+        if wave ~= nil and by_wave[wave] == nil then
+            army.escort_wave[unit.id] = nil
+        elseif wave ~= nil then
+            count[wave] = (count[wave] or 0) + 1
         end
     end
     for _, unit in ipairs(escorts) do
-        step_escort(unit, catalog.of(unit), leaders)
+        local entry = catalog.of(unit)
+        if army.escort_wave[unit.id] == nil then
+            local best, best_share
+            for _, wave in ipairs(members) do
+                local followed = 0
+                for _, row in ipairs(by_wave[wave]) do
+                    if can_lead(entry, row.entry) then
+                        followed = followed + 1
+                    end
+                end
+                if followed > 0 then
+                    local share = (count[wave] or 0) / followed
+                    if best_share == nil or share < best_share then
+                        best, best_share = wave, share
+                    end
+                end
+            end
+            if best ~= nil then
+                army.escort_wave[unit.id] = best
+                count[best] = (count[best] or 0) + 1
+            end
+        end
+        local wave = army.escort_wave[unit.id]
+        step_escort(unit, entry, leaders, wave and by_wave[wave] or nil)
+    end
+    for id in pairs(army.escort_wave) do
+        if world.own[id] == nil then
+            army.escort_wave[id] = nil
+        end
     end
 end
 
@@ -717,7 +811,7 @@ local function push(attackers)
             if at ~= nil then
                 enemy, lost = pick(unit, at, entry.bomber and 1400 or 800)
             end
-            local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200)
+            local contact = enemy == nil and lost == nil and at and world.nearest_contact(at, 1200, entry)
             if keep_range(unit) then
                 -- Stepped back from a close enemy.
             elseif enemy ~= nil then
@@ -1358,6 +1452,7 @@ local function anti_air_in_reach(at, reach)
 end
 
 local function aim_guns()
+    world.track_contacts()
     local strike = has_strike_aircraft()
     for _, gun in ipairs(world.select(function(u, e) return e.artillery and world.finished(u) end)) do
         local last = army.gun_orders[gun.id]
@@ -1395,14 +1490,18 @@ local function aim_guns()
                             end
                         end
                     end
-                    -- Nothing remembered in range: a radar or sonar contact.
+                    -- Nothing remembered in range: a radar or sonar contact
+                    -- the gun can hit that stood still (a building); a
+                    -- moving one is gone by the time the shell lands.
+                    local what = best ~= nil and best.entry ~= nil and best.entry.name or "remembered building"
                     if best == nil then
-                        best = world.nearest_contact(at, reach)
+                        best = world.nearest_contact(at, reach, entry, true)
+                        what = "still contact"
                     end
                     if best ~= nil then
                         gun:attack_ground({x = best.x, z = best.z})
                         army.gun_orders[gun.id] = me.tick
-                        print(string.format("%s shells %.0f,%.0f", entry.name, best.x, best.z))
+                        print(string.format("%s shells %s at %.0f,%.0f", entry.name, what, best.x, best.z))
                     end
                 end
             end
@@ -1598,8 +1697,219 @@ local function busy(unit)
     if shelter ~= nil and me.tick - shelter < 30 * 10 then
         return true
     end
+    local scattered = army.scattered[unit.id]
+    if scattered ~= nil and me.tick - scattered < scatter_busy then
+        return true
+    end
     local chase = army.intercepting[unit.id]
     return chase ~= nil and me.tick - chase < 30 * 8
+end
+
+-- Gunships and bombers flee enemy fighters (user's rule): with more enemy
+-- fighters within 1 400 than own fighters there, by threat level, they
+-- fly to the nearest own or allied anti-air within 5 000 (else home) and
+-- sit out the next minute, like aircraft pulling back from anti-air.
+local function is_fighter(kind)
+    return kind ~= nil and kind.air and (kind.fighter or kind.tags.fighter == true)
+end
+
+local function flee_fighters()
+    local strikers = world.select(function(u, e)
+        return e.air and e.combat and not is_fighter(e) and not e.scout and world.finished(u)
+    end)
+    if #strikers == 0 then
+        return
+    end
+    local own_fighters = {}
+    for _, fighter in ipairs(world.select(function(u, e) return is_fighter(e) and world.finished(u) end)) do
+        local at = util.pos(fighter)
+        if at ~= nil then
+            own_fighters[#own_fighters + 1] = {x = at.x, z = at.z, entry = catalog.of(fighter)}
+        end
+    end
+    local fled = 0
+    for _, unit in ipairs(strikers) do
+        local at = util.pos(unit)
+        local last = army.sheltering[unit.id]
+        if at ~= nil and not army.air_mending[unit.id] and (last == nil or me.tick - last >= 30 * 10) then
+            local foes = 0
+            for _, row in ipairs(world.enemies_near(at, 1400)) do
+                if is_fighter(row.entry) then
+                    foes = foes + strength(row.entry)
+                end
+            end
+            if foes > 0 then
+                local own = 0
+                for _, row in ipairs(own_fighters) do
+                    if util.dist(at, row) <= 1400 then
+                        own = own + strength(row.entry)
+                    end
+                end
+                if foes > own then
+                    local shelter = nearest_anti_air(at, 5000) or world.front(200)
+                    unit:move(util.clamp(util.around(shelter, brain.random(1000) / 1000, 100), 64))
+                    army.sheltering[unit.id] = me.tick
+                    army.attacking[unit.id] = nil
+                    army.patrolled[unit.id] = nil
+                    army.aimed[unit.id] = nil
+                    army.grounded[unit.id] = me.tick
+                    fled = fled + 1
+                end
+            end
+        end
+    end
+    if fled > 0 then
+        print(string.format("aircraft flee enemy fighters: %d", fled))
+    end
+end
+
+-- Units without anti-air leave aircraft alone (user's rule): the engine's
+-- own target pick on a patrol lets ground weapons take low-flying aircraft
+-- (construction aircraft at work), which they hardly hit. A unit whose
+-- current attack is on an aircraft in the air gets the best ground target
+-- near it, else steps on toward where it was going.
+local function airborne(target)
+    local x, z = util.whole(target.x), util.whole(target.z)
+    local ok, ground = pcall(function() return game.map:ground(x, z) end)
+    if not ok or ground == nil then
+        return true
+    end
+    local surface = math.max(util.num(ground), util.num(game.map.sea_level))
+    return util.num(target.y) > surface + 24
+end
+
+local function drop_air_chases(units)
+    local dropped = 0
+    for _, unit in ipairs(units) do
+        local entry = catalog.of(unit)
+        local at = util.pos(unit)
+        if at ~= nil and not entry.anti_air and not entry.air and not army.mending[unit.id] then
+            local air_near = false
+            for _, row in ipairs(world.enemies_near(at, 900)) do
+                if row.entry ~= nil and row.entry.air then
+                    air_near = true
+                    break
+                end
+            end
+            if air_near then
+                -- The engine's attack may come behind a short move.
+                local orders = unit:orders()
+                local head, target = nil, nil
+                for index = 1, 2 do
+                    local order = type(orders) == "table" and orders[index] or nil
+                    if head == nil and order ~= nil and type(order.kind) == "string"
+                        and string.sub(order.kind, 1, 6) == "Attack" then
+                        head, target = order, order.target
+                    end
+                end
+                if head ~= nil and (type(target) == "userdata" or type(target) == "table") and target.x ~= nil then
+                    local kind = catalog.of(target)
+                    if kind ~= nil and kind.air and airborne(target) then
+                        army.aimed[unit.id] = nil
+                        local best = world.best_target(at, 800, entry)
+                        if best ~= nil then
+                            attack(unit, best)
+                        else
+                            local onward = army.attacking[unit.id] and army.target or rally_point()
+                            unit:move(util.clamp(util.toward(at, onward, 250), 64))
+                            army.scattered[unit.id] = me.tick
+                        end
+                        dropped = dropped + 1
+                    end
+                end
+            end
+        end
+    end
+    army.air_dropped = (army.air_dropped or 0) + dropped
+end
+
+-- Under shells and bombs (artillery, area weapons, any weapon with a wide
+-- blast) a wave scatters (user's rule): the soldiers within 450 units of
+-- the hit move 180-300 units out from their middle, each its own way
+-- with some chance in it, so that one shell hits as few as it can. Then
+-- they fight on. At most once in eight seconds round one place. A hit by
+-- an unseen shooter counts when two units 200 units apart are hit within
+-- three ticks of each other: one blast.
+army.scattered = {} -- unit id -> tick it scattered
+army.scatters = {}  -- {x, z, tick} of recent scatters
+local unknown_hits = {} -- {x, z, tick} of recent hits from unseen shooters
+local scatter_reach = 450
+local scatter_again = 30 * 8
+local scatter_min_splash = 40
+
+local function splashes(kind)
+    return kind ~= nil and (kind.tags.artillery or kind.tags.aoe or kind.bomber
+        or (kind.splash or 0) >= scatter_min_splash)
+end
+
+local function scatter(at)
+    local keep = {}
+    for _, done in ipairs(army.scatters) do
+        if me.tick - done.tick < scatter_again then
+            if util.dist(at, done) < scatter_reach * 0.6 then
+                return
+            end
+            keep[#keep + 1] = done
+        end
+    end
+    army.scatters = keep
+    local group, sx, sz = {}, 0, 0
+    for _, unit in ipairs(soldiers()) do
+        local kind = catalog.of(unit)
+        local there = util.pos(unit)
+        if there ~= nil and kind.mobile and not kind.air and not kind.commander
+            and not army.mending[unit.id] and util.dist(at, there) <= scatter_reach then
+            group[#group + 1] = {unit = unit, x = there.x, z = there.z}
+            sx, sz = sx + there.x, sz + there.z
+        end
+    end
+    if #group < 2 then
+        return
+    end
+    army.scatters[#army.scatters + 1] = {x = at.x, z = at.z, tick = me.tick}
+    local mid = {x = sx / #group, z = sz / #group}
+    for _, row in ipairs(group) do
+        local dx, dz = row.x - mid.x, row.z - mid.z
+        local angle
+        if dx * dx + dz * dz < 30 * 30 then
+            angle = brain.random(1000) / 1000 * 2 * math.pi
+        else
+            angle = math.atan(dz, dx) + (brain.random(1000) / 1000 - 0.5) * 1.2
+        end
+        local step = 180 + brain.random(120)
+        row.unit:move(util.clamp({x = util.whole(row.x + math.cos(angle) * step),
+            z = util.whole(row.z + math.sin(angle) * step)}, 64))
+        army.scattered[row.unit.id] = me.tick
+        army.patrolled[row.unit.id] = nil
+    end
+    army.stepped.scattered = (army.stepped.scattered or 0) + #group
+end
+
+local function on_splash_hit(unit, attacker, at)
+    local kind = catalog.of(unit)
+    if kind == nil or not kind.combat or not kind.mobile or kind.air or kind.commander then
+        return
+    end
+    if attacker ~= nil then
+        if splashes(catalog.of(attacker)) then
+            scatter(at)
+        end
+        return
+    end
+    local keep, blast = {}, false
+    for _, hit in ipairs(unknown_hits) do
+        if me.tick - hit.tick <= 3 then
+            keep[#keep + 1] = hit
+            if util.dist(at, hit) <= 200 and util.dist(at, hit) > 0 then
+                blast = true
+            end
+        end
+    end
+    keep[#keep + 1] = {x = at.x, z = at.z, tick = me.tick}
+    unknown_hits = keep
+    if blast then
+        scatter(at)
+    end
 end
 
 -- Idle units of the seat standing in a factory's lane step out of its side,
@@ -1695,6 +2005,8 @@ function army.step()
     util.guard("careful", aim_careful)
     util.guard("cloak", manage_cloak)
     util.guard("air cover", air_cover, soldiers())
+    util.guard("flee fighters", flee_fighters)
+    util.guard("air chases", drop_air_chases, soldiers())
     for _, unit in ipairs(soldiers()) do
         if army.mending[unit.id] or army.air_mending[unit.id] or busy(unit) then
             -- Waiting at home for the builders, or on a repair pad.
@@ -1766,11 +2078,16 @@ function army.step()
     if engage(home, rally, 700) then
         return
     end
-    local contact = world.nearest_contact(rally, 900)
-    if contact ~= nil then
-        for _, unit in ipairs(home) do
+    -- A contact near the rally point, for each unit one it could hit.
+    local any = false
+    for _, unit in ipairs(home) do
+        local contact = world.nearest_contact(rally, 900, catalog.of(unit))
+        if contact ~= nil then
             patrol(unit, contact)
+            any = true
         end
+    end
+    if any then
         return
     end
     for _, unit in ipairs(home) do
@@ -1811,6 +2128,7 @@ function army.on_damaged(unit, attacker)
     if attacker ~= nil and util.alive(attacker) then
         world.remember(attacker)
     end
+    util.guard("scatter", on_splash_hit, unit, attacker ~= nil and util.alive(attacker) and attacker or nil, at)
 end
 
 return army

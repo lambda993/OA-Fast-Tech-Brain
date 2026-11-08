@@ -223,6 +223,9 @@ local function classify(index, record, inferred_tier)
     -- paralyzers hold fire and are given their targets (`careful`). The
     -- blast is half of `areaofeffect` (engine `detonate_area`).
     entry.blast = 0
+    -- The blast of its widest ground weapon, whatever the unit: shells
+    -- and bombs that hit several units at once make a wave scatter.
+    entry.splash = ground_blast / 2
     if entry.tags.aoe then
         entry.blast = math.max(1, ground_blast / 2)
     end

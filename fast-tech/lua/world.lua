@@ -163,7 +163,11 @@ function world.remember(unit)
             anti_air = world.anti_air(entry),
         }
     end
-    world.note_contact(at)
+    -- Where the enemy stands, for the waves: not aircraft passing by, nor
+    -- what lies under the sea.
+    if entry == nil or not (entry.air or entry.tags.underwater) then
+        world.note_contact(at)
+    end
 end
 
 function world.note_contact(at)
@@ -626,9 +630,85 @@ function world.best_target(from, reach, shooter)
     return best
 end
 
+-- Whether `entry` leaves submerged units alone (no anti-sub weapon: the
+-- table puts `underwater` among its ignored).
+function world.ignores_underwater(entry)
+    if entry == nil then
+        return false
+    end
+    if entry.no_subs == nil then
+        entry.no_subs = false
+        for _, token in ipairs(entry.ignored) do
+            if token == "underwater" then
+                entry.no_subs = true
+            end
+        end
+    end
+    return entry.no_subs
+end
+
+-- What a contact (no type, only a place) most likely is: in the air (well
+-- above the ground or the sea), under the sea (below the surface over sea
+-- floor: an underwater extractor, a submarine), or on the ground.
+function world.contact_place(contact, at)
+    local y = util.num(contact.y)
+    local ok, ground = pcall(function() return game.map:ground(at.x, at.z) end)
+    ground = ok and ground ~= nil and util.num(ground) or y
+    local sea = util.num(game.map.sea_level)
+    local surface = math.max(ground, sea)
+    if y > surface + 40 then
+        return "air"
+    end
+    if ground < sea and y < sea - 4 then
+        return "under"
+    end
+    return "ground"
+end
+
+-- Contacts that stood still: sampled every army step (three seconds) in
+-- 96-unit squares; a square held without a break for fifteen seconds is
+-- most likely a building. A long-range gun shelled where moving radar
+-- blips had been, empty ground by the time the shell came down (user's
+-- game: a Big Bertha firing at nothing).
+world.still = {} -- square key -> {x, z, first, last}
+local still_square = 96
+local still_needed = 30 * 15
+
+function world.track_contacts()
+    local contacts = me.radar
+    local seen = {}
+    if type(contacts) == "table" then
+        for index = 1, #contacts do
+            local contact = contacts[index]
+            if contact ~= nil and contact.x ~= nil and contact.current ~= false then
+                local x, z = util.whole(contact.x), util.whole(contact.z)
+                local key = (x // still_square) * 65536 + (z // still_square)
+                if not seen[key] and world.contact_place(contact, {x = x, z = z}) ~= "air" then
+                    seen[key] = true
+                    local held = world.still[key]
+                    if held == nil then
+                        world.still[key] = {x = x, z = z, first = me.tick, last = me.tick}
+                    else
+                        held.last = me.tick
+                    end
+                end
+            end
+        end
+    end
+    for key in pairs(world.still) do
+        if not seen[key] then
+            world.still[key] = nil
+        end
+    end
+end
+
 -- The radar or sonar contact nearest `from` within `reach`, as a point,
--- for when nothing in sight is worth shooting.
-function world.nearest_contact(from, reach)
+-- for when nothing in sight is worth shooting. With `shooter` (an entry)
+-- only contacts it could hit count: aircraft for anti-air only, contacts
+-- under the sea not for a shooter without anti-sub weapons (Hurricanes
+-- circled a sonar contact, an underwater extractor, they could never
+-- bomb). With `still` only contacts that stood still (world.still).
+function world.nearest_contact(from, reach, shooter, still)
     local contacts = me.radar
     if type(contacts) ~= "table" then
         return nil
@@ -640,7 +720,24 @@ function world.nearest_contact(from, reach)
             local at = {x = util.whole(contact.x), z = util.whole(contact.z)}
             local d = util.dist(from, at)
             if d <= reach and (best_d == nil or d < best_d) then
-                best, best_d = at, d
+                local fits = true
+                if shooter ~= nil then
+                    local place = world.contact_place(contact, at)
+                    if place == "air" then
+                        fits = shooter.anti_air == true
+                    elseif place == "under" then
+                        fits = not world.ignores_underwater(shooter)
+                    else
+                        fits = shooter.hits_ground == true
+                    end
+                end
+                if fits and still then
+                    local held = world.still[(at.x // still_square) * 65536 + (at.z // still_square)]
+                    fits = held ~= nil and held.last - held.first >= still_needed
+                end
+                if fits then
+                    best, best_d = at, d
+                end
             end
         end
     end
@@ -679,11 +776,14 @@ end
 function world.enemy_target(from)
     local best, best_d
     for _, building in pairs(world.enemy_buildings) do
+        -- Underwater buildings (extractors on the sea floor) only for
+        -- anti-sub units: a wave sent to one circled it, unable to hit it.
+        local under = building.entry ~= nil and building.entry.tags.underwater
         local d = util.dist2(from, building)
         if building.factory then
             d = d * 0.5
         end
-        if best_d == nil or d < best_d then
+        if not under and (best_d == nil or d < best_d) then
             best, best_d = {x = building.x, z = building.z}, d
         end
     end

@@ -92,13 +92,14 @@ grep -h 'brain match' $S/log/*
 ## Seat log
 
 Every minute: `builders: ...`, `artillery shot needs X energy, store holds Y`,
-`defence: decoys/anti-air/artillery/cloaked`, and a `status` line (tier,
+`defence: decoys/anti-air/ground/artillery/cloaked`, and a `status` line (tier,
 goal and its builders, stores and income, unit counts, extractors per tier).
 Every ten minutes (`hooks.dump_city = true` in `brain.lua`) an ASCII map of
 the city: `F` factory, `E` adjacency family, `#` building, `=` street, `x`
 block left out for poor ground. Events: `tech goal`, `tier a -> b`,
 `building`, `reclaim`, `upgrade`, `storage:`, `artillery:`, `jammer:`,
-`commander flees`, `commander d-guns`, `<gun> shells x,z`, `<gun> fires at`,
+`commander flees`, `commander d-guns`, `<gun> shells <what> at x,z`, `<gun> fires at`,
+`defence: <name> by x,z`, `aircraft flee enemy fighters: N`,
 `map: ...`, `error in <part>: ...` (each part runs under `util.guard`, so an
 error is logged once and the seat keeps playing).
 
@@ -338,8 +339,71 @@ error is logged once and the seat keeps playing).
     T4 builders should assist and repair around; were Tribulation and
     B.F.G. in the build lists; a Centaur on patrol in the enemy base
     attacked nothing; paralyzers must ignore economy buildings.
+31. User's 8-seat Atlantian States game (2026-11-08): units without
+    anti-sub must ignore underwater targets (Hurricanes circling an
+    underwater extractor); a lab with 8 builders while the economy
+    stalls and deposits are free; gunships/bombers must flee enemy
+    fighters to allied anti-air; waves scatter under artillery/AOE
+    (random directions from the wave's middle); escorts were too far
+    from the skirmishers; non-AA units must ignore aircraft (air
+    builders); a Big Bertha shelled empty ground; more ground defences
+    (Sentinel/Gaat, Guardian/Punisher, Annihilator/Doomsday) by the
+    economy and facilities. See state below.
 
 ## State and open points
+
+- User's 8-seat Atlantian States game (2026-11-08, all Fast Tech, rich,
+  ~37 min, 4 Arm vs 4 Core, no script errors; seats 2 and 8 dead by 30
+  min). Findings and fixes (item 31):
+  - Hurricanes on underwater extractors: the brain's own targets already
+    skip `underwater`, but a wave with nothing in sight patrols to the
+    nearest radar/sonar contact (no type), and remembered underwater
+    buildings and seen positions of any enemy were wave targets. Now
+    `world.contact_place` reads a contact's `y`: well above the surface =
+    air, below the sea over sea floor = under; `nearest_contact(from,
+    reach, shooter, still)` keeps only what the shooter can hit; waves skip
+    underwater buildings; noted contacts only on the ground. Engine:
+    `weapon_can_reach` refuses non-water weapons only when the target's
+    top is under the sea, so a tall underwater building in shallows may
+    still be auto-targeted (nothing to do in the brain).
+  - Big Bertha on empty ground: the shelled points moved every time
+    (radar blips of moving units). Guns now shell only contacts on the
+    ground that held their 96-unit square for 15 s (`world.still`,
+    sampled every army step); log `<gun> shells <what> at x,z`. Not seen
+    in tests (no contact shelling at all).
+  - Hangar with 7-8 builders (seat 4, 5 extractors for 30 minutes, energy
+    at 0 at times; they came by `resume`): the next lab's frame takes at
+    most 4 builders, 2 while `economy.need()` or a store under half
+    (`lab_crew_cap`, `may_join_lab`, `join_crew` in builders.lua, in
+    racing, goal, resume, help, help_frame). Income was above 2x the tier-2
+    goal (35), so no extractors: now free deposits within 1 200 are always
+    taken (not on metal maps).
+  - Gunships/bombers vs fighters: `flee_fighters` in army.lua. Seen 1-9
+    times a match in mirrors.
+  - Scatter under shells: `on_splash_hit` from `army.on_damaged`
+    (`catalog` `entry.splash` = widest ground blast / 2). 12-103 units a
+    match.
+  - Escorts: they followed the nearest non-escort soldier, often the home
+    army, and stepped out of every ground gun's reach. Now
+    `army.escort_wave` gives each to a wave; 140 behind (90 with enemy
+    aircraft near), 260 behind under ground fire.
+  - Non-AA units on aircraft: the engine's patrol pushes an `Attack_*`
+    order on its automatic target (ground weapons may target aircraft
+    without `toairweapon`, `ballistic.cpp`); `drop_air_chases` replaces it
+    when the target is airborne. `air chases dropped` was 0 in every test
+    (built-in AI uses few air builders): not verified.
+  - Ground defences: `try_defence` counted every armed building (the many
+    anti-air towers) against a want of 1-4. Now `builders.ground_defence`
+    (table tag `defense`, hits ground, no artillery/stockpile/upgrade/
+    economy: Escalation's geothermal plants are armed), 2/4/8/12/16 + one
+    per 4 economy/facility buildings, kind owned least first, placed by
+    `defence_spot`. Tests: 7-14 ground towers a seat (Sentinel, Gaat,
+    Guardian, Punisher, Immolator, Viper...).
+  - Tests, 13 matches vs built-in hard and mirrors on rich: all 8 decided
+    vs built-in won (Painted Desert x3, Ashap, Atlantian States x2,
+    Luschaven, Crater Islands), Core Prime seed 99 draws on time far ahead
+    (264-322 units vs 21-168), mirrors: Seven Islands draw, Atlantian
+    States won by seat 1. No errors, no stops. 8-seat games not tested.
 
 - User's 4-seat Painted Desert game (2026-11-07/08, all Fast Tech, rich,
   60 min, no errors):

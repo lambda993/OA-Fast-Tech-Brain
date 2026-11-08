@@ -53,13 +53,15 @@ local function status()
         shot = math.max(shot, catalog.of(unit).shot_energy)
     end
     print(string.format("artillery shot needs %.0f energy, store holds %.0f", shot, e.energy_cap))
-    print(string.format("defence: decoys %d, anti-air %d, artillery %d, commander cloaked %s",
+    print(string.format("defence: decoys %d, anti-air %d, ground %d, artillery %d, commander cloaked %s",
         #world.select(function(_, e) return e.decoy end),
         #world.select(function(_, e) return e.defense and e.anti_air end),
+        #world.select(function(_, e) return builders.ground_defence(e) end),
         #world.select(function(_, e) return e.artillery end),
         tostring(builders.cloaked == true)))
-    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; cloaked %d; targets kept %d, searched %d; moved out of factory lanes %d",
-        army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort, util.count(army.cloaked),
+    print(string.format("distance: skirmishers stepped back %d, artillery left %d, area weapons moved apart %d, escorts left %d; scattered %d; air chases dropped %d; cloaked %d; targets kept %d, searched %d; moved out of factory lanes %d",
+        army.stepped.skirmisher, army.stepped.artillery, army.stepped.apart, army.stepped.escort,
+        army.stepped.scattered or 0, army.air_dropped or 0, util.count(army.cloaked),
         army.targets_kept, army.searched, army.lanes_cleared or 0))
     local escorts, made = 0, {}
     for _, unit in ipairs(world.select(function(_, e) return e.combat end)) do
@@ -277,7 +279,10 @@ end
 
 function hooks.onRadarContact(contact)
     if contact ~= nil and contact.x ~= nil then
-        world.note_contact({x = util.whole(contact.x), z = util.whole(contact.z)})
+        local at = {x = util.whole(contact.x), z = util.whole(contact.z)}
+        if world.contact_place(contact, at) == "ground" then
+            world.note_contact(at)
+        end
     end
 end
 

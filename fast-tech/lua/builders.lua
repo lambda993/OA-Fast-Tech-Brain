@@ -36,7 +36,7 @@ local commander_reach = 1400
 -- How far from the base the commander walks to see a deposit.
 local commander_walk = 1200
 local radar_wanted = {[0] = 0, 1, 2, 3, 3, 3}
-local defence_wanted = {[0] = 0, 1, 2, 3, 4, 4}
+local defence_wanted = {[0] = 0, 2, 4, 8, 12, 16}
 
 local function count_of(test)
     return #world.select(test)
@@ -104,6 +104,45 @@ local function alone_on_frame(unit)
         return frame
     end
     return nil
+end
+
+-- How many builders the next lab's frame takes: four, two while the
+-- economy is short of anything or a store is under half. The rest see to
+-- the economy (user's game: eight builders on an Ultra Aircraft Hangar,
+-- the energy stalling and free deposits left around it).
+local function lab_crew_cap()
+    local e = economy.now or economy.read()
+    if economy.need() ~= nil or e.metal_share < 0.5 or e.energy_share < 0.5 then
+        return 2
+    end
+    return 4
+end
+
+-- Whether `unit` may work on the next lab's frame: one already on it
+-- stays while the crew is within the cap, a new one joins below it.
+local function may_join_lab(unit)
+    if not tech.frame_alive() then
+        return true
+    end
+    local id = tech.frame.id
+    local crew = builders.crew[id] or 0
+    if builders.on_frame[unit.id] == id then
+        return crew <= lab_crew_cap()
+    end
+    return crew < lab_crew_cap()
+end
+
+-- Counts `unit` on `frame` at once, so that builders given work in the
+-- same step see the crew it makes.
+local function join_crew(unit, frame)
+    if builders.on_frame[unit.id] ~= frame.id then
+        local old = builders.on_frame[unit.id]
+        if old ~= nil and builders.crew[old] ~= nil then
+            builders.crew[old] = math.max(0, builders.crew[old] - 1)
+        end
+        builders.on_frame[unit.id] = frame.id
+        builders.crew[frame.id] = (builders.crew[frame.id] or 0) + 1
+    end
 end
 
 -- Whether a builder alone on a frame may leave it to run: hit in the last
@@ -798,7 +837,14 @@ local function try_goal(unit, entry)
     end
     if tech.frame_alive() then
         tech.orders = 0
-        return reaches_work(unit, tech.frame) and unit:help(tech.frame) == true
+        if not may_join_lab(unit) or not reaches_work(unit, tech.frame) then
+            return false
+        end
+        if unit:help(tech.frame) == true then
+            join_crew(unit, tech.frame)
+            return true
+        end
+        return false
     end
     if recently("goal", 45) or not tech.affordable() then
         return false
@@ -1107,6 +1153,12 @@ local function try_economy(unit, entry, near_base)
             if try_extractor(unit, entry, reach) then
                 return true
             end
+        elseif not economy.metal_map() and try_extractor(unit, entry, math.min(near_base and commander_reach or 1200, 1200)) then
+            -- Income above the goal: free deposits near the base are
+            -- still taken, they are cheap (user's game: a seat raised an
+            -- Ultra Aircraft Hangar on five extractors with free deposits
+            -- around it).
+            return true
         end
     end
     if need == nil then
@@ -1251,25 +1303,106 @@ local function try_jammer(unit, entry)
     return false
 end
 
+-- Ground defences (user's rule): towers that hit ground units, the
+-- Sentinel/Gaat, Guardian/Punisher and Annihilator/Doomsday Machine
+-- kind (the table's `defense` tag); not anti-air, long-range artillery,
+-- nukes, mines, upgrades, nor the armed geothermal plants.
+-- Before, every armed building counted, so the many anti-air towers
+-- filled the count and hardly any ground tower was built.
+local function ground_defence(e)
+    return e.defense and e.tags.defense and e.hits_ground and not e.artillery and not e.stockpile
+        and not e.upgrade and not e.tags.kamikaze and not e.tags.economy and not e.power
+end
+
+builders.ground_defence = ground_defence
+
+-- How many the seat wants: by tier, and one more for every four
+-- economy buildings and facilities, up to twice the tier's number.
+local function defences_wanted(valued)
+    local base_wanted = defence_wanted[math.min(5, world.tier)]
+    return math.min(base_wanted * 2, base_wanted + valued // 4)
+end
+
+-- Own finished economy buildings and facilities within 2 500 of the base,
+-- as {x, z, cost}.
+local function valued_buildings()
+    local centre = base()
+    local found = {}
+    for _, building in ipairs(world.select(function(u, e)
+        return e.structure and (e.tags.economy or e.tags.facility) and world.finished(u)
+    end)) do
+        local at = util.pos(building)
+        if at ~= nil and (centre == nil or util.dist(at, centre) <= 2500) then
+            found[#found + 1] = {x = at.x, z = at.z, cost = catalog.of(building).cost}
+            if #found >= 150 then
+                break
+            end
+        end
+    end
+    return found
+end
+
+-- Where the next ground tower goes: by the economy building or facility
+-- with the most worth of such buildings within 500 units for each tower
+-- already guarding them.
+local defence_cover = 500
+
+local function defence_spot(valued, towers)
+    local best, best_score
+    local limit = defence_cover * defence_cover
+    for _, here in ipairs(valued) do
+        local worth = 0
+        for _, other in ipairs(valued) do
+            if util.dist2(here, other) <= limit then
+                worth = worth + other.cost
+            end
+        end
+        local guarded = 0
+        for _, tower in ipairs(towers) do
+            if util.dist2(here, tower) <= limit then
+                guarded = guarded + 1
+            end
+        end
+        local score = worth / (1 + guarded * 2)
+        if best_score == nil or score > best_score then
+            best, best_score = here, score
+        end
+    end
+    return best
+end
+
 local function try_defence(unit, entry)
-    local wanted = defence_wanted[math.min(5, world.tier)]
-    if wanted == 0 or recently("defence", 40) then
+    if world.tier == 0 or recently("defence", 30) then
         return false
     end
-    local have = count_of(function(_, e) return e.defense end)
-    if have >= wanted then
+    local valued = valued_buildings()
+    local wanted = defences_wanted(#valued)
+    local towers, owned = {}, {}
+    for _, tower in ipairs(world.select(function(_, e) return ground_defence(e) end)) do
+        local at = util.pos(tower)
+        if at ~= nil then
+            towers[#towers + 1] = at
+        end
+        local index = catalog.of(tower).index
+        owned[index] = (owned[index] or 0) + 1
+    end
+    if #towers >= wanted then
         return false
     end
-    local e = economy.now
-    local budget = math.max(300, e.metal_income * 60 + e.metal * 0.3)
+    -- Every kind gets built, as for the long-range guns: the kind owned
+    -- least first, the cheapest among those; light towers (threat level
+    -- 1, the L.L.T.) only when no heavier one is affordable.
     local function pick(wet)
-        local best
+        local best, best_key
         for _, option in ipairs(catalog.buildable(entry, function(o)
-            return o.defense and not o.air and o.water_only == wet
+            return ground_defence(o) and o.water_only == wet
         end, wet)) do
-            if option.metal <= budget and (best == nil or option.tier > best.tier
-                or (option.tier == best.tier and option.cost > best.cost)) then
-                best = option
+            if economy.affords(option, 60) then
+                local light = (option.threat or 0) < 2 and 1 or 0
+                local key = light * 1000000 + (owned[option.index] or 0) * 10000 + option.metal / 10
+                if best_key == nil or key < best_key then
+                    best, best_key = option, key
+                end
             end
         end
         return best
@@ -1279,8 +1412,10 @@ local function try_defence(unit, entry)
     if land == nil and wet == nil then
         return false
     end
-    if build_land_or_water(unit, land, wet, world.front(300)) then
+    local spot = defence_spot(valued, towers) or world.front(300)
+    if build_land_or_water(unit, land, wet, spot) then
         mark("defence")
+        print(string.format("defence: %s by %.0f,%.0f", (land or wet).name, spot.x, spot.z))
         return true
     end
     return false
@@ -1464,7 +1599,8 @@ local function try_help(unit, reach)
     local best, best_d
     for _, frame in ipairs(world.select(function(u, e) return e.structure and u.finished ~= true end)) do
         local where = util.pos(frame)
-        if where ~= nil then
+        local lab = tech.frame_alive() and frame.id == tech.frame.id
+        if where ~= nil and (not lab or may_join_lab(unit)) then
             local d = util.dist(at, where)
             if d <= reach and (best_d == nil or d < best_d) and reaches_work(unit, frame) then
                 best, best_d = frame, d
@@ -1473,6 +1609,7 @@ local function try_help(unit, reach)
     end
     if best ~= nil and unit:help(best) then
         builders.parked[unit.id] = me.tick
+        join_crew(unit, best)
         return true
     end
     return false
@@ -1486,11 +1623,13 @@ local function try_help_frame(unit)
     end
     local at = util.pos(unit)
     local where = util.pos(tech.frame)
-    if at == nil or where == nil or util.dist(at, where) > 2500 or not reaches_work(unit, tech.frame) then
+    if at == nil or where == nil or util.dist(at, where) > 2500 or not may_join_lab(unit)
+        or not reaches_work(unit, tech.frame) then
         return false
     end
     if unit:help(tech.frame) then
         builders.parked[unit.id] = me.tick
+        join_crew(unit, tech.frame)
         return true
     end
     return false
@@ -1587,7 +1726,8 @@ local function try_resume(unit)
     local best, best_left
     for _, frame in ipairs(frames) do
         local where = util.pos(frame)
-        if where ~= nil and reaches_work(unit, frame) then
+        local lab = tech.frame_alive() and frame.id == tech.frame.id
+        if where ~= nil and (not lab or may_join_lab(unit)) and reaches_work(unit, frame) then
             local mine = frame.id == own
             local idle = (builders.crew[frame.id] or 0) == 0
             if mine or (idle and util.dist(at, where) <= 1500) then
@@ -1601,7 +1741,7 @@ local function try_resume(unit)
     end
     if best ~= nil and unit:help(best) then
         builders.parked[unit.id] = me.tick
-        builders.crew[best.id] = (builders.crew[best.id] or 0) + 1
+        join_crew(unit, best)
         -- Logged once per builder and frame: a lone helper is looked at
         -- again every fifteen seconds and comes straight back.
         if builders.resumed[unit.id] ~= best.id then
@@ -2634,6 +2774,7 @@ local function builder_turn(unit, entry)
     local racing = tech.goal ~= nil and catalog.can_build(entry, tech.goal)
         and (tech.frame_alive() or tech.affordable())
         and not (critical and builders.role[unit.id] == "economy")
+        and may_join_lab(unit)
     if racing or (builders.role[unit.id] == "tech" and not critical) then
         order = {"reclaim", "resume", "radar", "goal", "salvage", "economy"}
     else
@@ -2650,7 +2791,7 @@ local function builder_turn(unit, entry)
         end
     end
     -- Under attack, or with too few defences, the economy builders fortify first.
-    local defences = count_of(function(_, e) return e.defense end)
+    local defences = count_of(function(_, e) return ground_defence(e) end)
     if builders.role[unit.id] == "economy" and not starving
         and (attacked or defences * 2 < defence_wanted[math.min(5, world.tier)]) then
         table.insert(order, 2, "defence")
